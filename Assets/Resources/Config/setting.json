@@ -1,0 +1,24 @@
+{
+ "data": [
+  {
+   "value": "1.0", 
+   "id": 1, 
+   "param": "reward_quick"
+  }, 
+  {
+   "value": "6.0", 
+   "id": 2, 
+   "param": "energy_max"
+  }, 
+  {
+   "value": "1.0", 
+   "id": 3, 
+   "param": "energy_expend"
+  }, 
+  {
+   "value": "10.0", 
+   "id": 4, 
+   "param": "energy_recover"
+  }
+ ]
+}
