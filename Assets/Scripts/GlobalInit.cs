@@ -4,10 +4,10 @@ using UnityEngine;
 
 public class GlobalInit : MonoBehaviour
 {
-    [Header("ÊÇ·ñ¿ªÆôLog")]
+    [Header("æ˜¯å¦å¼€å¯Log")]
     public bool isDebug = true;
 
-    [Header("ÓïÑÔ")]
+    [Header("è¯­è¨€")]
     public LanguageType language;
 
     private void Awake()
