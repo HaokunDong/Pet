@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e008fbfcb086b4309bd7c12f80de35ab, type: 3}
   m_Name: BonneSkillData
   m_EditorClassIdentifier: 
-  skillId: 1
+  skillId: Bonne_Skill_01
   skillName: Throw
   cooldown: 5
   damage: 10

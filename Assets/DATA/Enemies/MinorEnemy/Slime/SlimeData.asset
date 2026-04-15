@@ -10,10 +10,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6d4e6ea0883364f97a8ead9ca8741b5c, type: 3}
-  m_Name: BonneData
+  m_Name: SlimeData
   m_EditorClassIdentifier: 
-  characterId: Character_Bonne_01
-  characterName: Bonne
+  characterId: MinorEnemy_Slime_01
+  characterName: Slime
   attackPower: 10
   maxHealth: 100
   defense: 5
@@ -21,7 +21,7 @@ MonoBehaviour:
   attackSpeed: 1
   attackRange: 1.5
   qualityLevel: 0
-  characterType: 0
+  characterType: 1
   skills: []
-  sprite: {fileID: -792789133, guid: 325996c4e6f1740778132667857c1356, type: 3}
-  animatorController: {fileID: 0}
+  sprite: {fileID: -1798011705, guid: afc3f8ed9e4f84d5c9bce596f8394d2b, type: 3}
+  animatorController: {fileID: 9100000, guid: e451f540dc69b460c8b9268817298615, type: 2}
