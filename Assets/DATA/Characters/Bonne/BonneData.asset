@@ -24,4 +24,4 @@ MonoBehaviour:
   characterType: 0
   skills: []
   sprite: {fileID: -792789133, guid: 325996c4e6f1740778132667857c1356, type: 3}
-  animatorController: {fileID: 0}
+  animatorController: {fileID: 9100000, guid: 7eac7da675b804d11a4235a1f91a1025, type: 2}

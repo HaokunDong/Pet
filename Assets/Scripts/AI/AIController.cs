@@ -164,7 +164,27 @@ namespace PetGame.AI
         /// </summary>
         public void ResumeAI()
         {
+            if (entity == null)
+            {
+                entity = GetComponent<CharacterEntity>();
+            }
+
+            if (behaviorTree == null || context == null)
+            {
+                BuildTree();
+            }
+            else
+            {
+                context.CurrentTarget = null;
+                context.IsInCombat = false;
+            }
+
             IsActive = true;
+
+            if (entity != null && entity.CharAnimator != null)
+            {
+                entity.CharAnimator.PlayAttack();
+            }
         }
 
         /// <summary>

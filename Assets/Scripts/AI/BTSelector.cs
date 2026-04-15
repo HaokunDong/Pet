@@ -3,13 +3,14 @@ using System.Collections.Generic;
 namespace PetGame.AI
 {
     /// <summary>
-    /// Selector (OR) node: executes children in order until one succeeds.
+    /// Selector (OR) node: executes children in priority order until one succeeds.
+    /// This is a reactive selector: every tick it reevaluates from the first child,
+    /// so higher-priority behaviors (such as combat) can immediately interrupt lower-priority ones (such as patrol).
     /// Returns Success if any child succeeds, Failure if all fail.
     /// </summary>
     public class BTSelector : BTNode
     {
         private readonly List<BTNode> children = new List<BTNode>();
-        private int currentIndex = 0;
 
         public BTSelector(params BTNode[] nodes)
         {
@@ -23,21 +24,17 @@ namespace PetGame.AI
 
         public override BTState Execute()
         {
-            for (; currentIndex < children.Count; currentIndex++)
+            for (int i = 0; i < children.Count; i++)
             {
-                BTState state = children[currentIndex].Execute();
+                BTState state = children[i].Execute();
 
                 if (state == BTState.Running)
                     return BTState.Running;
 
                 if (state == BTState.Success)
-                {
-                    currentIndex = 0;
                     return BTState.Success;
-                }
             }
 
-            currentIndex = 0;
             return BTState.Failure;
         }
     }
