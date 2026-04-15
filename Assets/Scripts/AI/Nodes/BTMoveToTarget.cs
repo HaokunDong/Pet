@@ -10,6 +10,11 @@ namespace PetGame.AI
     {
         private readonly BTContext context;
 
+        /// <summary>
+        /// Minimum stopping distance to prevent entities from overlapping.
+        /// </summary>
+        private const float MIN_STOPPING_DISTANCE = 0.3f;
+
         public BTMoveToTarget(BTContext context)
         {
             this.context = context;
@@ -25,15 +30,57 @@ namespace PetGame.AI
 
             float dist = Vector2.Distance(owner.transform.position, target.transform.position);
 
-            // Already in attack range
-            if (dist <= owner.RuntimeStats.attackRange)
+            // If already in combat (attacking), face target and stay idle
+            if (context.IsInCombat)
+            {
+                if (owner.CharAnimator != null)
+                {
+                    owner.CharAnimator.FaceTowards(target.transform.position);
+                    owner.CharAnimator.PlayIdle();
+                }
                 return BTState.Success;
+            }
+
+            // Already in attack range — stop and switch to idle
+            if (dist <= owner.RuntimeStats.attackRange)
+            {
+                if (owner.CharAnimator != null)
+                {
+                    owner.CharAnimator.FaceTowards(target.transform.position);
+                    owner.CharAnimator.PlayIdle();
+                }
+                return BTState.Success;
+            }
+
+            // Too close to target — prevent overlap, stop moving
+            if (dist <= MIN_STOPPING_DISTANCE)
+            {
+                if (owner.CharAnimator != null)
+                {
+                    owner.CharAnimator.FaceTowards(target.transform.position);
+                    owner.CharAnimator.PlayIdle();
+                }
+                return BTState.Success;
+            }
+
+            // Determine movement direction
+            float direction = target.transform.position.x > owner.transform.position.x ? 1f : -1f;
+
+            // Wall detection: raycast ahead in movement direction
+            // Use y + 0.5f (character center height) to avoid hitting ground collider
+            Vector2 rayOrigin = new Vector2(owner.transform.position.x, owner.transform.position.y + 0.5f);
+            Vector2 rayDir = new Vector2(direction, 0f);
+            RaycastHit2D hit = Physics2D.Raycast(rayOrigin, rayDir, context.WallDetectDistance, context.TerrainLayerMask);
+
+            if (hit.collider != null)
+            {
+                // Wall detected ahead — cannot reach target, fallback to patrol
+                return BTState.Failure;
+            }
 
             // Move towards target
             float speed = owner.RuntimeStats.moveSpeed;
             Vector3 pos = owner.transform.position;
-            float direction = target.transform.position.x > pos.x ? 1f : -1f;
-
             pos.x += direction * speed * Time.deltaTime;
             owner.transform.position = pos;
 

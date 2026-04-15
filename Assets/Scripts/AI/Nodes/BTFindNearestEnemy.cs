@@ -23,6 +23,14 @@ namespace PetGame.AI
             if (owner == null || !owner.RuntimeStats.IsAlive)
                 return BTState.Failure;
 
+            // Validate current target — clear if dead or destroyed
+            if (context.CurrentTarget != null &&
+                (context.CurrentTarget.gameObject == null || !context.CurrentTarget.RuntimeStats.IsAlive))
+            {
+                context.CurrentTarget = null;
+                context.IsInCombat = false;
+            }
+
             // Determine which tags to search for based on owner type
             string targetTag = (owner.RuntimeStats.characterType == CharacterType.Player)
                 ? "Enemy"
@@ -47,11 +55,18 @@ namespace PetGame.AI
 
             if (closest != null)
             {
+                // If target changed, reset combat state so attack node re-establishes it
+                if (context.CurrentTarget != closest)
+                {
+                    context.IsInCombat = false;
+                }
                 context.CurrentTarget = closest;
                 return BTState.Success;
             }
 
+            // No target found — clear all combat state
             context.CurrentTarget = null;
+            context.IsInCombat = false;
             return BTState.Failure;
         }
     }

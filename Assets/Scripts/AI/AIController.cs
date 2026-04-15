@@ -16,6 +16,9 @@ namespace PetGame.AI
         [Tooltip("Patrol range (distance from spawn point)")]
         public float patrolRange = 5f;
 
+        [Tooltip("Wall detection raycast distance")]
+        public float wallDetectDistance = 0.5f;
+
         private CharacterEntity entity;
         private BehaviorTree behaviorTree;
         private BTContext context;
@@ -55,7 +58,8 @@ namespace PetGame.AI
         {
             context = new BTContext(entity)
             {
-                PatrolRange = patrolRange
+                PatrolRange = patrolRange,
+                WallDetectDistance = wallDetectDistance
             };
 
             BTNode root;

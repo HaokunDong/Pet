@@ -19,6 +19,7 @@ namespace PetGame
         private float moveDirection; // 1 = right, -1 = left
         private CharacterEntity attackTarget;
         private bool isChasing; // Moving towards an enemy to attack
+        private bool isAttacking; // Currently in sustained attack mode
 
         private void Awake()
         {
@@ -38,6 +39,7 @@ namespace PetGame
                 StopMoving();
                 attackTarget = null;
                 isChasing = false;
+                isAttacking = false;
             }
             else
             {
@@ -56,6 +58,7 @@ namespace PetGame
             HandleRightClickInput();
             HandleMovement();
             HandleChaseAndAttack();
+            HandleSustainedAttack();
         }
 
         /// <summary>
@@ -66,6 +69,9 @@ namespace PetGame
             if (!Input.GetMouseButtonDown(1)) return; // Right click only
 
             Vector2 mouseWorldPos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+
+            // New right-click input always interrupts sustained attack
+            isAttacking = false;
 
             // Check if clicked on an enemy
             Collider2D hit = Physics2D.OverlapPoint(mouseWorldPos);
@@ -83,10 +89,10 @@ namespace PetGame
                     float dist = Vector2.Distance(transform.position, attackTarget.transform.position);
                     if (dist <= entity.RuntimeStats.attackRange)
                     {
-                        // In range: attack immediately
+                        // In range: enter sustained attack mode
                         isChasing = false;
                         isMoving = false;
-                        combatSystem.TryNormalAttack(attackTarget);
+                        isAttacking = true;
                     }
                     else
                     {
@@ -148,6 +154,7 @@ namespace PetGame
             {
                 attackTarget = null;
                 isChasing = false;
+                isAttacking = false;
                 StopMoving();
                 return;
             }
@@ -156,14 +163,10 @@ namespace PetGame
 
             if (dist <= entity.RuntimeStats.attackRange)
             {
-                // In range: stop and attack
+                // In range: stop moving and enter sustained attack mode
                 isChasing = false;
-                combatSystem.TryNormalAttack(attackTarget);
-
-                if (entity.CharAnimator != null)
-                {
-                    entity.CharAnimator.FaceTowards(attackTarget.transform.position);
-                }
+                isMoving = false;
+                isAttacking = true;
             }
             else
             {
@@ -181,6 +184,43 @@ namespace PetGame
                     entity.CharAnimator.SetFacingDirection(direction);
                 }
             }
+        }
+
+        /// <summary>
+        /// Handle sustained attack: keep attacking target at attack speed interval.
+        /// Character stays still until player issues a new right-click command.
+        /// </summary>
+        private void HandleSustainedAttack()
+        {
+            if (!isAttacking || attackTarget == null) return;
+
+            // Check if target is still alive
+            if (!attackTarget.RuntimeStats.IsAlive)
+            {
+                attackTarget = null;
+                isAttacking = false;
+                StopMoving();
+                return;
+            }
+
+            // Check if target moved out of attack range
+            float dist = Vector2.Distance(transform.position, attackTarget.transform.position);
+            if (dist > entity.RuntimeStats.attackRange)
+            {
+                // Target left range — stop attacking, stay idle
+                isAttacking = false;
+                StopMoving();
+                return;
+            }
+
+            // Face the target
+            if (entity.CharAnimator != null)
+            {
+                entity.CharAnimator.FaceTowards(attackTarget.transform.position);
+            }
+
+            // Attempt attack — CombatSystem handles attack speed interval internally
+            combatSystem.TryNormalAttack(attackTarget);
         }
 
         /// <summary>

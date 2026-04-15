@@ -107,7 +107,7 @@ namespace PetGame
             if (Mathf.Approximately(moveDirection, 0f)) return;
 
             FacingDirection = moveDirection > 0f ? 1 : -1;
-            spriteRenderer.flipX = FacingDirection < 0;
+            spriteRenderer.flipX = FacingDirection > 0;
         }
 
         /// <summary>

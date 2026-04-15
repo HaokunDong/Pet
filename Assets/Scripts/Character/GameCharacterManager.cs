@@ -10,6 +10,12 @@ namespace PetGame
     /// </summary>
     public class GameCharacterManager : MonoBehaviour
     {
+        /// <summary>
+        /// Name of the physics layer used for all character entities.
+        /// Must be created in Unity Editor: Edit → Project Settings → Tags and Layers.
+        /// </summary>
+        private const string CHARACTER_LAYER_NAME = "Character";
+
         [Header("Player Characters")]
         [Tooltip("CharacterData templates for player characters to spawn at start")]
         public CharacterData[] playerCharacterDataList;
@@ -35,13 +41,38 @@ namespace PetGame
 
         private float saveTimer;
 
+        private void Awake()
+        {
+            // Disable collision between all Character-layer entities
+            int characterLayer = LayerMask.NameToLayer(CHARACTER_LAYER_NAME);
+            if (characterLayer != -1)
+            {
+                Physics2D.IgnoreLayerCollision(characterLayer, characterLayer, true);
+            }
+            else
+            {
+                Debug.LogError($"[GameCharacterManager] Physics layer '{CHARACTER_LAYER_NAME}' not found! " +
+                    "Entities will collide with each other and may get stuck. " +
+                    "Please create the 'Character' layer in Edit → Project Settings → Tags and Layers, " +
+                    "then assign it to all player and enemy prefabs.");
+            }
+        }
+
         private void Start()
         {
             // Load save data
-            GameSaveData saveData = SaveManager.Instance.LoadGame();
+            //GameSaveData saveData = SaveManager.Instance.LoadGame();
+            CharacterData data = playerCharacterDataList[0];
+            Vector3 spawnPos = Vector3.zero;
+            if (playerSpawnPoints != null && playerSpawnPoints[0] != null)
+            {
+                spawnPos = playerSpawnPoints[0].position;
+            }
+
+            CharacterEntity entity = CreatePlayerCharacter(data, spawnPos);
 
             // Spawn player characters
-            SpawnPlayerCharacters(saveData);
+            //SpawnPlayerCharacters(saveData);
 
             saveTimer = 0f;
         }
@@ -107,6 +138,11 @@ namespace PetGame
             playerObj.transform.position = position;
             playerObj.SetActive(true);
             playerObj.tag = "Player";
+
+            // Set physics layer so characters don't collide with each other
+            int characterLayer = LayerMask.NameToLayer(CHARACTER_LAYER_NAME);
+            if (characterLayer != -1)
+                playerObj.layer = characterLayer;
 
             // Ensure SpriteRenderer exists
             SpriteRenderer sr = playerObj.GetComponent<SpriteRenderer>();
