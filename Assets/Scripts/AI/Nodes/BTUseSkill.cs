@@ -4,6 +4,7 @@ namespace PetGame.AI
 {
     /// <summary>
     /// Action node: use a skill on the current target.
+    /// Delegates all skill logic (animation, damage timing, effects) to CombatSystem.
     /// Requires a BTCheckSkillReady reference to know which skill to use.
     /// Returns Success if skill was used, Failure otherwise.
     /// </summary>
@@ -11,6 +12,7 @@ namespace PetGame.AI
     {
         private readonly BTContext context;
         private readonly BTCheckSkillReady skillReadyCheck;
+        private CombatSystem combatSystem;
 
         public BTUseSkill(BTContext context, BTCheckSkillReady skillReadyCheck)
         {
@@ -30,40 +32,14 @@ namespace PetGame.AI
             if (skillIndex < 0)
                 return BTState.Failure;
 
-            SkillData skillData = owner.characterData.skills[skillIndex];
-            if (skillData == null)
-                return BTState.Failure;
+            // Lazy-cache CombatSystem reference
+            if (combatSystem == null)
+                combatSystem = owner.GetComponent<CombatSystem>();
 
-            // Check if target is within skill range
-            float dist = Vector2.Distance(owner.transform.position, target.transform.position);
-            if (dist > skillData.skillRange)
-                return BTState.Failure;
+            // Delegate all skill logic to CombatSystem (handles range, cooldown, animation, deferred damage & effects)
+            bool used = combatSystem.TryUseSkill(skillIndex, target);
 
-            // Face the target
-            if (owner.CharAnimator != null)
-            {
-                owner.CharAnimator.FaceTowards(target.transform.position);
-                owner.CharAnimator.PlaySkill(skillIndex);
-            }
-
-            // Deal skill damage
-            target.TakeDamage(skillData.damage);
-
-            // Start cooldown
-            owner.RuntimeStats.StartSkillCooldown(skillIndex, skillData.cooldown);
-
-            // Spawn skill effect if available
-            if (skillData.effectPrefab != null)
-            {
-                GameObject effect = Object.Instantiate(
-                    skillData.effectPrefab,
-                    target.transform.position,
-                    Quaternion.identity
-                );
-                Object.Destroy(effect, 2f);
-            }
-
-            return BTState.Success;
+            return used ? BTState.Success : BTState.Failure;
         }
     }
 }

@@ -51,5 +51,6 @@
         "temp/": true,
         "Temp/": true
     },
-    "dotnet.defaultSolution": "Pet.sln"
+    "dotnet.defaultSolution": "Pet.sln",
+    "dotnet.preferCSharpExtension": true
 }

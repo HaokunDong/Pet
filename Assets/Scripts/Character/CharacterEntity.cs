@@ -23,6 +23,11 @@ namespace PetGame
         public CharacterAnimator CharAnimator { get; private set; }
 
         /// <summary>
+        /// Reference to the HealthBar component displayed above this character.
+        /// </summary>
+        private HealthBar healthBar;
+
+        /// <summary>
         /// Whether this entity has been initialized.
         /// </summary>
         public bool IsInitialized { get; private set; }
@@ -57,7 +62,35 @@ namespace PetGame
 
             CharAnimator = GetComponent<CharacterAnimator>();
 
+            // Create or re-initialize the health bar above this character
+            InitializeHealthBar();
+
             IsInitialized = true;
+        }
+
+        /// <summary>
+        /// Create or re-initialize the HealthBar child object.
+        /// Handles both first-time creation and object pool reuse.
+        /// </summary>
+        private void InitializeHealthBar()
+        {
+            // Check if a HealthBar child already exists (object pool reuse)
+            healthBar = GetComponentInChildren<HealthBar>(true);
+
+            if (healthBar == null)
+            {
+                // Create a new HealthBar child object
+                GameObject hbObj = new GameObject("HealthBar");
+                hbObj.transform.SetParent(transform, false);
+                healthBar = hbObj.AddComponent<HealthBar>();
+
+                SpriteRenderer sr = GetComponent<SpriteRenderer>();
+                healthBar.Initialize(sr);
+            }
+
+            // Update to full health and show
+            healthBar.UpdateHealth(RuntimeStats.currentHealth, RuntimeStats.maxHealth);
+            healthBar.Show();
         }
 
         private void Update()
@@ -79,12 +112,26 @@ namespace PetGame
             float actualDamage = Mathf.Max(1f, attackPower - RuntimeStats.defense);
             RuntimeStats.currentHealth -= actualDamage;
 
+            Debug.Log($"[Combat] {gameObject.name} took {actualDamage} damage (ATK:{attackPower} - DEF:{RuntimeStats.defense}). " +
+                      $"HP: {RuntimeStats.currentHealth}/{RuntimeStats.maxHealth}");
+
             OnDamageTaken?.Invoke(this, actualDamage);
+
+            // Update health bar
+            if (healthBar != null)
+            {
+                healthBar.UpdateHealth(RuntimeStats.currentHealth, RuntimeStats.maxHealth);
+            }
 
             // Play hit animation
             if (CharAnimator != null)
             {
                 CharAnimator.PlayHit();
+            }
+            else
+            {
+                Debug.LogWarning($"[Combat] {gameObject.name} has no CharAnimator — cannot play Hit animation. " +
+                    "Ensure CharacterAnimator component is attached and Initialize() was called.");
             }
 
             if (!RuntimeStats.IsAlive)
@@ -99,6 +146,12 @@ namespace PetGame
         private void Die()
         {
             OnDeath?.Invoke(this);
+
+            // Hide health bar on death
+            if (healthBar != null)
+            {
+                healthBar.Hide();
+            }
 
             if (CharAnimator != null)
             {
@@ -126,6 +179,12 @@ namespace PetGame
             OnDeath = null;
             OnDamageTaken = null;
             IsInitialized = false;
+
+            // Hide health bar when recycled (will be re-shown on next Initialize)
+            if (healthBar != null)
+            {
+                healthBar.Hide();
+            }
         }
 
         private void OnDisable()
@@ -137,5 +196,33 @@ namespace PetGame
         {
             CleanUp();
         }
+
+#if UNITY_EDITOR
+        /// <summary>
+        /// Draw attack range gizmo when the character is selected in the Scene view.
+        /// Shows a prominent red semi-transparent circle.
+        /// </summary>
+        private void OnDrawGizmosSelected()
+        {
+            if (RuntimeStats == null) return;
+
+            Gizmos.color = new Color(1f, 0f, 0f, 0.3f);
+            Gizmos.DrawWireSphere(transform.position, RuntimeStats.attackRange);
+            // Draw a filled disc for better visibility
+            UnityEditor.Handles.color = new Color(1f, 0f, 0f, 0.1f);
+            UnityEditor.Handles.DrawSolidDisc(transform.position, Vector3.forward, RuntimeStats.attackRange);
+        }
+
+        /// <summary>
+        /// Draw attack range gizmo when the character is NOT selected (faint outline).
+        /// </summary>
+        private void OnDrawGizmos()
+        {
+            if (RuntimeStats == null) return;
+
+            Gizmos.color = new Color(1f, 0f, 0f, 0.1f);
+            Gizmos.DrawWireSphere(transform.position, RuntimeStats.attackRange);
+        }
+#endif
     }
 }

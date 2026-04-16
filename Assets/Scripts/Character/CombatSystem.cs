@@ -5,12 +5,33 @@ namespace PetGame
     /// <summary>
     /// Manages combat actions (normal attack and skills) for a character.
     /// Provides public interfaces for both AI and manual control to invoke.
+    /// Damage is applied via animation frame events through AnimEventReceiver.
     /// </summary>
     [RequireComponent(typeof(CharacterEntity))]
     public class CombatSystem : MonoBehaviour
     {
         private CharacterEntity entity;
         private float lastAttackTime = -999f;
+
+        // --- Cached attack state for animation frame event callbacks ---
+        private CharacterEntity _cachedTarget;
+        private int _cachedSkillIndex = -1;
+        private bool _isAttacking;
+
+        /// <summary>
+        /// The current cached attack target. Read by AnimEventReceiver.
+        /// </summary>
+        public CharacterEntity CachedTarget => _cachedTarget;
+
+        /// <summary>
+        /// The current cached skill index (-1 means normal attack). Read by AnimEventReceiver.
+        /// </summary>
+        public int CachedSkillIndex => _cachedSkillIndex;
+
+        /// <summary>
+        /// Whether the character is currently in an attack/skill animation waiting for hit frame.
+        /// </summary>
+        public bool IsAttacking => _isAttacking;
 
         private void Awake()
         {
@@ -20,6 +41,7 @@ namespace PetGame
         /// <summary>
         /// Attempt a normal attack on the target.
         /// Respects attack speed interval (no CD, but limited by attack speed).
+        /// Damage is deferred to the animation hit frame event.
         /// </summary>
         /// <returns>True if attack was executed.</returns>
         public bool TryNormalAttack(CharacterEntity target)
@@ -35,15 +57,18 @@ namespace PetGame
             float attackInterval = 1f / entity.RuntimeStats.attackSpeed;
             if (Time.time - lastAttackTime < attackInterval) return false;
 
-            // Face the target
+            // Cache target for frame event callback
+            _cachedTarget = target;
+            _cachedSkillIndex = -1;
+            _isAttacking = true;
+
+            // Face the target and play attack animation
             if (entity.CharAnimator != null)
             {
                 entity.CharAnimator.FaceTowards(target.transform.position);
                 entity.CharAnimator.PlayAttack();
             }
 
-            // Deal damage
-            target.TakeDamage(entity.RuntimeStats.attackPower);
             lastAttackTime = Time.time;
 
             return true;
@@ -51,7 +76,8 @@ namespace PetGame
 
         /// <summary>
         /// Attempt to use a skill on the target.
-        /// Checks cooldown, range, and plays animation/effects.
+        /// Checks cooldown, range, and plays animation.
+        /// Damage and effects are deferred to the animation hit frame event.
         /// </summary>
         /// <returns>True if skill was used.</returns>
         public bool TryUseSkill(int skillIndex, CharacterEntity target)
@@ -74,32 +100,100 @@ namespace PetGame
             float dist = Vector2.Distance(transform.position, target.transform.position);
             if (dist > skillData.skillRange) return false;
 
-            // Face the target
+            // Cache target and skill index for frame event callback
+            _cachedTarget = target;
+            _cachedSkillIndex = skillIndex;
+            _isAttacking = true;
+
+            // Face the target and play skill animation
             if (entity.CharAnimator != null)
             {
                 entity.CharAnimator.FaceTowards(target.transform.position);
                 entity.CharAnimator.PlaySkill(skillIndex);
             }
 
-            // Deal skill damage
-            target.TakeDamage(skillData.damage);
-
-            // Start cooldown
+            // Start cooldown immediately (animation is playing)
             entity.RuntimeStats.StartSkillCooldown(skillIndex, skillData.cooldown);
 
-            // Spawn skill effect
+            return true;
+        }
+
+        // ==================== Frame Event Callbacks ====================
+
+        /// <summary>
+        /// Called by AnimEventReceiver when the normal attack animation reaches the hit frame.
+        /// Applies damage to the cached target and clears attack state.
+        /// </summary>
+        public void ApplyNormalAttackDamage()
+        {
+            if (_cachedTarget == null || !_cachedTarget.RuntimeStats.IsAlive)
+            {
+                Debug.Log($"[CombatSystem] {gameObject.name}: Cached target is null or dead, skipping normal attack damage.");
+                ClearAttackState();
+                return;
+            }
+
+            _cachedTarget.TakeDamage(entity.RuntimeStats.attackPower);
+            ClearAttackState();
+        }
+
+        /// <summary>
+        /// Called by AnimEventReceiver when the skill animation reaches the hit frame.
+        /// Applies skill damage and spawns effects, then clears attack state.
+        /// </summary>
+        public void ApplySkillDamage()
+        {
+            if (_cachedTarget == null || !_cachedTarget.RuntimeStats.IsAlive)
+            {
+                Debug.Log($"[CombatSystem] {gameObject.name}: Cached target is null or dead, skipping skill damage.");
+                ClearAttackState();
+                return;
+            }
+
+            if (_cachedSkillIndex < 0 || entity.characterData.skills == null ||
+                _cachedSkillIndex >= entity.characterData.skills.Length)
+            {
+                Debug.LogWarning($"[CombatSystem] {gameObject.name}: Invalid cached skill index {_cachedSkillIndex}, skipping skill damage.");
+                ClearAttackState();
+                return;
+            }
+
+            SkillData skillData = entity.characterData.skills[_cachedSkillIndex];
+            if (skillData == null)
+            {
+                Debug.LogWarning($"[CombatSystem] {gameObject.name}: SkillData at index {_cachedSkillIndex} is null, skipping skill damage.");
+                ClearAttackState();
+                return;
+            }
+
+            // Apply skill damage
+            _cachedTarget.TakeDamage(skillData.damage);
+
+            // Spawn skill effect at target position
             if (skillData.effectPrefab != null)
             {
                 GameObject effect = Instantiate(
                     skillData.effectPrefab,
-                    target.transform.position,
+                    _cachedTarget.transform.position,
                     Quaternion.identity
                 );
                 Destroy(effect, 2f);
             }
 
-            return true;
+            ClearAttackState();
         }
+
+        /// <summary>
+        /// Clear all cached attack state. Called when attack is interrupted or completed.
+        /// </summary>
+        public void ClearAttackState()
+        {
+            _cachedTarget = null;
+            _cachedSkillIndex = -1;
+            _isAttacking = false;
+        }
+
+        // ==================== Utility ====================
 
         /// <summary>
         /// Get the index of the first skill that is ready to use.

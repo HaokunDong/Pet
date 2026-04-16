@@ -5,6 +5,14 @@ namespace PetGame
     /// <summary>
     /// Wraps Animator state transitions for character animations.
     /// Attach alongside CharacterEntity on the character GameObject.
+    /// When a non-attack animation is played (Idle, Walk), any pending attack state
+    /// in CombatSystem is cleared to prevent stale damage events.
+    /// 
+    /// IMPORTANT Animator Controller setup:
+    /// - Hit animation state MUST have Loop Time = false (non-looping).
+    /// - Hit state should have an Exit Time transition back to Idle (no condition needed).
+    /// - Attack animation clips MUST have Animation Events configured:
+    ///   add an event at the hit frame calling "OnAttackHit" (normal attack) or "OnSkillHit" (skill).
     /// </summary>
     [RequireComponent(typeof(Animator))]
     [RequireComponent(typeof(SpriteRenderer))]
@@ -19,8 +27,24 @@ namespace PetGame
         private static readonly int HashDeath = Animator.StringToHash("Death");
         private static readonly int HashSkillIndex = Animator.StringToHash("SkillIndex");
 
+        /// <summary>
+        /// Duration of the hit animation protection period (seconds).
+        /// During this time, behavior tree ticks will not interrupt the Hit animation.
+        /// </summary>
+        private const float HIT_STATE_DURATION = 0.4f;
+
         private Animator animator;
         private SpriteRenderer spriteRenderer;
+        private CombatSystem combatSystem;
+
+        private bool isInHitState;
+        private float hitStateTimer;
+
+        /// <summary>
+        /// Whether the character is currently in the Hit animation protection period.
+        /// When true, behavior tree nodes should avoid overriding the current animation.
+        /// </summary>
+        public bool IsInHitState => isInHitState;
 
         /// <summary>
         /// Current facing direction: 1 = right, -1 = left.
@@ -31,6 +55,20 @@ namespace PetGame
         {
             animator = GetComponent<Animator>();
             spriteRenderer = GetComponent<SpriteRenderer>();
+            combatSystem = GetComponent<CombatSystem>();
+        }
+
+        private void Update()
+        {
+            // Count down hit state protection timer
+            if (isInHitState)
+            {
+                hitStateTimer -= Time.deltaTime;
+                if (hitStateTimer <= 0f)
+                {
+                    isInHitState = false;
+                }
+            }
         }
 
         /// <summary>
@@ -45,19 +83,25 @@ namespace PetGame
         }
 
         /// <summary>
-        /// Play idle animation.
+        /// Play idle animation. Clears any pending attack state.
+        /// Skipped if the character is in the Hit animation protection period.
         /// </summary>
         public void PlayIdle()
         {
+            // Do not interrupt Hit animation during protection period
+            if (isInHitState) return;
+
+            ClearAttackStateIfNeeded();
             ResetAllTriggers();
             animator.SetTrigger(HashIdle);
         }
 
         /// <summary>
-        /// Play walk/run animation.
+        /// Play walk/run animation. Clears any pending attack state.
         /// </summary>
         public void PlayWalk()
         {
+            ClearAttackStateIfNeeded();
             ResetAllTriggers();
             animator.SetTrigger(HashWalk);
         }
@@ -82,18 +126,37 @@ namespace PetGame
         }
 
         /// <summary>
-        /// Play hit/hurt animation.
+        /// Play hit/hurt animation. Clears any pending attack state
+        /// since being hit interrupts the current attack.
+        /// If already in Hit state, replays the animation from the beginning.
+        /// Sets a protection period so behavior tree ticks don't interrupt the animation.
         /// </summary>
         public void PlayHit()
         {
-            animator.SetTrigger(HashHit);
+            ClearAttackStateIfNeeded();
+            ResetAllTriggers();
+
+            // If already in hit state, force replay from beginning
+            if (isInHitState)
+            {
+                animator.Play("Hit", 0, 0f);
+            }
+            else
+            {
+                animator.SetTrigger(HashHit);
+            }
+
+            // Set hit state protection period
+            isInHitState = true;
+            hitStateTimer = HIT_STATE_DURATION;
         }
 
         /// <summary>
-        /// Play death animation.
+        /// Play death animation. Clears any pending attack state.
         /// </summary>
         public void PlayDeath()
         {
+            ClearAttackStateIfNeeded();
             ResetAllTriggers();
             animator.SetTrigger(HashDeath);
         }
@@ -117,6 +180,17 @@ namespace PetGame
         {
             float direction = targetPosition.x - transform.position.x;
             SetFacingDirection(direction);
+        }
+
+        /// <summary>
+        /// Notify CombatSystem to clear pending attack state when a non-attack animation interrupts.
+        /// </summary>
+        private void ClearAttackStateIfNeeded()
+        {
+            if (combatSystem != null && combatSystem.IsAttacking)
+            {
+                combatSystem.ClearAttackState();
+            }
         }
 
         /// <summary>

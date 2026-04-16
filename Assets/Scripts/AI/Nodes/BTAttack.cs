@@ -4,12 +4,13 @@ namespace PetGame.AI
 {
     /// <summary>
     /// Action node: execute a normal attack on the current target.
+    /// Delegates all attack logic (animation, damage timing) to CombatSystem.
     /// Returns Running while in combat (including cooldown), Failure if target lost or out of range.
     /// </summary>
     public class BTAttack : BTNode
     {
         private readonly BTContext context;
-        private float lastAttackTime = -999f;
+        private CombatSystem combatSystem;
 
         public BTAttack(BTContext context)
         {
@@ -40,33 +41,28 @@ namespace PetGame.AI
             // Enter combat state — stop all movement
             context.IsInCombat = true;
 
-            // Always face the target while in combat
-            if (owner.CharAnimator != null)
+            // Lazy-cache CombatSystem reference
+            if (combatSystem == null)
+                combatSystem = owner.GetComponent<CombatSystem>();
+
+            // If the character is in Hit animation protection period, skip attack and idle
+            // to avoid interrupting the hurt feedback animation
+            if (owner.CharAnimator != null && owner.CharAnimator.IsInHitState)
             {
-                owner.CharAnimator.FaceTowards(target.transform.position);
+                return BTState.Running;
             }
 
-            // Check attack speed cooldown
-            float attackInterval = 1f / owner.RuntimeStats.attackSpeed;
-            if (Time.time - lastAttackTime < attackInterval)
+            // Attempt attack via CombatSystem (handles cooldown, animation, and deferred damage)
+            bool attacked = combatSystem.TryNormalAttack(target);
+
+            if (!attacked && !combatSystem.IsAttacking)
             {
-                // During cooldown — play idle animation and wait
+                // During cooldown and no attack animation playing — play idle and wait
                 if (owner.CharAnimator != null)
                 {
                     owner.CharAnimator.PlayIdle();
                 }
-                return BTState.Running;
             }
-
-            // Perform attack
-            if (owner.CharAnimator != null)
-            {
-                owner.CharAnimator.PlayAttack();
-            }
-
-            // Deal damage
-            target.TakeDamage(owner.RuntimeStats.attackPower);
-            lastAttackTime = Time.time;
 
             // Return Running to stay in combat — don't reset the behavior tree
             return BTState.Running;

@@ -117,6 +117,11 @@ namespace PetGame
             if (enemyObj.GetComponent<CombatSystem>() == null)
                 enemyObj.AddComponent<CombatSystem>();
 
+            // Ensure AnimEventReceiver exists so attack animation frame events
+            // can trigger damage application (fixes enemy not playing Hit animation)
+            if (enemyObj.GetComponent<AnimEventReceiver>() == null)
+                enemyObj.AddComponent<AnimEventReceiver>();
+
             if (enemyObj.GetComponent<Collider2D>() == null)
             {
                 BoxCollider2D col = enemyObj.AddComponent<BoxCollider2D>();
@@ -180,6 +185,11 @@ namespace PetGame
 
             if (enemyObj.GetComponent<CombatSystem>() == null)
                 enemyObj.AddComponent<CombatSystem>();
+
+            // Ensure AnimEventReceiver exists so attack animation frame events
+            // can trigger damage application (fixes enemy not playing Hit animation)
+            if (enemyObj.GetComponent<AnimEventReceiver>() == null)
+                enemyObj.AddComponent<AnimEventReceiver>();
 
             if (enemyObj.GetComponent<Collider2D>() == null)
                 enemyObj.AddComponent<BoxCollider2D>();

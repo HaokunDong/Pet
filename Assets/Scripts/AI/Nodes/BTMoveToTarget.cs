@@ -30,14 +30,9 @@ namespace PetGame.AI
 
             float dist = Vector2.Distance(owner.transform.position, target.transform.position);
 
-            // If already in combat (attacking), face target and stay idle
+            // If already in combat (attacking), don't interfere with attack animation
             if (context.IsInCombat)
             {
-                if (owner.CharAnimator != null)
-                {
-                    owner.CharAnimator.FaceTowards(target.transform.position);
-                    owner.CharAnimator.PlayIdle();
-                }
                 return BTState.Success;
             }
 
