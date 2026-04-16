@@ -37,9 +37,19 @@ namespace PetGame
         [Min(0.1f)]
         public float attackSpeed = 1f;
 
-        [Tooltip("Normal attack range")]
+        [Tooltip("Normal attack range (fallback if no attack range shapes defined)")]
         [Min(0f)]
         public float attackRange = 1.5f;
+
+        [Header("Attack Range Shapes")]
+        [Tooltip("Composable attack range shapes. Union of all shapes defines the final attack area. Leave empty to use attackRange as a simple circle.")]
+        public AttackRangeShape[] attackRangeShapes;
+
+        [Header("Sprite Orientation")]
+        [Tooltip("Whether the sprite asset faces right by default. " +
+                 "Uncheck this if the sprite faces left in its original art. " +
+                 "Attack range shapes are configured relative to this default facing direction.")]
+        public bool defaultFacesRight = true;
 
         [Header("Classification")]
         [Tooltip("Quality level determines max skill count: A=1, S=2, SS=3, SSS=4")]

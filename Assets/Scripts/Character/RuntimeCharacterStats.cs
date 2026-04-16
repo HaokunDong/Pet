@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace PetGame
 {
@@ -17,6 +18,8 @@ namespace PetGame
         public float moveSpeed;
         public float attackSpeed;
         public float attackRange;
+        public AttackRangeShape[] attackRangeShapes;
+        public bool defaultFacesRight;
         public QualityLevel qualityLevel;
         public CharacterType characterType;
 
@@ -43,6 +46,8 @@ namespace PetGame
             moveSpeed = data.moveSpeed;
             attackSpeed = data.attackSpeed;
             attackRange = data.attackRange;
+            attackRangeShapes = data.attackRangeShapes;
+            defaultFacesRight = data.defaultFacesRight;
             qualityLevel = data.qualityLevel;
             characterType = data.characterType;
 
@@ -55,6 +60,33 @@ namespace PetGame
                     skillCooldowns[i] = 0f; // All skills start ready
                 }
             }
+        }
+
+        /// <summary>
+        /// Check if a target position is within this character's attack range.
+        /// Uses multi-shape union check, falls back to simple circle if no shapes defined.
+        /// </summary>
+        /// <param name="ownerPos">Owner character world position.</param>
+        /// <param name="facingSign">1 for facing right, -1 for facing left.</param>
+        /// <param name="targetPos">Target world position.</param>
+        /// <returns>True if target is in attack range.</returns>
+        public bool IsTargetInAttackRange(Vector2 ownerPos, float facingSign, Vector2 targetPos)
+        {
+            // Convert runtime facing direction to effective facing sign relative to sprite's native orientation.
+            // Shapes are configured relative to the sprite's default facing direction.
+            // If sprite faces right by default: facingSign 1 (right) means no mirror, -1 (left) means mirror.
+            // If sprite faces left by default:  facingSign -1 (left) means no mirror, 1 (right) means mirror.
+            float effectiveFacingSign = defaultFacesRight ? facingSign : -facingSign;
+            return AttackRangeHelper.IsTargetInRange(ownerPos, effectiveFacingSign, attackRangeShapes, attackRange, targetPos);
+        }
+
+        /// <summary>
+        /// Get the maximum attack distance for AI chase calculations.
+        /// Returns the farthest reach across all shapes, or fallback attackRange.
+        /// </summary>
+        public float GetMaxAttackDistance()
+        {
+            return AttackRangeHelper.GetMaxAttackDistance(attackRangeShapes, attackRange);
         }
 
         /// <summary>

@@ -20,6 +20,11 @@ MonoBehaviour:
   moveSpeed: 3
   attackSpeed: 1
   attackRange: 1.5
+  attackRangeShapes:
+  - shapeType: 0
+    offset: {x: 0, y: 0}
+    radius: 0.2
+    size: {x: 0, y: 0}
   qualityLevel: 0
   characterType: 1
   skills: []

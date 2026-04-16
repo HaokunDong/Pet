@@ -30,6 +30,11 @@ namespace PetGame.AI
 
             float dist = Vector2.Distance(owner.transform.position, target.transform.position);
 
+            // Compute facing sign for multi-shape range check
+            float facingSign = target.transform.position.x >= owner.transform.position.x ? 1f : -1f;
+            if (owner.CharAnimator != null)
+                facingSign = owner.CharAnimator.FacingDirection;
+
             // If already in combat (attacking), don't interfere with attack animation
             if (context.IsInCombat)
             {
@@ -37,7 +42,8 @@ namespace PetGame.AI
             }
 
             // Already in attack range — stop and switch to idle
-            if (dist <= owner.RuntimeStats.attackRange)
+            if (owner.RuntimeStats.IsTargetInAttackRange(
+                    owner.transform.position, facingSign, target.transform.position))
             {
                 if (owner.CharAnimator != null)
                 {

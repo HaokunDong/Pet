@@ -62,6 +62,12 @@ namespace PetGame
 
             CharAnimator = GetComponent<CharacterAnimator>();
 
+            // Sync sprite orientation from CharacterData to CharacterAnimator
+            if (CharAnimator != null)
+            {
+                CharAnimator.SyncDefaultFacing(data.defaultFacesRight);
+            }
+
             // Create or re-initialize the health bar above this character
             InitializeHealthBar();
 
@@ -199,18 +205,29 @@ namespace PetGame
 
 #if UNITY_EDITOR
         /// <summary>
+        /// Get the current facing sign for Gizmo drawing.
+        /// Returns 1 (right) or -1 (left).
+        /// </summary>
+        private float GetFacingSign()
+        {
+            if (CharAnimator != null)
+            {
+                float rawFacing = CharAnimator.FacingDirection;
+                // Convert to effective facing sign relative to sprite's native orientation
+                bool facesRight = CharAnimator.DefaultFacesRight;
+                return facesRight ? rawFacing : -rawFacing;
+            }
+            return 1f;
+        }
+
+        /// <summary>
         /// Draw attack range gizmo when the character is selected in the Scene view.
-        /// Shows a prominent red semi-transparent circle.
+        /// Shows prominent semi-transparent shapes with wire outlines.
         /// </summary>
         private void OnDrawGizmosSelected()
         {
             if (RuntimeStats == null) return;
-
-            Gizmos.color = new Color(1f, 0f, 0f, 0.3f);
-            Gizmos.DrawWireSphere(transform.position, RuntimeStats.attackRange);
-            // Draw a filled disc for better visibility
-            UnityEditor.Handles.color = new Color(1f, 0f, 0f, 0.1f);
-            UnityEditor.Handles.DrawSolidDisc(transform.position, Vector3.forward, RuntimeStats.attackRange);
+            DrawAttackRangeGizmos(selected: true);
         }
 
         /// <summary>
@@ -219,9 +236,70 @@ namespace PetGame
         private void OnDrawGizmos()
         {
             if (RuntimeStats == null) return;
+            DrawAttackRangeGizmos(selected: false);
+        }
 
-            Gizmos.color = new Color(1f, 0f, 0f, 0.1f);
-            Gizmos.DrawWireSphere(transform.position, RuntimeStats.attackRange);
+        /// <summary>
+        /// Draw all attack range shapes as Gizmos.
+        /// Falls back to a simple circle if no shapes are defined.
+        /// </summary>
+        private void DrawAttackRangeGizmos(bool selected)
+        {
+            float fillAlpha = selected ? 0.15f : 0.05f;
+            float wireAlpha = selected ? 0.5f : 0.15f;
+            Color fillColor = new Color(1f, 0f, 0f, fillAlpha);
+            Color wireColor = new Color(1f, 0f, 0f, wireAlpha);
+
+            AttackRangeShape[] shapes = RuntimeStats.attackRangeShapes;
+            float facingSign = GetFacingSign();
+            Vector3 pos = transform.position;
+
+            if (shapes == null || shapes.Length == 0)
+            {
+                // Fallback: draw simple circle using attackRange
+                Gizmos.color = wireColor;
+                Gizmos.DrawWireSphere(pos, RuntimeStats.attackRange);
+                if (selected)
+                {
+                    UnityEditor.Handles.color = fillColor;
+                    UnityEditor.Handles.DrawSolidDisc(pos, Vector3.forward, RuntimeStats.attackRange);
+                }
+                return;
+            }
+
+            // Draw each shape
+            for (int i = 0; i < shapes.Length; i++)
+            {
+                if (shapes[i] == null) continue;
+
+                AttackRangeShape shape = shapes[i];
+                Vector2 center = (Vector2)pos + new Vector2(shape.offset.x * facingSign, shape.offset.y);
+
+                switch (shape.shapeType)
+                {
+                    case AttackShapeType.Circle:
+                        Gizmos.color = wireColor;
+                        Gizmos.DrawWireSphere(center, shape.radius);
+                        if (selected)
+                        {
+                            UnityEditor.Handles.color = fillColor;
+                            UnityEditor.Handles.DrawSolidDisc(center, Vector3.forward, shape.radius);
+                        }
+                        break;
+
+                    case AttackShapeType.Box:
+                        Vector3 boxCenter = new Vector3(center.x, center.y, pos.z);
+                        Vector3 boxSize = new Vector3(shape.size.x, shape.size.y, 0f);
+                        Gizmos.color = wireColor;
+                        Gizmos.DrawWireCube(boxCenter, boxSize);
+                        if (selected)
+                        {
+                            Gizmos.color = fillColor;
+                            Gizmos.DrawCube(boxCenter, boxSize);
+                        }
+                        break;
+                }
+            }
         }
 #endif
     }

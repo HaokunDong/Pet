@@ -33,9 +33,22 @@ namespace PetGame
         /// </summary>
         private const float HIT_STATE_DURATION = 0.4f;
 
+        [Header("Sprite Orientation")]
+        [Tooltip("Whether the sprite asset faces right by default. " +
+                 "This value is synced from CharacterData at runtime. " +
+                 "Only used as fallback if no CharacterData is assigned.")]
+        [SerializeField]
+        private bool defaultFacesRight = true;
+
         private Animator animator;
         private SpriteRenderer spriteRenderer;
         private CombatSystem combatSystem;
+
+        /// <summary>
+        /// Whether the sprite asset faces right by default.
+        /// Exposed for external systems (e.g. Gizmo drawing) that need to know the native orientation.
+        /// </summary>
+        public bool DefaultFacesRight => defaultFacesRight;
 
         private bool isInHitState;
         private float hitStateTimer;
@@ -69,6 +82,15 @@ namespace PetGame
                     isInHitState = false;
                 }
             }
+        }
+
+        /// <summary>
+        /// Sync the defaultFacesRight setting from CharacterData.
+        /// Called by CharacterEntity during initialization.
+        /// </summary>
+        public void SyncDefaultFacing(bool facesRight)
+        {
+            defaultFacesRight = facesRight;
         }
 
         /// <summary>
@@ -164,13 +186,18 @@ namespace PetGame
         /// <summary>
         /// Flip the sprite to face the movement direction.
         /// Positive moveDirection = face right, negative = face left.
+        /// Respects the defaultFacesRight setting for sprites with different native orientations.
         /// </summary>
         public void SetFacingDirection(float moveDirection)
         {
             if (Mathf.Approximately(moveDirection, 0f)) return;
 
             FacingDirection = moveDirection > 0f ? 1 : -1;
-            spriteRenderer.flipX = FacingDirection > 0;
+
+            // If sprite natively faces right: flip when we want to face left
+            // If sprite natively faces left:  flip when we want to face right
+            bool wantFaceRight = FacingDirection > 0;
+            spriteRenderer.flipX = defaultFacesRight ? !wantFaceRight : wantFaceRight;
         }
 
         /// <summary>

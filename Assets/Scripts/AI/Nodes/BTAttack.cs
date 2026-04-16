@@ -29,9 +29,13 @@ namespace PetGame.AI
                 return BTState.Failure;
             }
 
-            // Check if in attack range
-            float dist = Vector2.Distance(owner.transform.position, target.transform.position);
-            if (dist > owner.RuntimeStats.attackRange)
+            // Check if in attack range using multi-shape system
+            float facingSign = target.transform.position.x >= owner.transform.position.x ? 1f : -1f;
+            if (owner.CharAnimator != null)
+                facingSign = owner.CharAnimator.FacingDirection;
+
+            if (!owner.RuntimeStats.IsTargetInAttackRange(
+                    owner.transform.position, facingSign, target.transform.position))
             {
                 // Target moved out of range — exit combat state
                 context.IsInCombat = false;

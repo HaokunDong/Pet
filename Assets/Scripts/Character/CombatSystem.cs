@@ -49,9 +49,16 @@ namespace PetGame
             if (entity == null || !entity.RuntimeStats.IsAlive) return false;
             if (target == null || !target.RuntimeStats.IsAlive) return false;
 
-            // Check attack range
-            float dist = Vector2.Distance(transform.position, target.transform.position);
-            if (dist > entity.RuntimeStats.attackRange) return false;
+            // Check attack range using multi-shape system
+            float facingSign = 1f;
+            if (entity.CharAnimator != null)
+                facingSign = entity.CharAnimator.FacingDirection;
+            else
+                facingSign = target.transform.position.x >= transform.position.x ? 1f : -1f;
+
+            if (!entity.RuntimeStats.IsTargetInAttackRange(
+                    transform.position, facingSign, target.transform.position))
+                return false;
 
             // Check attack speed interval
             float attackInterval = 1f / entity.RuntimeStats.attackSpeed;

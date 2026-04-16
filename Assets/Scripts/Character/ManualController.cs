@@ -85,9 +85,13 @@ namespace PetGame
                     // Clicked on an enemy
                     attackTarget = clickedEntity;
 
-                    // Check if already in attack range
-                    float dist = Vector2.Distance(transform.position, attackTarget.transform.position);
-                    if (dist <= entity.RuntimeStats.attackRange)
+                    // Check if already in attack range using multi-shape system
+                    float facingSign1 = attackTarget.transform.position.x >= transform.position.x ? 1f : -1f;
+                    if (entity.CharAnimator != null)
+                        facingSign1 = entity.CharAnimator.FacingDirection;
+
+                    if (entity.RuntimeStats.IsTargetInAttackRange(
+                            transform.position, facingSign1, attackTarget.transform.position))
                     {
                         // In range: enter sustained attack mode
                         isChasing = false;
@@ -159,9 +163,12 @@ namespace PetGame
                 return;
             }
 
-            float dist = Vector2.Distance(transform.position, attackTarget.transform.position);
+            float facingSign2 = attackTarget.transform.position.x >= transform.position.x ? 1f : -1f;
+            if (entity.CharAnimator != null)
+                facingSign2 = entity.CharAnimator.FacingDirection;
 
-            if (dist <= entity.RuntimeStats.attackRange)
+            if (entity.RuntimeStats.IsTargetInAttackRange(
+                    transform.position, facingSign2, attackTarget.transform.position))
             {
                 // In range: stop moving and enter sustained attack mode
                 isChasing = false;
@@ -203,9 +210,13 @@ namespace PetGame
                 return;
             }
 
-            // Check if target moved out of attack range
-            float dist = Vector2.Distance(transform.position, attackTarget.transform.position);
-            if (dist > entity.RuntimeStats.attackRange)
+            // Check if target moved out of attack range using multi-shape system
+            float facingSign3 = attackTarget.transform.position.x >= transform.position.x ? 1f : -1f;
+            if (entity.CharAnimator != null)
+                facingSign3 = entity.CharAnimator.FacingDirection;
+
+            if (!entity.RuntimeStats.IsTargetInAttackRange(
+                    transform.position, facingSign3, attackTarget.transform.position))
             {
                 // Target left range — stop attacking, stay idle
                 isAttacking = false;
