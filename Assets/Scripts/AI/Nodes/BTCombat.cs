@@ -1,0 +1,291 @@
+using UnityEngine;
+
+namespace PetGame.AI
+{
+    /// <summary>
+    /// Action node: drive the Combat phase (Engage → Strike) of the AI state machine.
+    /// 
+    /// Preconditions:
+    /// - The root Selector routes the tick to this node only after a valid target has been
+    ///   acquired by BTFindNearestEnemy (i.e. <see cref="BTContext.CurrentTarget"/> is alive).
+    /// - The Wander/PostCombat → Combat transition (and the TargetWasBehindOnEngage / HasFiredFirstStrike
+    ///   initialization) is handled by the target-acquisition node.
+    /// 
+    /// Behavior:
+    /// - Engage sub-state: if distance &gt; engageDistance, walk horizontally toward the target.
+    ///   Every frame call SetFacingDirection(targetDir); once the facing aligns with the target
+    ///   direction, clear TargetWasBehindOnEngage (natural turn during chase).
+    /// - Strike sub-state: horizontal velocity = 0, FaceTowards(target); on each tick, if the
+    ///   attack cooldown (1/attackSpeed) has elapsed, try skill first (Player/Boss) then normal
+    ///   attack. IsAttacking or IsInHitState skips the attack trigger this frame.
+    /// - First-strike-behind rule: if TargetWasBehindOnEngage is true and this is the first
+    ///   strike of the encounter, spend this frame only turning (no attack) and clear the flag.
+    /// - Hysteresis: stay in Strike until distance &gt; engageDistance + EngageExitHysteresis.
+    /// 
+    /// Returns Success when combat should continue (target alive and within reach),
+    /// Failure when the target is dead / gone so the root Selector can fall through to PostCombat.
+    /// </summary>
+    public class BTCombat : BTNode
+    {
+        /// <summary>Minimum allowed engageDistance to prevent complete overlap.</summary>
+        private const float MinEngageDistance = 0.1f;
+
+        /// <summary>Horizontal dead-zone for FaceTowards in Strike state to prevent per-frame flip-flopping.</summary>
+        private const float StrikeFacingDeadzone = 0.05f;
+
+        private readonly BTContext context;
+        private CombatSystem combatSystem;
+
+        public BTCombat(BTContext context)
+        {
+            this.context = context;
+        }
+
+        public override BTState Execute()
+        {
+            CharacterEntity owner = context.Owner;
+            CharacterEntity target = context.CurrentTarget;
+
+            if (owner == null || !owner.RuntimeStats.IsAlive)
+                return BTState.Failure;
+
+            if (target == null || !target.RuntimeStats.IsAlive)
+            {
+                // Target lost — let root fall through to PostCombat.
+                return BTState.Failure;
+            }
+
+            if (combatSystem == null)
+                combatSystem = owner.GetComponent<CombatSystem>();
+
+            float dist = Mathf.Abs(owner.transform.position.x - target.transform.position.x);
+            float engageDist = Mathf.Max(owner.RuntimeStats.engageDistance, MinEngageDistance);
+            float engageExitDist = engageDist + context.EngageExitHysteresis;
+
+            // Decide Engage vs Strike (with hysteresis on Strike exit).
+            if (context.CurrentState == AIState.Strike)
+            {
+                if (dist > engageExitDist)
+                {
+                    context.CurrentState = AIState.Engage;
+                }
+            }
+            else
+            {
+                // Coming from Wander / PostCombat / Engage — pick strictly by engageDistance.
+                context.CurrentState = dist <= engageDist ? AIState.Strike : AIState.Engage;
+            }
+
+            if (context.CurrentState == AIState.Strike)
+            {
+                TickStrike(owner, target);
+            }
+            else
+            {
+                TickEngage(owner, target);
+            }
+
+            return BTState.Success;
+        }
+
+        // ---------------- Engage sub-state ----------------
+
+        private void TickEngage(CharacterEntity owner, CharacterEntity target)
+        {
+            float ownerX = owner.transform.position.x;
+            float targetX = target.transform.position.x;
+            float dx = targetX - ownerX;
+            float absDx = Mathf.Abs(dx);
+            float dir = dx >= 0f ? 1f : -1f;
+            float engageDist = Mathf.Max(owner.RuntimeStats.engageDistance, MinEngageDistance);
+
+            // Use the larger minAttackDistance of both combatants to prevent overlap.
+            float ownerMinDist = owner.RuntimeStats.minAttackDistance;
+            float targetMinDist = target.RuntimeStats != null ? target.RuntimeStats.minAttackDistance : 0f;
+            float minDist = Mathf.Max(ownerMinDist, targetMinDist);
+
+            // If already within engage distance, snap to Strike immediately — no movement.
+            if (absDx <= engageDist)
+            {
+                // But if too close (below minAttackDistance), push owner back to minDist.
+                if (absDx < minDist)
+                {
+                    Vector3 pos = owner.transform.position;
+                    pos.x = targetX - dir * minDist;
+                    owner.transform.position = pos;
+                }
+
+                context.CurrentState = AIState.Strike;
+                if (owner.CharAnimator != null)
+                {
+                    owner.CharAnimator.PlayIdle();
+                    owner.CharAnimator.SetFacingDirection(dir);
+                }
+                MaybeClearBehindFlagOnFacingAligned(owner, dir);
+                return;
+            }
+
+            // Wall detection: if a wall blocks our path, stop and play idle, stay in Combat.
+            Vector2 rayOrigin = new Vector2(ownerX, owner.transform.position.y + 0.5f);
+            RaycastHit2D hit = Physics2D.Raycast(
+                rayOrigin, new Vector2(dir, 0f),
+                context.WallDetectDistance, context.TerrainLayerMask);
+
+            if (hit.collider != null)
+            {
+                if (owner.CharAnimator != null)
+                {
+                    owner.CharAnimator.PlayIdle();
+                    owner.CharAnimator.SetFacingDirection(dir);
+                }
+                MaybeClearBehindFlagOnFacingAligned(owner, dir);
+                return;
+            }
+
+            // Walk toward target with overshoot protection.
+            // Stop at the larger of minAttackDistance and engageDistance to prevent overlap.
+            float speed = owner.RuntimeStats.moveSpeed;
+            float step = speed * Time.deltaTime;
+            float stopDist = Mathf.Max(minDist, engageDist);
+            float maxAllowedStep = absDx - stopDist;
+
+            if (step >= maxAllowedStep)
+            {
+                // Clamp: place owner exactly at stopDist from target.
+                step = Mathf.Max(maxAllowedStep, 0f);
+            }
+
+            Vector3 newPos = owner.transform.position;
+            newPos.x += dir * step;
+            owner.transform.position = newPos;
+
+            // After clamped move, check if we've reached engage distance → switch to Strike.
+            float newAbsDx = Mathf.Abs(targetX - newPos.x);
+            if (newAbsDx <= engageDist)
+            {
+                context.CurrentState = AIState.Strike;
+            }
+
+            if (owner.CharAnimator != null)
+            {
+                // If we actually moved, play walk; otherwise idle (clamped to zero step).
+                if (step > 0.001f)
+                    owner.CharAnimator.PlayWalk();
+                else
+                    owner.CharAnimator.PlayIdle();
+                owner.CharAnimator.SetFacingDirection(dir);
+            }
+
+            MaybeClearBehindFlagOnFacingAligned(owner, dir);
+        }
+
+        /// <summary>
+        /// While chasing, once our facing aligns with the target direction, clear the
+        /// "target was behind on engage" flag so we don't waste a frame turning at Strike entry.
+        /// </summary>
+        private void MaybeClearBehindFlagOnFacingAligned(CharacterEntity owner, float targetDir)
+        {
+            if (!context.TargetWasBehindOnEngage) return;
+            if (owner.CharAnimator == null) return;
+
+            int targetDirSign = targetDir >= 0f ? 1 : -1;
+            if (owner.CharAnimator.FacingDirection == targetDirSign)
+            {
+                context.TargetWasBehindOnEngage = false;
+            }
+        }
+
+        // ---------------- Strike sub-state ----------------
+
+        private void TickStrike(CharacterEntity owner, CharacterEntity target)
+        {
+            // Enforce minimum attack distance: if characters are too close, push owner away.
+            // Use the larger minAttackDistance of both combatants.
+            float strikeDx = target.transform.position.x - owner.transform.position.x;
+            float strikeAbsDx = Mathf.Abs(strikeDx);
+            float ownerMinDist = owner.RuntimeStats.minAttackDistance;
+            float targetMinDist = target.RuntimeStats != null ? target.RuntimeStats.minAttackDistance : 0f;
+            float minDist = Mathf.Max(ownerMinDist, targetMinDist);
+            if (strikeAbsDx < minDist && strikeAbsDx > 0.001f)
+            {
+                // Only push owner; the target's own AI will handle its side.
+                float pushDir = strikeDx >= 0f ? -1f : 1f;
+                float pushAmount = minDist - strikeAbsDx;
+                Vector3 ownerPos = owner.transform.position;
+                ownerPos.x += pushDir * pushAmount;
+                owner.transform.position = ownerPos;
+            }
+
+            // Face the target while in Strike, but apply a dead-zone to prevent
+            // flip-flopping when the two characters are nearly overlapping on X.
+            float facingDx = target.transform.position.x - owner.transform.position.x;
+            if (owner.CharAnimator != null && Mathf.Abs(facingDx) >= StrikeFacingDeadzone)
+            {
+                owner.CharAnimator.FaceTowards(target.transform.position);
+            }
+
+            // Do not interrupt Hit animation.
+            if (owner.CharAnimator != null && owner.CharAnimator.IsInHitState)
+            {
+                return;
+            }
+
+            // If already mid-attack (animation playing, waiting for frame event), don't stack new attacks.
+            if (combatSystem != null && combatSystem.IsAttacking)
+            {
+                return;
+            }
+
+            // First-strike-behind rule: spend this frame only turning, clear flag, wait for next tick.
+            if (context.TargetWasBehindOnEngage && !context.HasFiredFirstStrike)
+            {
+                context.TargetWasBehindOnEngage = false;
+                if (owner.CharAnimator != null)
+                {
+                    owner.CharAnimator.PlayIdle();
+                }
+                return;
+            }
+
+            // Attack-speed gate.
+            float attackInterval = 1f / Mathf.Max(0.0001f, owner.RuntimeStats.attackSpeed);
+            if (Time.time - context.LastAttackTime < attackInterval)
+            {
+                if (owner.CharAnimator != null)
+                {
+                    owner.CharAnimator.PlayIdle();
+                }
+                return;
+            }
+
+            bool fired = false;
+
+            // Skill priority for Player / Boss.
+            CharacterType type = owner.RuntimeStats.characterType;
+            if ((type == CharacterType.Player || type == CharacterType.Boss) && combatSystem != null)
+            {
+                int readySkill = combatSystem.GetFirstReadySkillIndex();
+                if (readySkill >= 0)
+                {
+                    fired = combatSystem.TryUseSkill(readySkill, target);
+                }
+            }
+
+            if (!fired && combatSystem != null)
+            {
+                fired = combatSystem.TryNormalAttack(target);
+            }
+
+            if (fired)
+            {
+                context.LastAttackTime = Time.time;
+                context.HasFiredFirstStrike = true;
+            }
+            else if (owner.CharAnimator != null)
+            {
+                // Attack range check may have failed this frame; stay in Strike and idle.
+                owner.CharAnimator.PlayIdle();
+            }
+        }
+    }
+}

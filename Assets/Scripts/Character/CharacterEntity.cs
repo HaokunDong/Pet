@@ -241,7 +241,7 @@ namespace PetGame
 
         /// <summary>
         /// Draw all attack range shapes as Gizmos.
-        /// Falls back to a simple circle if no shapes are defined.
+        /// Also draws minAttackDistance as a green circle and engageDistance as a yellow circle.
         /// </summary>
         private void DrawAttackRangeGizmos(bool selected)
         {
@@ -254,51 +254,63 @@ namespace PetGame
             float facingSign = GetFacingSign();
             Vector3 pos = transform.position;
 
-            if (shapes == null || shapes.Length == 0)
+            if (shapes != null)
             {
-                // Fallback: draw simple circle using attackRange
-                Gizmos.color = wireColor;
-                Gizmos.DrawWireSphere(pos, RuntimeStats.attackRange);
-                if (selected)
+                for (int i = 0; i < shapes.Length; i++)
                 {
-                    UnityEditor.Handles.color = fillColor;
-                    UnityEditor.Handles.DrawSolidDisc(pos, Vector3.forward, RuntimeStats.attackRange);
+                    if (shapes[i] == null) continue;
+
+                    AttackRangeShape shape = shapes[i];
+                    Vector2 center = (Vector2)pos + new Vector2(shape.offset.x * facingSign, shape.offset.y);
+
+                    switch (shape.shapeType)
+                    {
+                        case AttackShapeType.Circle:
+                            Gizmos.color = wireColor;
+                            Gizmos.DrawWireSphere(center, shape.radius);
+                            if (selected)
+                            {
+                                UnityEditor.Handles.color = fillColor;
+                                UnityEditor.Handles.DrawSolidDisc(center, Vector3.forward, shape.radius);
+                            }
+                            break;
+
+                        case AttackShapeType.Box:
+                            Vector3 boxCenter = new Vector3(center.x, center.y, pos.z);
+                            Vector3 boxSize = new Vector3(shape.size.x, shape.size.y, 0f);
+                            Gizmos.color = wireColor;
+                            Gizmos.DrawWireCube(boxCenter, boxSize);
+                            if (selected)
+                            {
+                                Gizmos.color = fillColor;
+                                Gizmos.DrawCube(boxCenter, boxSize);
+                            }
+                            break;
+                    }
                 }
-                return;
             }
 
-            // Draw each shape
-            for (int i = 0; i < shapes.Length; i++)
+            // Draw minAttackDistance as a green circle
+            float minAtkDist = RuntimeStats.minAttackDistance;
+            if (minAtkDist > 0f)
             {
-                if (shapes[i] == null) continue;
-
-                AttackRangeShape shape = shapes[i];
-                Vector2 center = (Vector2)pos + new Vector2(shape.offset.x * facingSign, shape.offset.y);
-
-                switch (shape.shapeType)
+                Color minDistWire = new Color(0f, 1f, 0f, selected ? 0.6f : 0.2f);
+                Gizmos.color = minDistWire;
+                Gizmos.DrawWireSphere(pos, minAtkDist);
+                if (selected)
                 {
-                    case AttackShapeType.Circle:
-                        Gizmos.color = wireColor;
-                        Gizmos.DrawWireSphere(center, shape.radius);
-                        if (selected)
-                        {
-                            UnityEditor.Handles.color = fillColor;
-                            UnityEditor.Handles.DrawSolidDisc(center, Vector3.forward, shape.radius);
-                        }
-                        break;
-
-                    case AttackShapeType.Box:
-                        Vector3 boxCenter = new Vector3(center.x, center.y, pos.z);
-                        Vector3 boxSize = new Vector3(shape.size.x, shape.size.y, 0f);
-                        Gizmos.color = wireColor;
-                        Gizmos.DrawWireCube(boxCenter, boxSize);
-                        if (selected)
-                        {
-                            Gizmos.color = fillColor;
-                            Gizmos.DrawCube(boxCenter, boxSize);
-                        }
-                        break;
+                    UnityEditor.Handles.color = new Color(0f, 1f, 0f, 0.08f);
+                    UnityEditor.Handles.DrawSolidDisc(pos, Vector3.forward, minAtkDist);
                 }
+            }
+
+            // Draw engageDistance as a yellow circle
+            float engDist = RuntimeStats.engageDistance;
+            if (engDist > 0f)
+            {
+                Color engDistWire = new Color(1f, 1f, 0f, selected ? 0.5f : 0.15f);
+                Gizmos.color = engDistWire;
+                Gizmos.DrawWireSphere(pos, engDist);
             }
         }
 #endif

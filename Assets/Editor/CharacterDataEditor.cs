@@ -31,6 +31,7 @@ namespace PetGame
             EditorGUILayout.HelpBox(
                 "Preview shows the character sprite with attack range shapes overlaid.\n" +
                 "Red = Circle shapes, Blue = Box shapes.\n" +
+                "Green circle = Min Attack Distance, Yellow circle = Engage Distance.\n" +
                 "Shapes are shown matching the sprite's native facing direction.",
                 MessageType.Info);
 
@@ -68,14 +69,23 @@ namespace PetGame
             // Draw attack range shapes
             DrawAttackRangeShapes(data, center);
 
-            // Draw fallback range circle if no shapes defined
-            if (data.attackRangeShapes == null || data.attackRangeShapes.Length == 0)
+            // Draw engageDistance as a yellow dashed circle
+            if (data.engageDistance > 0f)
             {
-                DrawCircleOutline(center, data.attackRange * PIXELS_PER_UNIT, new Color(1f, 1f, 0f, 0.5f));
-                // Label
-                Vector2 labelPos = new Vector2(center.x, center.y - data.attackRange * PIXELS_PER_UNIT - 12);
-                Rect labelRect = new Rect(labelPos.x - 60, labelPos.y, 120, 16);
-                GUI.Label(labelRect, $"Fallback: {data.attackRange:F1}", EditorStyles.centeredGreyMiniLabel);
+                DrawCircleOutline(center, data.engageDistance * PIXELS_PER_UNIT, new Color(1f, 1f, 0f, 0.4f));
+                Vector2 engLabelPos = new Vector2(center.x + data.engageDistance * PIXELS_PER_UNIT + 4, center.y - 8);
+                Rect engLabelRect = new Rect(engLabelPos.x, engLabelPos.y, 100, 16);
+                GUI.Label(engLabelRect, $"Engage: {data.engageDistance:F2}", EditorStyles.centeredGreyMiniLabel);
+            }
+
+            // Draw minAttackDistance as a green circle
+            if (data.minAttackDistance > 0f)
+            {
+                DrawCircleFilled(center, data.minAttackDistance * PIXELS_PER_UNIT, new Color(0f, 1f, 0f, 0.1f));
+                DrawCircleOutline(center, data.minAttackDistance * PIXELS_PER_UNIT, new Color(0f, 1f, 0f, 0.6f));
+                Vector2 minLabelPos = new Vector2(center.x + data.minAttackDistance * PIXELS_PER_UNIT + 4, center.y + 4);
+                Rect minLabelRect = new Rect(minLabelPos.x, minLabelPos.y, 100, 16);
+                GUI.Label(minLabelRect, $"MinAtk: {data.minAttackDistance:F2}", EditorStyles.centeredGreyMiniLabel);
             }
         }
 

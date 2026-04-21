@@ -3,21 +3,43 @@ using UnityEngine;
 namespace PetGame.AI
 {
     /// <summary>
-    /// AI controller component. Builds and drives the behavior tree for a character.
-    /// Supports different tree structures for Player AI, MinorEnemy, and Boss.
+    /// AI controller component. Builds and drives the new Wander → Combat(Engage/Strike) → PostCombat
+    /// behavior tree for a character. Player, MinorEnemy and Boss share the same tree structure; skill
+    /// priority inside Strike is gated at runtime by the character type (MinorEnemy uses normal attack only).
     /// </summary>
     [RequireComponent(typeof(CharacterEntity))]
     public class AIController : MonoBehaviour
     {
-        [Header("Settings")]
-        [Tooltip("Detection range for finding enemies")]
+        [Header("Detection & Wander")]
+        [Tooltip("Detection range for finding enemies.")]
         public float detectionRange = 10f;
 
-        [Tooltip("Patrol range (distance from spawn point)")]
+        [Tooltip("Patrol/wander range (distance from spawn point).")]
         public float patrolRange = 5f;
 
-        [Tooltip("Wall detection raycast distance")]
+        [Tooltip("Wall detection raycast distance.")]
         public float wallDetectDistance = 0.5f;
+
+        [Header("Combat Hysteresis")]
+        [Tooltip("Extra distance beyond engageDistance before Strike falls back to Engage (anti-jitter).")]
+        [Min(0f)]
+        public float engageExitHysteresis = 0.25f;
+
+        [Tooltip("Extra distance beyond detectionRange before AI disengages from the current target.")]
+        [Min(0f)]
+        public float disengageHysteresis = 1.0f;
+
+        [Header("PostCombat")]
+        [Tooltip("Duration (seconds) of the idle cooldown after combat ends before returning to Wander.")]
+        [Min(0f)]
+        public float postCombatDuration = 1.5f;
+
+        [Header("Wander Timing")]
+        [Tooltip("Random range (seconds) for a single Wander walk segment length.")]
+        public Vector2 wanderWalkDuration = new Vector2(1.5f, 3.5f);
+
+        [Tooltip("Random range (seconds) for a single WanderPause idle duration.")]
+        public Vector2 wanderPauseDuration = new Vector2(0.5f, 1.5f);
 
         private CharacterEntity entity;
         private BehaviorTree behaviorTree;
@@ -35,7 +57,7 @@ namespace PetGame.AI
 
         private void Start()
         {
-            if (entity.IsInitialized)
+            if (entity != null && entity.IsInitialized)
             {
                 BuildTree();
             }
@@ -52,91 +74,44 @@ namespace PetGame.AI
         }
 
         /// <summary>
-        /// Build the behavior tree based on character type.
+        /// Build the unified Wander → Combat → PostCombat behavior tree.
         /// </summary>
         private void BuildTree()
         {
             context = new BTContext(entity)
             {
                 PatrolRange = patrolRange,
-                WallDetectDistance = wallDetectDistance
+                WallDetectDistance = wallDetectDistance,
+                EngageExitHysteresis = engageExitHysteresis,
+                DisengageHysteresis = disengageHysteresis,
+                PostCombatDuration = postCombatDuration,
+                WanderWalkDuration = wanderWalkDuration,
+                WanderPauseDuration = wanderPauseDuration,
+                CurrentState = AIState.Wander
             };
 
-            BTNode root;
-
-            switch (entity.RuntimeStats.characterType)
-            {
-                case CharacterType.MinorEnemy:
-                    root = BuildMinorEnemyTree();
-                    break;
-                case CharacterType.Boss:
-                    root = BuildBossTree();
-                    break;
-                case CharacterType.Player:
-                default:
-                    root = BuildPlayerAITree();
-                    break;
-            }
-
-            behaviorTree = new BehaviorTree(root);
+            behaviorTree = new BehaviorTree(BuildUnifiedTree());
         }
 
         /// <summary>
-        /// Player AI tree: Patrol → Find Enemy → (Skill Attack | Normal Attack)
+        /// Unified tree used by Player / MinorEnemy / Boss:
+        ///   Selector(
+        ///     Sequence(FindNearestEnemy, Combat),   // highest priority — engage any valid target
+        ///     PostCombat,                           // short idle cooldown after a fight ends
+        ///     Wander                                // default random wander behavior
+        ///   )
+        /// MinorEnemy's skill branch is suppressed inside BTCombat based on RuntimeStats.characterType.
         /// </summary>
-        private BTNode BuildPlayerAITree()
+        private BTNode BuildUnifiedTree()
         {
             var findEnemy = new BTFindNearestEnemy(context, detectionRange);
-            var checkInRange = new BTCheckEnemyInRange(context);
-            var moveToTarget = new BTMoveToTarget(context);
-            var attack = new BTAttack(context);
-            var patrol = new BTPatrol(context);
-            var checkSkill = new BTCheckSkillReady(context);
-            var useSkill = new BTUseSkill(context, checkSkill);
+            var combat = new BTCombat(context);
+            var postCombat = new BTPostCombat(context);
+            var wander = new BTWander(context);
 
-            // Skill attack sequence: check skill ready → check in range → use skill
-            var skillAttackSeq = new BTSequence(checkSkill, checkInRange, useSkill);
+            var combatSeq = new BTSequence(findEnemy, combat);
 
-            // Normal attack sequence: check in range → attack
-            var normalAttackSeq = new BTSequence(checkInRange, attack);
-
-            // Attack selector: try skill first, then normal attack
-            var attackSelector = new BTSelector(skillAttackSeq, normalAttackSeq);
-
-            // Combat sequence: find enemy → move to target → attack
-            var combatSeq = new BTSequence(findEnemy, moveToTarget, attackSelector);
-
-            // Root selector: try combat, fallback to patrol
-            return new BTSelector(combatSeq, patrol);
-        }
-
-        /// <summary>
-        /// Minor enemy tree: Find Player → Move → Normal Attack only (no skills)
-        /// </summary>
-        private BTNode BuildMinorEnemyTree()
-        {
-            var findEnemy = new BTFindNearestEnemy(context, detectionRange);
-            var checkInRange = new BTCheckEnemyInRange(context);
-            var moveToTarget = new BTMoveToTarget(context);
-            var attack = new BTAttack(context);
-            var patrol = new BTPatrol(context);
-
-            // Normal attack sequence: check in range → attack
-            var normalAttackSeq = new BTSequence(checkInRange, attack);
-
-            // Combat sequence: find player → move → attack
-            var combatSeq = new BTSequence(findEnemy, moveToTarget, normalAttackSeq);
-
-            // Root: try combat, fallback to patrol
-            return new BTSelector(combatSeq, patrol);
-        }
-
-        /// <summary>
-        /// Boss tree: same as player AI (find → move → skill/normal attack)
-        /// </summary>
-        private BTNode BuildBossTree()
-        {
-            return BuildPlayerAITree();
+            return new BTSelector(combatSeq, postCombat, wander);
         }
 
         private void Update()
@@ -144,7 +119,25 @@ namespace PetGame.AI
             if (!IsActive || behaviorTree == null) return;
             if (entity == null || !entity.RuntimeStats.IsAlive) return;
 
+            // Keep runtime hysteresis / duration tunables in sync with Inspector tweaks.
+            SyncContextTunables();
+
             behaviorTree.Tick();
+        }
+
+        /// <summary>
+        /// Propagate Inspector tweaks into the BTContext so designers can iterate at runtime.
+        /// </summary>
+        private void SyncContextTunables()
+        {
+            if (context == null) return;
+            context.EngageExitHysteresis = engageExitHysteresis;
+            context.DisengageHysteresis = disengageHysteresis;
+            context.PostCombatDuration = postCombatDuration;
+            context.WanderWalkDuration = wanderWalkDuration;
+            context.WanderPauseDuration = wanderPauseDuration;
+            context.PatrolRange = patrolRange;
+            context.WallDetectDistance = wallDetectDistance;
         }
 
         /// <summary>
@@ -153,14 +146,15 @@ namespace PetGame.AI
         public void PauseAI()
         {
             IsActive = false;
-            if (entity.CharAnimator != null)
+            if (entity != null && entity.CharAnimator != null)
             {
                 entity.CharAnimator.PlayIdle();
             }
         }
 
         /// <summary>
-        /// Resume the AI (start ticking the behavior tree again).
+        /// Resume the AI: reset the state machine to a clean Wander state so no stale
+        /// target / combat sub-state is carried over from the manual-control session.
         /// </summary>
         public void ResumeAI()
         {
@@ -176,14 +170,16 @@ namespace PetGame.AI
             else
             {
                 context.CurrentTarget = null;
-                context.IsInCombat = false;
+                context.CurrentState = AIState.Wander;
+                context.HasFiredFirstStrike = false;
+                context.TargetWasBehindOnEngage = false;
             }
 
             IsActive = true;
 
             if (entity != null && entity.CharAnimator != null)
             {
-                entity.CharAnimator.PlayAttack();
+                entity.CharAnimator.PlayIdle();
             }
         }
 

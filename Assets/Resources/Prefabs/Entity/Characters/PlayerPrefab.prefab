@@ -17,6 +17,7 @@ GameObject:
   - component: {fileID: 1017297527261191616}
   - component: {fileID: 4649569251312808839}
   - component: {fileID: 800866984162691023}
+  - component: {fileID: 5695150033332502739}
   m_Layer: 8
   m_Name: PlayerPrefab
   m_TagString: Player
@@ -234,3 +235,23 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   defaultFacesRight: 0
+--- !u!114 &5695150033332502739
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5516931510916368851}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d3bb5e0ba9414e69b53da0aadfcf9f4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  detectionRange: 10
+  patrolRange: 5
+  wallDetectDistance: 0.5
+  engageExitHysteresis: 0.25
+  disengageHysteresis: 1
+  postCombatDuration: 1.5
+  wanderWalkDuration: {x: 1.5, y: 3.5}
+  wanderPauseDuration: {x: 0.5, y: 1.5}

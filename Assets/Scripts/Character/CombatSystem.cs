@@ -11,7 +11,6 @@ namespace PetGame
     public class CombatSystem : MonoBehaviour
     {
         private CharacterEntity entity;
-        private float lastAttackTime = -999f;
 
         // --- Cached attack state for animation frame event callbacks ---
         private CharacterEntity _cachedTarget;
@@ -60,9 +59,8 @@ namespace PetGame
                     transform.position, facingSign, target.transform.position))
                 return false;
 
-            // Check attack speed interval
-            float attackInterval = 1f / entity.RuntimeStats.attackSpeed;
-            if (Time.time - lastAttackTime < attackInterval) return false;
+            // NOTE: Attack speed interval is managed by BTCombat (context.LastAttackTime).
+            // No duplicate check here to avoid desync between two separate timers.
 
             // Cache target for frame event callback
             _cachedTarget = target;
@@ -75,8 +73,6 @@ namespace PetGame
                 entity.CharAnimator.FaceTowards(target.transform.position);
                 entity.CharAnimator.PlayAttack();
             }
-
-            lastAttackTime = Time.time;
 
             return true;
         }

@@ -17,7 +17,8 @@ namespace PetGame
         public float defense;
         public float moveSpeed;
         public float attackSpeed;
-        public float attackRange;
+        public float engageDistance;
+        public float minAttackDistance;
         public AttackRangeShape[] attackRangeShapes;
         public bool defaultFacesRight;
         public QualityLevel qualityLevel;
@@ -45,7 +46,25 @@ namespace PetGame
             defense = data.defense;
             moveSpeed = data.moveSpeed;
             attackSpeed = data.attackSpeed;
-            attackRange = data.attackRange;
+
+            // Clamp engageDistance to be strictly smaller than the max attack distance.
+            // If the designer set a value >= max attack distance (or left it at a larger default),
+            // fall back to 90% of max attack distance so the AI always stops inside its attack range.
+            float maxAttackDist = AttackRangeHelper.GetMaxAttackDistance(data.attackRangeShapes);
+            engageDistance = Mathf.Min(data.engageDistance, maxAttackDist * 0.9f);
+            if (engageDistance <= 0f)
+            {
+                // Safety: never let engageDistance be non-positive, otherwise AI can never enter Strike.
+                engageDistance = maxAttackDist * 0.9f;
+            }
+
+            // Clamp minAttackDistance to be no larger than engageDistance.
+            minAttackDistance = Mathf.Min(data.minAttackDistance, engageDistance);
+            if (minAttackDistance <= 0f)
+            {
+                minAttackDistance = 0.05f;
+            }
+
             attackRangeShapes = data.attackRangeShapes;
             defaultFacesRight = data.defaultFacesRight;
             qualityLevel = data.qualityLevel;
@@ -77,16 +96,16 @@ namespace PetGame
             // If sprite faces right by default: facingSign 1 (right) means no mirror, -1 (left) means mirror.
             // If sprite faces left by default:  facingSign -1 (left) means no mirror, 1 (right) means mirror.
             float effectiveFacingSign = defaultFacesRight ? facingSign : -facingSign;
-            return AttackRangeHelper.IsTargetInRange(ownerPos, effectiveFacingSign, attackRangeShapes, attackRange, targetPos);
+            return AttackRangeHelper.IsTargetInRange(ownerPos, effectiveFacingSign, attackRangeShapes, targetPos);
         }
 
         /// <summary>
         /// Get the maximum attack distance for AI chase calculations.
-        /// Returns the farthest reach across all shapes, or fallback attackRange.
+        /// Returns the farthest reach across all attack range shapes.
         /// </summary>
         public float GetMaxAttackDistance()
         {
-            return AttackRangeHelper.GetMaxAttackDistance(attackRangeShapes, attackRange);
+            return AttackRangeHelper.GetMaxAttackDistance(attackRangeShapes);
         }
 
         /// <summary>

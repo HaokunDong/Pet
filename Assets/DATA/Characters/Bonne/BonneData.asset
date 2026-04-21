@@ -17,17 +17,18 @@ MonoBehaviour:
   attackPower: 70
   maxHealth: 100
   defense: 5
-  moveSpeed: 3
+  moveSpeed: 2
   attackSpeed: 1
-  attackRange: 1.5
+  engageDistance: 0.5
+  minAttackDistance: 0.34
   attackRangeShapes:
-  - shapeType: 1
-    offset: {x: -0.36, y: -0.06}
-    radius: 0
-    size: {x: 0.64, y: 0.3}
+  - shapeType: 0
+    offset: {x: 0, y: 0}
+    radius: 0.63
+    size: {x: 1.3, y: 0.5}
   defaultFacesRight: 0
   qualityLevel: 0
   characterType: 0
   skills: []
-  sprite: {fileID: -792789133, guid: 325996c4e6f1740778132667857c1356, type: 3}
+  sprite: {fileID: -1679921973, guid: 325996c4e6f1740778132667857c1356, type: 3}
   animatorController: {fileID: 9100000, guid: 7eac7da675b804d11a4235a1f91a1025, type: 2}

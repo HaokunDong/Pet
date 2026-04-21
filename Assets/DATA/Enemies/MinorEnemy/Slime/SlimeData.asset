@@ -17,14 +17,16 @@ MonoBehaviour:
   attackPower: 10
   maxHealth: 100
   defense: 5
-  moveSpeed: 3
+  moveSpeed: 1
   attackSpeed: 1
-  attackRange: 1.5
+  engageDistance: 0.4
+  minAttackDistance: 0.25
   attackRangeShapes:
   - shapeType: 0
     offset: {x: 0, y: 0}
-    radius: 0.2
+    radius: 0.5
     size: {x: 0, y: 0}
+  defaultFacesRight: 1
   qualityLevel: 0
   characterType: 1
   skills: []

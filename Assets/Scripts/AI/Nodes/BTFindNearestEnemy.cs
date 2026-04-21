@@ -3,8 +3,23 @@ using UnityEngine;
 namespace PetGame.AI
 {
     /// <summary>
-    /// Condition node: finds the nearest enemy and sets it as the current target.
-    /// Returns Success if an enemy is found, Failure otherwise.
+    /// Condition + target-maintenance node: keeps <see cref="BTContext.CurrentTarget"/> up to date.
+    /// 
+    /// Rules:
+    /// - If the current target is dead / missing, clear it and search for a new nearest enemy
+    ///   within detectionRange (by tag: Player→Enemy, otherwise→Player).
+    /// - If the current target is alive and still within detectionRange + DisengageHysteresis,
+    ///   keep it as the target (no jitter-prone re-selection every frame).
+    /// - If the current target has drifted beyond detectionRange + DisengageHysteresis, treat it
+    ///   as disengaged: clear it and search for a new nearest enemy; if none found, report Failure
+    ///   so the root Selector falls through to PostCombat / Wander.
+    /// 
+    /// When acquiring a new target (either fresh or replacing a dead/disengaged one):
+    /// - Reset per-encounter combat flags: HasFiredFirstStrike = false.
+    /// - Compute TargetWasBehindOnEngage based on the owner's current facing vs the target's
+    ///   horizontal position, so the Combat node's first-strike-behind rule can act on it.
+    /// 
+    /// Returns Success when a valid target is set, Failure otherwise.
     /// </summary>
     public class BTFindNearestEnemy : BTNode
     {
@@ -23,15 +38,50 @@ namespace PetGame.AI
             if (owner == null || !owner.RuntimeStats.IsAlive)
                 return BTState.Failure;
 
-            // Validate current target — clear if dead or destroyed
-            if (context.CurrentTarget != null &&
-                (context.CurrentTarget.gameObject == null || !context.CurrentTarget.RuntimeStats.IsAlive))
+            // Validate the existing target first — only replace it if it has died or disengaged.
+            if (context.CurrentTarget != null)
             {
+                bool dead = context.CurrentTarget.gameObject == null
+                            || !context.CurrentTarget.RuntimeStats.IsAlive;
+
+                float distToCurrent = dead
+                    ? float.MaxValue
+                    : Vector2.Distance(owner.transform.position, context.CurrentTarget.transform.position);
+
+                float disengageDist = detectionRange + context.DisengageHysteresis;
+
+                if (!dead && distToCurrent <= disengageDist)
+                {
+                    // Keep current target — stable, no jitter from every-frame re-selection.
+                    return BTState.Success;
+                }
+
+                // Current target is dead or too far — clear and re-scan.
                 context.CurrentTarget = null;
-                context.IsInCombat = false;
             }
 
-            // Determine which tags to search for based on owner type
+            // Scan for the nearest valid enemy within detectionRange.
+            CharacterEntity newTarget = FindNearest(owner);
+
+            if (newTarget == null)
+            {
+                return BTState.Failure;
+            }
+
+            // New target acquired — initialize per-encounter combat flags.
+            context.CurrentTarget = newTarget;
+            context.HasFiredFirstStrike = false;
+            context.TargetWasBehindOnEngage = ComputeTargetBehind(owner, newTarget);
+
+            return BTState.Success;
+        }
+
+        /// <summary>
+        /// Tag-based nearest enemy search within detectionRange.
+        /// Player → Enemy, otherwise → Player.
+        /// </summary>
+        private CharacterEntity FindNearest(CharacterEntity owner)
+        {
             string targetTag = (owner.RuntimeStats.characterType == CharacterType.Player)
                 ? "Enemy"
                 : "Player";
@@ -40,8 +90,9 @@ namespace PetGame.AI
             float closestDist = float.MaxValue;
             CharacterEntity closest = null;
 
-            foreach (GameObject go in candidates)
+            for (int i = 0; i < candidates.Length; i++)
             {
+                GameObject go = candidates[i];
                 CharacterEntity entity = go.GetComponent<CharacterEntity>();
                 if (entity == null || !entity.RuntimeStats.IsAlive) continue;
 
@@ -53,21 +104,21 @@ namespace PetGame.AI
                 }
             }
 
-            if (closest != null)
-            {
-                // If target changed, reset combat state so attack node re-establishes it
-                if (context.CurrentTarget != closest)
-                {
-                    context.IsInCombat = false;
-                }
-                context.CurrentTarget = closest;
-                return BTState.Success;
-            }
+            return closest;
+        }
 
-            // No target found — clear all combat state
-            context.CurrentTarget = null;
-            context.IsInCombat = false;
-            return BTState.Failure;
+        /// <summary>
+        /// True if the target sits on the opposite side of owner's current facing direction.
+        /// </summary>
+        private bool ComputeTargetBehind(CharacterEntity owner, CharacterEntity target)
+        {
+            if (owner.CharAnimator == null) return false;
+
+            float dx = target.transform.position.x - owner.transform.position.x;
+            if (Mathf.Approximately(dx, 0f)) return false;
+
+            int targetDir = dx > 0f ? 1 : -1;
+            return owner.CharAnimator.FacingDirection != targetDir;
         }
     }
 }

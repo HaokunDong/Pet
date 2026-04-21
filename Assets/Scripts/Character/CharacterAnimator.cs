@@ -64,6 +64,13 @@ namespace PetGame
         /// </summary>
         public int FacingDirection { get; private set; } = 1;
 
+        /// <summary>
+        /// Tracks the current animation state to avoid re-triggering the same state every frame,
+        /// which would cause AnyState self-transitions to restart the animation (visual jitter).
+        /// </summary>
+        private enum AnimState { None, Idle, Walk, Attack, Skill, Hit, Death }
+        private AnimState currentAnimState = AnimState.None;
+
         private void Awake()
         {
             animator = GetComponent<Animator>();
@@ -113,9 +120,13 @@ namespace PetGame
             // Do not interrupt Hit animation during protection period
             if (isInHitState) return;
 
+            // Skip if already in Idle state to prevent AnyState self-transition restart
+            if (currentAnimState == AnimState.Idle) return;
+
             ClearAttackStateIfNeeded();
             ResetAllTriggers();
             animator.SetTrigger(HashIdle);
+            currentAnimState = AnimState.Idle;
         }
 
         /// <summary>
@@ -123,9 +134,13 @@ namespace PetGame
         /// </summary>
         public void PlayWalk()
         {
+            // Skip if already in Walk state to prevent AnyState self-transition restart
+            if (currentAnimState == AnimState.Walk) return;
+
             ClearAttackStateIfNeeded();
             ResetAllTriggers();
             animator.SetTrigger(HashWalk);
+            currentAnimState = AnimState.Walk;
         }
 
         /// <summary>
@@ -135,6 +150,7 @@ namespace PetGame
         {
             ResetAllTriggers();
             animator.SetTrigger(HashAttack);
+            currentAnimState = AnimState.Attack;
         }
 
         /// <summary>
@@ -145,6 +161,7 @@ namespace PetGame
             ResetAllTriggers();
             animator.SetInteger(HashSkillIndex, skillIndex);
             animator.SetTrigger(HashSkill);
+            currentAnimState = AnimState.Skill;
         }
 
         /// <summary>
@@ -171,6 +188,7 @@ namespace PetGame
             // Set hit state protection period
             isInHitState = true;
             hitStateTimer = HIT_STATE_DURATION;
+            currentAnimState = AnimState.Hit;
         }
 
         /// <summary>
@@ -181,6 +199,7 @@ namespace PetGame
             ClearAttackStateIfNeeded();
             ResetAllTriggers();
             animator.SetTrigger(HashDeath);
+            currentAnimState = AnimState.Death;
         }
 
         /// <summary>
