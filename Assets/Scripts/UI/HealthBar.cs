@@ -74,6 +74,16 @@ namespace PetGame
             // Position the health bar above the character
             transform.localPosition = new Vector3(0f, yOffset, 0f);
 
+            // Inherit layer from parent GameObject so the health bar
+            // shares the same physics/rendering layer as the character
+            if (transform.parent != null)
+            {
+                int parentLayer = transform.parent.gameObject.layer;
+                gameObject.layer = parentLayer;
+                bgObj.layer = parentLayer;
+                fgObj.layer = parentLayer;
+            }
+
             isInitialized = true;
             UpdateVisual();
         }

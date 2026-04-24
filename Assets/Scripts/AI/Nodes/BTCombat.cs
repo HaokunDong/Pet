@@ -35,10 +35,34 @@ namespace PetGame.AI
 
         private readonly BTContext context;
         private CombatSystem combatSystem;
+        private KnockbackController knockbackController;
 
         public BTCombat(BTContext context)
         {
             this.context = context;
+        }
+
+        /// <summary>
+        /// Check if any skill is ready and the target is within that skill's range.
+        /// Returns true if the character should enter Strike to use a skill.
+        /// </summary>
+        private bool IsTargetInSkillRange(CharacterEntity owner, CharacterEntity target)
+        {
+            if (combatSystem == null) return false;
+            CharacterType type = owner.RuntimeStats.characterType;
+            if (type != CharacterType.Player && type != CharacterType.Boss) return false;
+            if (owner.characterData.skills == null) return false;
+
+            float dist = Vector2.Distance(owner.transform.position, target.transform.position);
+            int maxSkills = owner.characterData.GetMaxSkillCount();
+            for (int i = 0; i < owner.characterData.skills.Length && i < maxSkills; i++)
+            {
+                if (!owner.RuntimeStats.IsSkillReady(i)) continue;
+                SkillData skill = owner.characterData.skills[i];
+                if (skill != null && dist <= skill.skillRange)
+                    return true;
+            }
+            return false;
         }
 
         public override BTState Execute()
@@ -58,22 +82,54 @@ namespace PetGame.AI
             if (combatSystem == null)
                 combatSystem = owner.GetComponent<CombatSystem>();
 
+            if (knockbackController == null)
+                knockbackController = owner.GetComponent<KnockbackController>();
+
+            // If the owner is being knocked back, skip all movement and attack logic this frame.
+            if (knockbackController != null && knockbackController.IsInKnockback)
+            {
+                return BTState.Success;
+            }
+
             float dist = Mathf.Abs(owner.transform.position.x - target.transform.position.x);
             float engageDist = Mathf.Max(owner.RuntimeStats.engageDistance, MinEngageDistance);
             float engageExitDist = engageDist + context.EngageExitHysteresis;
 
-            // Decide Engage vs Strike (with hysteresis on Strike exit).
+            // Use the actual attack range shape check to decide Strike eligibility.
+            // This avoids the mismatch between X-axis engageDistance and 2D shape checks.
+            float facingSign = 1f;
+            if (owner.CharAnimator != null)
+                facingSign = owner.CharAnimator.FacingDirection;
+            else
+            {
+                float dx = target.transform.position.x - owner.transform.position.x;
+                facingSign = dx >= 0f ? 1f : -1f;
+            }
+            bool inAttackRange = owner.RuntimeStats.IsTargetInAttackRange(
+                owner.transform.position, facingSign, target.transform.position);
+
+            // Also check if target is within any ready skill's range.
+            // This allows the character to enter Strike early to use a ranged skill
+            // instead of walking all the way to melee attack range.
+            bool inSkillRange = IsTargetInSkillRange(owner, target);
+
+            // Decide Engage vs Strike:
+            // - Enter Strike when within engageDistance OR actually in attack range OR in skill range.
+            // - Exit Strike only when both out of attack range AND beyond engageExitDist AND not in skill range.
             if (context.CurrentState == AIState.Strike)
             {
-                if (dist > engageExitDist)
+                if (!inAttackRange && !inSkillRange && dist > engageExitDist)
                 {
                     context.CurrentState = AIState.Engage;
                 }
             }
             else
             {
-                // Coming from Wander / PostCombat / Engage — pick strictly by engageDistance.
-                context.CurrentState = dist <= engageDist ? AIState.Strike : AIState.Engage;
+                // Coming from Wander / PostCombat / Engage.
+                // Enter Strike if in attack range OR within engageDistance OR in skill range.
+                context.CurrentState = (inAttackRange || inSkillRange || dist <= engageDist)
+                    ? AIState.Strike
+                    : AIState.Engage;
             }
 
             if (context.CurrentState == AIState.Strike)
@@ -104,17 +160,20 @@ namespace PetGame.AI
             float targetMinDist = target.RuntimeStats != null ? target.RuntimeStats.minAttackDistance : 0f;
             float minDist = Mathf.Max(ownerMinDist, targetMinDist);
 
-            // If already within engage distance, snap to Strike immediately — no movement.
-            if (absDx <= engageDist)
-            {
-                // But if too close (below minAttackDistance), push owner back to minDist.
-                if (absDx < minDist)
-                {
-                    Vector3 pos = owner.transform.position;
-                    pos.x = targetX - dir * minDist;
-                    owner.transform.position = pos;
-                }
+            // If already in attack range, snap to Strike immediately — no movement.
+            // Also check engageDistance as a secondary condition for backward compatibility.
+            float facingForCheck = dir;
+            if (owner.CharAnimator != null)
+                facingForCheck = owner.CharAnimator.FacingDirection;
+            bool inRange = owner.RuntimeStats.IsTargetInAttackRange(
+                owner.transform.position, facingForCheck, target.transform.position);
 
+            // Also check skill range — if a skill is ready and target is in skill range,
+            // enter Strike immediately so the character can use the skill.
+            bool inSkillRangeEngage = IsTargetInSkillRange(owner, target);
+
+            if (inRange || inSkillRangeEngage || absDx <= engageDist)
+            {
                 context.CurrentState = AIState.Strike;
                 if (owner.CharAnimator != null)
                 {
@@ -143,10 +202,11 @@ namespace PetGame.AI
             }
 
             // Walk toward target with overshoot protection.
-            // Stop at the larger of minAttackDistance and engageDistance to prevent overlap.
+            // Stop at minAttackDistance to prevent overlap. The character will keep
+            // approaching until Execute()'s attack range check triggers Strike.
             float speed = owner.RuntimeStats.moveSpeed;
             float step = speed * Time.deltaTime;
-            float stopDist = Mathf.Max(minDist, engageDist);
+            float stopDist = minDist;
             float maxAllowedStep = absDx - stopDist;
 
             if (step >= maxAllowedStep)
@@ -159,9 +219,15 @@ namespace PetGame.AI
             newPos.x += dir * step;
             owner.transform.position = newPos;
 
-            // After clamped move, check if we've reached engage distance → switch to Strike.
+            // After clamped move, check if we've entered attack range or engage distance → switch to Strike.
             float newAbsDx = Mathf.Abs(targetX - newPos.x);
-            if (newAbsDx <= engageDist)
+            float newFacing = dir;
+            if (owner.CharAnimator != null)
+                newFacing = owner.CharAnimator.FacingDirection;
+            bool nowInRange = owner.RuntimeStats.IsTargetInAttackRange(
+                newPos, newFacing, target.transform.position);
+            bool nowInSkillRange = IsTargetInSkillRange(owner, target);
+            if (nowInRange || nowInSkillRange || newAbsDx <= engageDist)
             {
                 context.CurrentState = AIState.Strike;
             }
@@ -199,23 +265,6 @@ namespace PetGame.AI
 
         private void TickStrike(CharacterEntity owner, CharacterEntity target)
         {
-            // Enforce minimum attack distance: if characters are too close, push owner away.
-            // Use the larger minAttackDistance of both combatants.
-            float strikeDx = target.transform.position.x - owner.transform.position.x;
-            float strikeAbsDx = Mathf.Abs(strikeDx);
-            float ownerMinDist = owner.RuntimeStats.minAttackDistance;
-            float targetMinDist = target.RuntimeStats != null ? target.RuntimeStats.minAttackDistance : 0f;
-            float minDist = Mathf.Max(ownerMinDist, targetMinDist);
-            if (strikeAbsDx < minDist && strikeAbsDx > 0.001f)
-            {
-                // Only push owner; the target's own AI will handle its side.
-                float pushDir = strikeDx >= 0f ? -1f : 1f;
-                float pushAmount = minDist - strikeAbsDx;
-                Vector3 ownerPos = owner.transform.position;
-                ownerPos.x += pushDir * pushAmount;
-                owner.transform.position = ownerPos;
-            }
-
             // Face the target while in Strike, but apply a dead-zone to prevent
             // flip-flopping when the two characters are nearly overlapping on X.
             float facingDx = target.transform.position.x - owner.transform.position.x;
@@ -226,6 +275,12 @@ namespace PetGame.AI
 
             // Do not interrupt Hit animation.
             if (owner.CharAnimator != null && owner.CharAnimator.IsInHitState)
+            {
+                return;
+            }
+
+            // Do not interrupt Skill animation.
+            if (owner.CharAnimator != null && owner.CharAnimator.IsInSkillState)
             {
                 return;
             }
@@ -284,6 +339,7 @@ namespace PetGame.AI
             else if (owner.CharAnimator != null)
             {
                 // Attack range check may have failed this frame; stay in Strike and idle.
+                // Execute() will re-evaluate next frame and switch to Engage if needed.
                 owner.CharAnimator.PlayIdle();
             }
         }

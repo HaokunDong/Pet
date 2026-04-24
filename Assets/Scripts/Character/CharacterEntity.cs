@@ -23,6 +23,16 @@ namespace PetGame
         public CharacterAnimator CharAnimator { get; private set; }
 
         /// <summary>
+        /// Reference to the FlashEffect component for hit flash visual feedback.
+        /// </summary>
+        public FlashEffect FlashFx { get; private set; }
+
+        /// <summary>
+        /// Reference to the KnockbackController component for hit knockback physics.
+        /// </summary>
+        public KnockbackController Knockback { get; private set; }
+
+        /// <summary>
         /// Reference to the HealthBar component displayed above this character.
         /// </summary>
         private HealthBar healthBar;
@@ -41,6 +51,14 @@ namespace PetGame
         /// Event fired when this character takes damage.
         /// </summary>
         public event System.Action<CharacterEntity, float> OnDamageTaken;
+
+        /// <summary>
+        /// Current velocity of the character, computed from per-frame position delta.
+        /// Used by projectile skills for target movement prediction.
+        /// </summary>
+        public Vector2 Velocity { get; private set; }
+
+        private Vector3 lastFramePosition;
 
         private void Awake()
         {
@@ -68,12 +86,57 @@ namespace PetGame
                 CharAnimator.SyncDefaultFacing(data.defaultFacesRight);
             }
 
+            // Ensure FlashEffect component exists and SpriteRenderer uses the flash material
+            InitializeFlashEffect();
+
+            // Ensure KnockbackController component exists
+            Knockback = GetComponent<KnockbackController>();
+            if (Knockback == null)
+            {
+                Knockback = gameObject.AddComponent<KnockbackController>();
+            }
+
             // Create or re-initialize the health bar above this character
             InitializeHealthBar();
+
+            // Initialize velocity tracking
+            lastFramePosition = transform.position;
+            Velocity = Vector2.zero;
 
             IsInitialized = true;
         }
 
+        /// <summary>
+        /// Ensure FlashEffect component is attached and SpriteRenderer uses the CharacterFlash shader material.
+        /// </summary>
+        private void InitializeFlashEffect()
+        {
+            FlashFx = GetComponent<FlashEffect>();
+            if (FlashFx == null)
+            {
+                FlashFx = gameObject.AddComponent<FlashEffect>();
+            }
+
+            // Ensure the SpriteRenderer uses the CharacterFlash shader material.
+            // If the material already uses the correct shader, skip to avoid breaking shared material references.
+            SpriteRenderer sr = GetComponent<SpriteRenderer>();
+            if (sr != null && (sr.sharedMaterial == null || sr.sharedMaterial.shader.name != "Game/CharacterFlash"))
+            {
+                Shader flashShader = Shader.Find("Game/CharacterFlash");
+                if (flashShader != null)
+                {
+                    // Create a runtime material instance with the flash shader
+                    Material flashMat = new Material(flashShader);
+                    flashMat.name = "CharacterFlash_Runtime";
+                    sr.material = flashMat;
+                }
+                else
+                {
+                    Debug.LogWarning($"[CharacterEntity] {gameObject.name}: Could not find shader 'Game/CharacterFlash'. " +
+                        "Flash effect may not work. Ensure CharacterFlash.shader is included in the build.");
+                }
+            }
+        }
         /// <summary>
         /// Create or re-initialize the HealthBar child object.
         /// Handles both first-time creation and object pool reuse.
@@ -103,6 +166,11 @@ namespace PetGame
         {
             if (!IsInitialized || !RuntimeStats.IsAlive) return;
 
+            // Track velocity from position delta (characters move via transform, not Rigidbody)
+            Vector3 currentPos = transform.position;
+            Velocity = (Vector2)(currentPos - lastFramePosition) / Time.deltaTime;
+            lastFramePosition = currentPos;
+
             // Tick skill cooldowns
             RuntimeStats.UpdateCooldowns(Time.deltaTime);
         }
@@ -111,7 +179,7 @@ namespace PetGame
         /// Apply damage to this character.
         /// Actual damage = attackPower - defense (min 1).
         /// </summary>
-        public void TakeDamage(float attackPower)
+        public void TakeDamage(float attackPower, CharacterEntity attacker = null)
         {
             if (!RuntimeStats.IsAlive) return;
 
@@ -140,9 +208,23 @@ namespace PetGame
                     "Ensure CharacterAnimator component is attached and Initialize() was called.");
             }
 
+            // Trigger flash white effect (even on lethal hit — Die() will not cancel it)
+            if (FlashFx != null)
+            {
+                FlashFx.TriggerFlash();
+            }
+
+            // Apply knockback away from attacker
+            if (Knockback != null && attacker != null)
+            {
+                Knockback.ApplyKnockback(attacker.transform.position);
+            }
+
             if (!RuntimeStats.IsAlive)
             {
-                Die();
+                // Delay Die() slightly so the flash effect is visible on the killing blow
+                float deathDelay = (FlashFx != null) ? FlashFx.flashDuration : 0f;
+                Invoke(nameof(Die), deathDelay);
             }
         }
 
@@ -157,6 +239,18 @@ namespace PetGame
             if (healthBar != null)
             {
                 healthBar.Hide();
+            }
+
+            // Stop flash effect on death
+            if (FlashFx != null)
+            {
+                FlashFx.ResetFlash();
+            }
+
+            // Stop knockback on death
+            if (Knockback != null)
+            {
+                Knockback.CancelKnockback();
             }
 
             if (CharAnimator != null)
@@ -196,6 +290,22 @@ namespace PetGame
         private void OnDisable()
         {
             CancelInvoke();
+        }
+
+        /// <summary>
+        /// Debug: detect if physics collision actually occurs.
+        /// </summary>
+        private void OnCollisionEnter2D(Collision2D collision)
+        {
+            Debug.LogWarning($"[CollisionCheck] '{gameObject.name}'(layer={gameObject.layer}) <-> '{collision.gameObject.name}'(layer={collision.gameObject.layer}) contacts={collision.contactCount}");
+        }
+
+        private void OnCollisionStay2D(Collision2D collision)
+        {
+            if (Time.frameCount % 120 == 0)
+            {
+                Debug.LogWarning($"[CollisionCheck] STAY '{gameObject.name}'(layer={gameObject.layer}) <-> '{collision.gameObject.name}'(layer={collision.gameObject.layer})");
+            }
         }
 
         private void OnDestroy()

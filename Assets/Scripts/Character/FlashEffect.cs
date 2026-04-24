@@ -11,9 +11,13 @@ namespace PetGame
     public class FlashEffect : MonoBehaviour
     {
         [Header("Settings")]
-        [Tooltip("Duration of the flash effect in seconds")]
-        [Range(0.05f, 0.5f)]
-        public float flashDuration = 0.15f;
+        [Tooltip("Total duration of the flash effect in seconds (hold + fade)")]
+        [Range(0.05f, 1f)]
+        public float flashDuration = 0.35f;
+
+        [Tooltip("Duration the flash stays at full intensity before fading")]
+        [Range(0f, 0.5f)]
+        public float flashHoldDuration = 0.1f;
 
         [Tooltip("Flash color (default white)")]
         public Color flashColor = Color.white;
@@ -36,18 +40,38 @@ namespace PetGame
         }
 
         /// <summary>
-        /// Trigger the flash effect. Ignored if already flashing.
+        /// Trigger the flash effect. If already flashing, interrupts and restarts.
         /// </summary>
-        /// <returns>True if flash was triggered, false if already flashing.</returns>
+        /// <returns>True if flash was triggered.</returns>
         public bool TriggerFlash()
         {
-            if (IsFlashing) return false;
-
             if (flashCoroutine != null)
                 StopCoroutine(flashCoroutine);
 
             flashCoroutine = StartCoroutine(FlashRoutine());
             return true;
+        }
+
+        /// <summary>
+        /// Immediately stop the flash effect and reset to normal color.
+        /// Called when the character dies or is recycled.
+        /// </summary>
+        public void ResetFlash()
+        {
+            if (flashCoroutine != null)
+            {
+                StopCoroutine(flashCoroutine);
+                flashCoroutine = null;
+            }
+
+            IsFlashing = false;
+
+            if (spriteRenderer != null && propertyBlock != null)
+            {
+                spriteRenderer.GetPropertyBlock(propertyBlock);
+                propertyBlock.SetFloat(FlashAmountId, 0f);
+                spriteRenderer.SetPropertyBlock(propertyBlock);
+            }
         }
 
         private IEnumerator FlashRoutine()
@@ -58,11 +82,29 @@ namespace PetGame
             spriteRenderer.GetPropertyBlock(propertyBlock);
             propertyBlock.SetColor(FlashColorId, flashColor);
 
+            // Phase 1: Hold at full intensity
+            float holdTime = Mathf.Min(flashHoldDuration, flashDuration);
+            if (holdTime > 0f)
+            {
+                spriteRenderer.GetPropertyBlock(propertyBlock);
+                propertyBlock.SetFloat(FlashAmountId, 1f);
+                spriteRenderer.SetPropertyBlock(propertyBlock);
+
+                float holdElapsed = 0f;
+                while (holdElapsed < holdTime)
+                {
+                    holdElapsed += Time.deltaTime;
+                    yield return null;
+                }
+            }
+
+            // Phase 2: Fade out from full intensity to zero
+            float fadeDuration = flashDuration - holdTime;
             float elapsed = 0f;
-            while (elapsed < flashDuration)
+            while (elapsed < fadeDuration)
             {
                 elapsed += Time.deltaTime;
-                float t = 1f - Mathf.Clamp01(elapsed / flashDuration);
+                float t = 1f - Mathf.Clamp01(elapsed / fadeDuration);
 
                 spriteRenderer.GetPropertyBlock(propertyBlock);
                 propertyBlock.SetFloat(FlashAmountId, t);

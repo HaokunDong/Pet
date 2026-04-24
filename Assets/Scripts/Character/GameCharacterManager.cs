@@ -41,20 +41,30 @@ namespace PetGame
 
         private float saveTimer;
 
+        /// <summary>
+        /// Name of the physics layer used for enemy entities.
+        /// </summary>
+        private const string ENEMY_LAYER_NAME = "Enemy";
+
         private void Awake()
         {
-            // Disable collision between all Character-layer entities
+            // Disable collision between Character layer and Enemy layer
             int characterLayer = LayerMask.NameToLayer(CHARACTER_LAYER_NAME);
-            if (characterLayer != -1)
+            int enemyLayer = LayerMask.NameToLayer(ENEMY_LAYER_NAME);
+
+            if (characterLayer != -1 && enemyLayer != -1)
             {
+                Physics2D.IgnoreLayerCollision(characterLayer, enemyLayer, true);
+                // Also disable collision between same layers
                 Physics2D.IgnoreLayerCollision(characterLayer, characterLayer, true);
+                Physics2D.IgnoreLayerCollision(enemyLayer, enemyLayer, true);
             }
             else
             {
-                Debug.LogError($"[GameCharacterManager] Physics layer '{CHARACTER_LAYER_NAME}' not found! " +
-                    "Entities will collide with each other and may get stuck. " +
-                    "Please create the 'Character' layer in Edit → Project Settings → Tags and Layers, " +
-                    "then assign it to all player and enemy prefabs.");
+                Debug.LogError($"[GameCharacterManager] Physics layer not found! " +
+                    $"Character layer: {characterLayer}, Enemy layer: {enemyLayer}. " +
+                    "Please ensure both 'Character' and 'Enemy' layers exist in " +
+                    "Edit → Project Settings → Tags and Layers.");
             }
         }
 
@@ -179,6 +189,11 @@ namespace PetGame
             // Add CombatSystem
             if (playerObj.GetComponent<CombatSystem>() == null)
                 playerObj.AddComponent<CombatSystem>();
+
+            // Add AnimEventReceiver so attack animation frame events
+            // can trigger damage application and clear IsAttacking state
+            if (playerObj.GetComponent<AnimEventReceiver>() == null)
+                playerObj.AddComponent<AnimEventReceiver>();
 
             // Add FlashEffect
             if (playerObj.GetComponent<FlashEffect>() == null)

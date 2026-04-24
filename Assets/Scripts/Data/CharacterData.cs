@@ -59,6 +59,19 @@ namespace PetGame
                  "Attack range shapes are configured relative to this default facing direction.")]
         public bool defaultFacesRight = true;
 
+        [Header("Knockback Settings")]
+        [Tooltip("Horizontal knockback speed when hit (units/second). Higher = pushed back further.")]
+        [Min(0f)]
+        public float knockbackHorizontalSpeed = 2.0f;
+
+        [Tooltip("Vertical knockback speed when hit (units/second). Higher = launched higher.")]
+        [Min(0f)]
+        public float knockbackVerticalSpeed = 1.5f;
+
+        [Tooltip("Gravity applied during knockback (units/second²). Controls how fast the character falls back down.")]
+        [Min(0.1f)]
+        public float knockbackGravity = 8.0f;
+
         [Header("Classification")]
         [Tooltip("Quality level determines max skill count: A=1, S=2, SS=3, SSS=4")]
         public QualityLevel qualityLevel = QualityLevel.A;

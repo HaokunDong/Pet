@@ -33,7 +33,24 @@ namespace PetGame
         [Tooltip("Skill icon for UI display")]
         public Sprite icon;
 
-        [Tooltip("Skill VFX prefab to instantiate on use")]
-        public GameObject effectPrefab;
+        [Header("Skill Effect")]
+        [Tooltip("Skill effect data asset that defines the skill's behavior (e.g. projectile, AOE). " +
+                 "If null, the skill will not execute any effect.")]
+        public SkillEffectData skillEffect;
+
+#if UNITY_EDITOR
+        private void OnValidate()
+        {
+            if (skillEffect == null)
+            {
+                Debug.LogWarning(
+                    $"[SkillData] \"{skillName}\" (id: {skillId}) has no SkillEffectData assigned. " +
+                    "The skill will not execute any effect when used. " +
+                    "Please assign a SkillEffectData asset to the 'skillEffect' field.",
+                    this
+                );
+            }
+        }
+#endif
     }
 }

@@ -1,8 +1,10 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class NodePool 
+/// <summary>
+/// Simple object queue for pooling. Parent management is handled by PoolMgr.
+/// </summary>
+public class NodePool
 {
     private Queue<GameObject> objQueue;
 
@@ -17,27 +19,13 @@ public class NodePool
         {
             return objQueue.Dequeue();
         }
-
         return null;
     }
 
-    public void PutObj(GameObject obj,Transform parent=null)
+    public void PutObj(GameObject obj)
     {
         if (obj == null) return;
-
         obj.SetActive(false);
-
-        if (!parent)
-        {
-            //默认回到所属的画布下
-            if(GameObject.Find("Canvas"))
-                obj.transform.SetParent(GameObject.Find("Canvas").transform);
-        }
-        else
-        {
-            obj.transform.SetParent(parent);
-        }
-
         objQueue.Enqueue(obj);
     }
 

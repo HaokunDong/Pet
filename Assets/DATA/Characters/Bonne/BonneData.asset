@@ -19,16 +19,20 @@ MonoBehaviour:
   defense: 5
   moveSpeed: 2
   attackSpeed: 1
-  engageDistance: 0.5
-  minAttackDistance: 0.34
+  engageDistance: 0.56
+  minAttackDistance: 0.4
   attackRangeShapes:
   - shapeType: 0
     offset: {x: 0, y: 0}
     radius: 0.63
     size: {x: 1.3, y: 0.5}
   defaultFacesRight: 0
+  knockbackHorizontalSpeed: 2
+  knockbackVerticalSpeed: 1.5
+  knockbackGravity: 8
   qualityLevel: 0
   characterType: 0
-  skills: []
+  skills:
+  - {fileID: 11400000, guid: 1d3b349038d514f4e8eea5de44833f3e, type: 2}
   sprite: {fileID: -1679921973, guid: 325996c4e6f1740778132667857c1356, type: 3}
   animatorController: {fileID: 9100000, guid: 7eac7da675b804d11a4235a1f91a1025, type: 2}

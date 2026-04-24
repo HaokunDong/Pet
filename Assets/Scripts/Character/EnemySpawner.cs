@@ -91,18 +91,6 @@ namespace PetGame
             // Set tag for AI targeting
             enemyObj.tag = "Enemy";
 
-            // Set physics layer so characters don't collide with each other
-            int characterLayer = LayerMask.NameToLayer(CHARACTER_LAYER_NAME);
-            if (characterLayer != -1)
-            {
-                enemyObj.layer = characterLayer;
-            }
-            else
-            {
-                Debug.LogWarning($"[EnemySpawner] Physics layer '{CHARACTER_LAYER_NAME}' not found. " +
-                    "Enemy entities may collide and get stuck. " +
-                    "Please create the 'Character' layer in Edit → Project Settings → Tags and Layers.");
-            }
 
             // Initialize CharacterEntity
             CharacterEntity entity = enemyObj.GetComponent<CharacterEntity>();
@@ -162,18 +150,6 @@ namespace PetGame
             enemyObj.SetActive(true);
             enemyObj.tag = "Enemy";
 
-            // Set physics layer so characters don't collide with each other
-            int characterLayer = LayerMask.NameToLayer(CHARACTER_LAYER_NAME);
-            if (characterLayer != -1)
-            {
-                enemyObj.layer = characterLayer;
-            }
-            else
-            {
-                Debug.LogWarning($"[EnemySpawner] Physics layer '{CHARACTER_LAYER_NAME}' not found. " +
-                    "Enemy entities may collide and get stuck. " +
-                    "Please create the 'Character' layer in Edit → Project Settings → Tags and Layers.");
-            }
 
             CharacterEntity entity = enemyObj.GetComponent<CharacterEntity>();
             if (entity == null)
@@ -208,6 +184,8 @@ namespace PetGame
 
             entity.OnDeath += OnEnemyDeath;
             currentEnemyCount++;
+
+
         }
 
         private void OnEnemyDeath(CharacterEntity deadEnemy)

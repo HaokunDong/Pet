@@ -32,6 +32,12 @@ namespace PetGame.AI
             if (owner == null || !owner.RuntimeStats.IsAlive)
                 return BTState.Failure;
 
+            // If the owner is being knocked back, skip all movement this frame.
+            if (owner.Knockback != null && owner.Knockback.IsInKnockback)
+            {
+                return BTState.Running;
+            }
+
             // First entry / state just switched to Wander: initialize a walk segment.
             if (context.CurrentState != AIState.Wander && context.CurrentState != AIState.WanderPause)
             {

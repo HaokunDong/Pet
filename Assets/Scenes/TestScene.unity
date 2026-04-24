@@ -290,7 +290,7 @@ MonoBehaviour:
   enemyPrefabName: EnemyPrefab
   spawnCenter: {fileID: 1779445765}
   spawnRange: 8
-  spawnInterval: 3
+  spawnInterval: 1
   maxEnemies: 1
   aiDetectionRange: 10
   aiPatrolRange: 3

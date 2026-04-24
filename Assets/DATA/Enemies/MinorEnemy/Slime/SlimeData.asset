@@ -19,14 +19,17 @@ MonoBehaviour:
   defense: 5
   moveSpeed: 1
   attackSpeed: 1
-  engageDistance: 0.4
-  minAttackDistance: 0.25
+  engageDistance: 0.43
+  minAttackDistance: 0.35
   attackRangeShapes:
   - shapeType: 0
     offset: {x: 0, y: 0}
-    radius: 0.5
+    radius: 0.53
     size: {x: 0, y: 0}
   defaultFacesRight: 1
+  knockbackHorizontalSpeed: 2
+  knockbackVerticalSpeed: 1.5
+  knockbackGravity: 8
   qualityLevel: 0
   characterType: 1
   skills: []

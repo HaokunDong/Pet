@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace PetGame
@@ -6,6 +7,7 @@ namespace PetGame
     /// Manages combat actions (normal attack and skills) for a character.
     /// Provides public interfaces for both AI and manual control to invoke.
     /// Damage is applied via animation frame events through AnimEventReceiver.
+    /// Normal attacks deal AOE damage to ALL enemies within the attack range shapes.
     /// </summary>
     [RequireComponent(typeof(CharacterEntity))]
     public class CombatSystem : MonoBehaviour
@@ -14,11 +16,12 @@ namespace PetGame
 
         // --- Cached attack state for animation frame event callbacks ---
         private CharacterEntity _cachedTarget;
+        private float _cachedFacingSign;
         private int _cachedSkillIndex = -1;
         private bool _isAttacking;
 
         /// <summary>
-        /// The current cached attack target. Read by AnimEventReceiver.
+        /// The current cached attack target (primary target for skills / facing reference).
         /// </summary>
         public CharacterEntity CachedTarget => _cachedTarget;
 
@@ -62,8 +65,9 @@ namespace PetGame
             // NOTE: Attack speed interval is managed by BTCombat (context.LastAttackTime).
             // No duplicate check here to avoid desync between two separate timers.
 
-            // Cache target for frame event callback
+            // Cache target and facing for frame event callback (AOE will find all targets at hit frame)
             _cachedTarget = target;
+            _cachedFacingSign = facingSign;
             _cachedSkillIndex = -1;
             _isAttacking = true;
 
@@ -125,18 +129,44 @@ namespace PetGame
 
         /// <summary>
         /// Called by AnimEventReceiver when the normal attack animation reaches the hit frame.
-        /// Applies damage to the cached target and clears attack state.
+        /// Applies AOE damage to ALL enemies within the attack range shapes.
         /// </summary>
         public void ApplyNormalAttackDamage()
         {
-            if (_cachedTarget == null || !_cachedTarget.RuntimeStats.IsAlive)
+            // Determine the enemy tag based on owner's character type
+            string targetTag = (entity.RuntimeStats.characterType == CharacterType.Player)
+                ? "Enemy"
+                : "Player";
+
+            // Get current facing direction (use cached value from when attack started)
+            float facingSign = _cachedFacingSign;
+
+            // Find all enemies in attack range and apply damage
+            GameObject[] candidates = GameObject.FindGameObjectsWithTag(targetTag);
+            int hitCount = 0;
+
+            for (int i = 0; i < candidates.Length; i++)
             {
-                Debug.Log($"[CombatSystem] {gameObject.name}: Cached target is null or dead, skipping normal attack damage.");
-                ClearAttackState();
-                return;
+                CharacterEntity target = candidates[i].GetComponent<CharacterEntity>();
+                if (target == null || !target.RuntimeStats.IsAlive) continue;
+
+                if (entity.RuntimeStats.IsTargetInAttackRange(
+                        transform.position, facingSign, target.transform.position))
+                {
+                    target.TakeDamage(entity.RuntimeStats.attackPower, entity);
+                    hitCount++;
+                }
             }
 
-            _cachedTarget.TakeDamage(entity.RuntimeStats.attackPower);
+            if (hitCount == 0)
+            {
+                Debug.Log($"[CombatSystem] {gameObject.name}: No targets in attack range at hit frame.");
+            }
+            else
+            {
+                Debug.Log($"[CombatSystem] {gameObject.name}: Normal attack hit {hitCount} target(s).");
+            }
+
             ClearAttackState();
         }
 
@@ -146,13 +176,6 @@ namespace PetGame
         /// </summary>
         public void ApplySkillDamage()
         {
-            if (_cachedTarget == null || !_cachedTarget.RuntimeStats.IsAlive)
-            {
-                Debug.Log($"[CombatSystem] {gameObject.name}: Cached target is null or dead, skipping skill damage.");
-                ClearAttackState();
-                return;
-            }
-
             if (_cachedSkillIndex < 0 || entity.characterData.skills == null ||
                 _cachedSkillIndex >= entity.characterData.skills.Length)
             {
@@ -169,31 +192,43 @@ namespace PetGame
                 return;
             }
 
-            // Apply skill damage
-            _cachedTarget.TakeDamage(skillData.damage);
-
-            // Spawn skill effect at target position
-            if (skillData.effectPrefab != null)
+            // Delegate to SkillEffectData if configured.
+            // NOTE: We pass _cachedTarget even if it's null or dead — the skill effect
+            // (e.g. projectile) should still fly to the predicted position and explode.
+            if (skillData.skillEffect != null)
             {
-                GameObject effect = Instantiate(
-                    skillData.effectPrefab,
-                    _cachedTarget.transform.position,
-                    Quaternion.identity
-                );
-                Destroy(effect, 2f);
+                skillData.skillEffect.Execute(this, _cachedTarget, skillData);
+                ClearAttackState();
+                return;
             }
 
+            // Legacy fallback: direct damage (no SkillEffectData assigned)
+            if (_cachedTarget == null || !_cachedTarget.RuntimeStats.IsAlive)
+            {
+                Debug.Log($"[CombatSystem] {gameObject.name}: Cached target is null or dead, skipping skill damage.");
+                ClearAttackState();
+                return;
+            }
+
+            // No SkillEffectData assigned — warn and skip
+            Debug.LogWarning($"[CombatSystem] {gameObject.name}: SkillData \"{skillData.skillName}\" has no SkillEffectData assigned. Skipping skill effect.");
             ClearAttackState();
         }
 
         /// <summary>
         /// Clear all cached attack state. Called when attack is interrupted or completed.
+        /// Also clears skill animation protection if active.
         /// </summary>
         public void ClearAttackState()
         {
             _cachedTarget = null;
+            _cachedFacingSign = 0f;
             _cachedSkillIndex = -1;
             _isAttacking = false;
+
+            // Also clear skill animation protection so the character can transition
+            if (entity != null && entity.CharAnimator != null)
+                entity.CharAnimator.ClearSkillState();
         }
 
         // ==================== Utility ====================

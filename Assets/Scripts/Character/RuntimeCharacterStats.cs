@@ -24,6 +24,11 @@ namespace PetGame
         public QualityLevel qualityLevel;
         public CharacterType characterType;
 
+        // Knockback parameters
+        public float knockbackHorizontalSpeed;
+        public float knockbackVerticalSpeed;
+        public float knockbackGravity;
+
         /// <summary>
         /// Remaining cooldown time for each skill (indexed by skill array position).
         /// </summary>
@@ -49,7 +54,9 @@ namespace PetGame
 
             // Clamp engageDistance to be strictly smaller than the max attack distance.
             // If the designer set a value >= max attack distance (or left it at a larger default),
-            // fall back to 90% of max attack distance so the AI always stops inside its attack range.
+            // fall back to 90% of max attack distance so the AI stops inside its attack range.
+            // Note: BTCombat.Execute() also uses IsTargetInAttackRange() for Strike entry,
+            // so even if engageDistance is slightly off, the character will still attack correctly.
             float maxAttackDist = AttackRangeHelper.GetMaxAttackDistance(data.attackRangeShapes);
             engageDistance = Mathf.Min(data.engageDistance, maxAttackDist * 0.9f);
             if (engageDistance <= 0f)
@@ -69,6 +76,11 @@ namespace PetGame
             defaultFacesRight = data.defaultFacesRight;
             qualityLevel = data.qualityLevel;
             characterType = data.characterType;
+
+            // Knockback parameters
+            knockbackHorizontalSpeed = data.knockbackHorizontalSpeed;
+            knockbackVerticalSpeed = data.knockbackVerticalSpeed;
+            knockbackGravity = data.knockbackGravity;
 
             skillCooldowns = new Dictionary<int, float>();
             if (data.skills != null)
