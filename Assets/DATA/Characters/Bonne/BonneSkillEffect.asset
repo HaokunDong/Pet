@@ -12,10 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5e95b7bc24987a34e9d1852c57ff2a1d, type: 3}
   m_Name: BonneSkillEffect
   m_EditorClassIdentifier: 
-  projectileSprite: {fileID: -653641005, guid: 325996c4e6f1740778132667857c1356, type: 3}
+  projectilePrefab: {fileID: 5234936525060002432, guid: 540551d775356b94cb16a2e1d6bf74bd, type: 3}
   projectileFlightDuration: 0.6
   projectileArcHeight: 1.5
-  projectileScale: 1
-  explosionAnimatorController: {fileID: 9100000, guid: 4a5a4050a9bef2e4dabd020980359e4e, type: 2}
-  explosionRadius: 1
-  explosionScale: 1
+  explosionRadius: 4
