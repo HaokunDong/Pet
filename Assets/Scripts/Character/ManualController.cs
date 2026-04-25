@@ -4,7 +4,8 @@ namespace PetGame
 {
     /// <summary>
     /// Manual control component for player-controlled characters.
-    /// Handles right-click movement and attack input.
+    /// Handles right-click point-to-move, attack input, arrow indicators,
+    /// and enemy outline highlighting.
     /// Only active when the character is in Manual control mode.
     /// </summary>
     [RequireComponent(typeof(CharacterEntity))]
@@ -16,10 +17,22 @@ namespace PetGame
 
         private bool isActive;
         private bool isMoving;
-        private float moveDirection; // 1 = right, -1 = left
+        private float targetX; // Target X coordinate for point-to-move
+        private bool hasTargetX; // Whether we have a valid move target
         private CharacterEntity attackTarget;
         private bool isChasing; // Moving towards an enemy to attack
         private bool isAttacking; // Currently in sustained attack mode
+
+        // Arrow indicator tracking
+        private MoveArrowIndicator currentArrow;
+
+        // Mouse hover outline tracking
+        private CharacterEntity hoveredEnemy;
+
+        /// <summary>
+        /// Threshold distance to consider the character has arrived at target X.
+        /// </summary>
+        private const float ArrivalThreshold = 0.05f;
 
         private void Awake()
         {
@@ -40,6 +53,13 @@ namespace PetGame
                 attackTarget = null;
                 isChasing = false;
                 isAttacking = false;
+                hasTargetX = false;
+
+                // Destroy any active arrow indicator
+                DestroyCurrentArrow();
+
+                // Clear all outline effects
+                ClearHoveredEnemy();
             }
             else
             {
@@ -55,6 +75,10 @@ namespace PetGame
         {
             if (!isActive || entity == null || !entity.RuntimeStats.IsAlive) return;
 
+            // If the character is in skill animation, freeze all manual control.
+            if (entity.CharAnimator != null && entity.CharAnimator.IsInSkillState) return;
+
+            HandleMouseHover();
             HandleRightClickInput();
             HandleMovement();
             HandleChaseAndAttack();
@@ -74,69 +98,95 @@ namespace PetGame
             isAttacking = false;
 
             // Check if clicked on an enemy
-            Collider2D hit = Physics2D.OverlapPoint(mouseWorldPos);
-            if (hit != null)
+            CharacterEntity clickedEnemy = GetEnemyAtPoint(mouseWorldPos);
+            if (clickedEnemy != null)
             {
-                CharacterEntity clickedEntity = hit.GetComponent<CharacterEntity>();
-                if (clickedEntity != null && clickedEntity != entity &&
-                    clickedEntity.RuntimeStats.IsAlive &&
-                    clickedEntity.RuntimeStats.characterType != CharacterType.Player)
+                // Clicked on an enemy — cancel any point-to-move
+                hasTargetX = false;
+                DestroyCurrentArrow();
+
+                attackTarget = clickedEnemy;
+
+                // Trigger bold pulse outline feedback on the clicked enemy
+                if (clickedEnemy.OutlineFx != null)
                 {
-                    // Clicked on an enemy
-                    attackTarget = clickedEntity;
-
-                    // Check if already in attack range using multi-shape system
-                    float facingSign1 = attackTarget.transform.position.x >= transform.position.x ? 1f : -1f;
-                    if (entity.CharAnimator != null)
-                        facingSign1 = entity.CharAnimator.FacingDirection;
-
-                    if (entity.RuntimeStats.IsTargetInAttackRange(
-                            transform.position, facingSign1, attackTarget.transform.position))
-                    {
-                        // In range: enter sustained attack mode
-                        isChasing = false;
-                        isMoving = false;
-                        isAttacking = true;
-                    }
-                    else
-                    {
-                        // Out of range: chase
-                        isChasing = true;
-                        isMoving = false;
-                    }
-                    return;
+                    clickedEnemy.OutlineFx.ShouldRemainAfterPulse = (hoveredEnemy == clickedEnemy);
+                    clickedEnemy.OutlineFx.TriggerBoldPulse();
                 }
+
+                // Check if already in attack range using multi-shape system
+                float facingSign1 = attackTarget.transform.position.x >= transform.position.x ? 1f : -1f;
+                if (entity.CharAnimator != null)
+                    facingSign1 = entity.CharAnimator.FacingDirection;
+
+                if (entity.RuntimeStats.IsTargetInAttackRange(
+                        transform.position, facingSign1, attackTarget.transform.position))
+                {
+                    // In range: enter sustained attack mode
+                    isChasing = false;
+                    isMoving = false;
+                    isAttacking = true;
+                }
+                else
+                {
+                    // Out of range: chase
+                    isChasing = true;
+                    isMoving = false;
+                }
+                return;
             }
 
-            // Clicked on empty area: move left or right based on click position
+            // Clicked on empty area: point-to-move to the click X position
             attackTarget = null;
             isChasing = false;
 
             float clickX = mouseWorldPos.x;
             float charX = transform.position.x;
 
-            if (clickX > charX)
+            // If click position is very close to current position, don't move
+            if (Mathf.Abs(clickX - charX) < ArrivalThreshold)
             {
-                moveDirection = 1f; // Move right
-            }
-            else
-            {
-                moveDirection = -1f; // Move left
+                hasTargetX = false;
+                isMoving = false;
+                return;
             }
 
+            targetX = clickX;
+            hasTargetX = true;
             isMoving = true;
+
+            // Spawn arrow indicator at click position (destroy old one first)
+            DestroyCurrentArrow();
+            OutlineSettings settings = OutlineSettings.Instance;
+            Vector3 arrowPos = new Vector3(mouseWorldPos.x, settings.arrowYOffset, 0f);
+            currentArrow = MoveArrowIndicator.Spawn(arrowPos, settings.arrowColor, settings.arrowScale, settings.arrowDuration);
         }
 
         /// <summary>
-        /// Handle directional movement.
+        /// Handle point-to-move: move towards targetX and stop when arrived.
         /// </summary>
         private void HandleMovement()
         {
-            if (!isMoving || isChasing) return;
+            if (!isMoving || isChasing || !hasTargetX) return;
+
+            float charX = transform.position.x;
+            float distance = Mathf.Abs(targetX - charX);
+
+            // Check if arrived at target
+            if (distance < ArrivalThreshold)
+            {
+                hasTargetX = false;
+                isMoving = false;
+                StopMoving();
+                return;
+            }
+
+            // Determine move direction
+            float moveDirection = targetX > charX ? 1f : -1f;
 
             float speed = entity.RuntimeStats.moveSpeed;
             Vector3 pos = transform.position;
-            pos.x += moveDirection * speed * Time.deltaTime;
+            pos.x = Mathf.MoveTowards(pos.x, targetX, speed * Time.deltaTime);
             transform.position = pos;
 
             if (entity.CharAnimator != null)
@@ -243,6 +293,113 @@ namespace PetGame
             if (entity.CharAnimator != null)
             {
                 entity.CharAnimator.PlayIdle();
+            }
+        }
+
+        // =====================================================================
+        // Mouse Hover Outline Detection
+        // =====================================================================
+
+        /// <summary>
+        /// Handle mouse hover detection: highlight enemies under the cursor with an outline.
+        /// </summary>
+        private void HandleMouseHover()
+        {
+            Vector2 mouseWorldPos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+            CharacterEntity enemyUnderMouse = GetEnemyAtPoint(mouseWorldPos);
+
+            // Check if hovered enemy died
+            if (hoveredEnemy != null && (!hoveredEnemy.RuntimeStats.IsAlive || hoveredEnemy == null))
+            {
+                ClearHoveredEnemy();
+            }
+
+            if (enemyUnderMouse != hoveredEnemy)
+            {
+                // Mouse moved to a different target (or moved off)
+                ClearHoveredEnemy();
+
+                if (enemyUnderMouse != null)
+                {
+                    hoveredEnemy = enemyUnderMouse;
+                    if (hoveredEnemy.OutlineFx != null)
+                    {
+                        hoveredEnemy.OutlineFx.ShouldRemainAfterPulse = true;
+                        // Only set hover outline if not currently in a bold pulse
+                        if (!hoveredEnemy.OutlineFx.IsBoldPulsing)
+                        {
+                            hoveredEnemy.OutlineFx.SetOutline(true, OutlineSettings.Instance.hoverThickness);
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Get the topmost enemy CharacterEntity at the given world point.
+        /// Returns null if no enemy is found.
+        /// </summary>
+        private CharacterEntity GetEnemyAtPoint(Vector2 worldPoint)
+        {
+            // Use OverlapPointAll to handle overlapping enemies, pick the topmost one
+            Collider2D[] hits = Physics2D.OverlapPointAll(worldPoint);
+            CharacterEntity bestEnemy = null;
+            int bestOrder = int.MinValue;
+
+            for (int i = 0; i < hits.Length; i++)
+            {
+                CharacterEntity ce = hits[i].GetComponent<CharacterEntity>();
+                if (ce != null && ce != entity &&
+                    ce.RuntimeStats.IsAlive &&
+                    ce.RuntimeStats.characterType != CharacterType.Player)
+                {
+                    // Use SpriteRenderer sorting order to determine "topmost"
+                    SpriteRenderer sr = ce.GetComponent<SpriteRenderer>();
+                    int order = sr != null ? sr.sortingOrder : 0;
+                    if (bestEnemy == null || order > bestOrder)
+                    {
+                        bestEnemy = ce;
+                        bestOrder = order;
+                    }
+                }
+            }
+
+            return bestEnemy;
+        }
+
+        /// <summary>
+        /// Clear the outline on the currently hovered enemy and reset tracking.
+        /// </summary>
+        private void ClearHoveredEnemy()
+        {
+            if (hoveredEnemy != null)
+            {
+                if (hoveredEnemy.OutlineFx != null)
+                {
+                    hoveredEnemy.OutlineFx.ShouldRemainAfterPulse = false;
+                    // Only clear outline if not in a bold pulse (pulse will handle its own cleanup)
+                    if (!hoveredEnemy.OutlineFx.IsBoldPulsing)
+                    {
+                        hoveredEnemy.OutlineFx.SetOutline(false);
+                    }
+                }
+                hoveredEnemy = null;
+            }
+        }
+
+        // =====================================================================
+        // Arrow Indicator Helpers
+        // =====================================================================
+
+        /// <summary>
+        /// Destroy the current arrow indicator if it exists.
+        /// </summary>
+        private void DestroyCurrentArrow()
+        {
+            if (currentArrow != null)
+            {
+                currentArrow.DestroyNow();
+                currentArrow = null;
             }
         }
     }

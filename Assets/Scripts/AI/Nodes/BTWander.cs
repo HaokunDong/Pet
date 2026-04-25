@@ -38,6 +38,12 @@ namespace PetGame.AI
                 return BTState.Running;
             }
 
+            // If the owner is in skill animation, freeze movement and skip wander logic.
+            if (owner.CharAnimator != null && owner.CharAnimator.IsInSkillState)
+            {
+                return BTState.Running;
+            }
+
             // First entry / state just switched to Wander: initialize a walk segment.
             if (context.CurrentState != AIState.Wander && context.CurrentState != AIState.WanderPause)
             {

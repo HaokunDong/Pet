@@ -91,6 +91,12 @@ namespace PetGame.AI
                 return BTState.Success;
             }
 
+            // If the owner is in skill animation, freeze movement (speed = 0) and skip all logic.
+            if (owner.CharAnimator != null && owner.CharAnimator.IsInSkillState)
+            {
+                return BTState.Success;
+            }
+
             float dist = Mathf.Abs(owner.transform.position.x - target.transform.position.x);
             float engageDist = Mathf.Max(owner.RuntimeStats.engageDistance, MinEngageDistance);
             float engageExitDist = engageDist + context.EngageExitHysteresis;

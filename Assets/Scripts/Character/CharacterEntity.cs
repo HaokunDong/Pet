@@ -28,6 +28,11 @@ namespace PetGame
         public FlashEffect FlashFx { get; private set; }
 
         /// <summary>
+        /// Reference to the OutlineEffect component for enemy highlight outline.
+        /// </summary>
+        public OutlineEffect OutlineFx { get; private set; }
+
+        /// <summary>
         /// Reference to the KnockbackController component for hit knockback physics.
         /// </summary>
         public KnockbackController Knockback { get; private set; }
@@ -86,8 +91,15 @@ namespace PetGame
                 CharAnimator.SyncDefaultFacing(data.defaultFacesRight);
             }
 
-            // Ensure FlashEffect component exists and SpriteRenderer uses the flash material
+            // Ensure FlashEffect component exists and SpriteRenderer uses the outline+flash material
             InitializeFlashEffect();
+
+            // Ensure OutlineEffect component exists
+            OutlineFx = GetComponent<OutlineEffect>();
+            if (OutlineFx == null)
+            {
+                OutlineFx = gameObject.AddComponent<OutlineEffect>();
+            }
 
             // Ensure KnockbackController component exists
             Knockback = GetComponent<KnockbackController>();
@@ -120,20 +132,20 @@ namespace PetGame
             // Ensure the SpriteRenderer uses the CharacterFlash shader material.
             // If the material already uses the correct shader, skip to avoid breaking shared material references.
             SpriteRenderer sr = GetComponent<SpriteRenderer>();
-            if (sr != null && (sr.sharedMaterial == null || sr.sharedMaterial.shader.name != "Game/CharacterFlash"))
+            if (sr != null && (sr.sharedMaterial == null || sr.sharedMaterial.shader.name != "Game/SpriteOutline"))
             {
-                Shader flashShader = Shader.Find("Game/CharacterFlash");
-                if (flashShader != null)
+                Shader outlineShader = Shader.Find("Game/SpriteOutline");
+                if (outlineShader != null)
                 {
-                    // Create a runtime material instance with the flash shader
-                    Material flashMat = new Material(flashShader);
-                    flashMat.name = "CharacterFlash_Runtime";
-                    sr.material = flashMat;
+                    // Create a runtime material instance with the outline+flash shader
+                    Material outlineMat = new Material(outlineShader);
+                    outlineMat.name = "SpriteOutline_Runtime";
+                    sr.material = outlineMat;
                 }
                 else
                 {
-                    Debug.LogWarning($"[CharacterEntity] {gameObject.name}: Could not find shader 'Game/CharacterFlash'. " +
-                        "Flash effect may not work. Ensure CharacterFlash.shader is included in the build.");
+                    Debug.LogWarning($"[CharacterEntity] {gameObject.name}: Could not find shader 'Game/SpriteOutline'. " +
+                        "Outline and flash effects may not work. Ensure SpriteOutline.shader is included in the build.");
                 }
             }
         }
@@ -247,6 +259,12 @@ namespace PetGame
                 FlashFx.ResetFlash();
             }
 
+            // Stop outline effect on death
+            if (OutlineFx != null)
+            {
+                OutlineFx.ResetOutline();
+            }
+
             // Stop knockback on death
             if (Knockback != null)
             {
@@ -284,6 +302,12 @@ namespace PetGame
             if (healthBar != null)
             {
                 healthBar.Hide();
+            }
+
+            // Reset outline effect when recycled
+            if (OutlineFx != null)
+            {
+                OutlineFx.ResetOutline();
             }
         }
 
