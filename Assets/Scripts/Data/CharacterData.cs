@@ -83,6 +83,11 @@ namespace PetGame
         [Tooltip("Skill list. Count must not exceed quality level limit.")]
         public SkillData[] skills;
 
+        [Header("Description")]
+        [Tooltip("Character description / backstory displayed on the card UI")]
+        [TextArea(2, 5)]
+        public string characterDescription = "";
+
         [Header("Visuals")]
         [Tooltip("Character sprite")]
         public Sprite sprite;

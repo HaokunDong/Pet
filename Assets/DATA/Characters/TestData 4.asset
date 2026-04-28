@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6d4e6ea0883364f97a8ead9ca8741b5c, type: 3}
+  m_Name: TestData 4
+  m_EditorClassIdentifier: 
+  characterId: 
+  characterName: 
+  attackPower: 244
+  maxHealth: 111
+  defense: 5
+  moveSpeed: 3
+  attackSpeed: 1
+  engageDistance: 1
+  minAttackDistance: 0.3
+  attackRangeShapes: []
+  defaultFacesRight: 1
+  knockbackHorizontalSpeed: 2
+  knockbackVerticalSpeed: 1.5
+  knockbackGravity: 8
+  qualityLevel: 0
+  characterType: 0
+  skills: []
+  characterDescription: 
+  sprite: {fileID: 0}
+  animatorController: {fileID: 0}
