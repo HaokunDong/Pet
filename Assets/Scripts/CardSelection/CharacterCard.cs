@@ -42,8 +42,8 @@ namespace PetGame
 
             if (portraitImage != null)
             {
-                portraitImage.sprite = data.sprite;
-                portraitImage.enabled = data.sprite != null;
+                portraitImage.sprite = data.portraitSprite;
+                portraitImage.enabled = data.portraitSprite != null;
             }
 
             if (nameText != null)

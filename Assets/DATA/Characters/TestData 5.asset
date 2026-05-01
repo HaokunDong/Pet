@@ -31,4 +31,5 @@ MonoBehaviour:
   skills: []
   characterDescription: 
   sprite: {fileID: 0}
+  portraitSprite: {fileID: 807168342, guid: efaa67d8d9b95e647b7e11972d093ddf, type: 3}
   animatorController: {fileID: 0}

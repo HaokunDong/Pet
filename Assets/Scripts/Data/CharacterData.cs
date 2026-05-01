@@ -92,6 +92,9 @@ namespace PetGame
         [Tooltip("Character sprite")]
         public Sprite sprite;
 
+        [Tooltip("Portrait image displayed on the card UI")]
+        public Sprite portraitSprite;
+
         [Tooltip("Animator controller for this character")]
         public RuntimeAnimatorController animatorController;
 
