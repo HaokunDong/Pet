@@ -20,6 +20,9 @@ public class MainView : BaseView
 
     private int num = 0;
 
+    // Cached reference to the card selection system
+    private PetGame.CardSplineDistributor cardDistributor;
+
     protected override void OnAwake()
     {
         //transform.Find("Button1").GetComponent<Button>().onClick.AddListener(OnButton1Click);
@@ -91,7 +94,10 @@ public class MainView : BaseView
         }
         else if (go == button1)
         {
-            Debug.Log("button1");
+            if (cardDistributor == null)
+                cardDistributor = FindObjectOfType<PetGame.CardSplineDistributor>();
+            if (cardDistributor != null)
+                cardDistributor.ToggleVisibility();
         }
         else if (go == button2)
         {

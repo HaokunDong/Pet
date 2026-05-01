@@ -5,7 +5,7 @@ namespace PetGame
 {
     /// <summary>
     /// Handles inertia scrolling after drag release and snap-to-focus animation.
-    /// Listens to CardDragHandler.OnDragEnded to receive the release velocity,
+    /// Listens to CardSplineDistributor.OnDragEnded to receive the release velocity,
     /// then applies inertia deceleration followed by a DOTween snap animation
     /// to align the nearest card to the focus position.
     /// </summary>
@@ -13,7 +13,6 @@ namespace PetGame
     {
         [Header("References")]
         [SerializeField] private CardSplineDistributor distributor;
-        [SerializeField] private CardDragHandler dragHandler;
         [SerializeField] private CardFocusDisplay focusDisplay;
 
         private CardSelectionSettings Settings => CardSelectionSettings.Instance;
@@ -35,14 +34,14 @@ namespace PetGame
 
         private void OnEnable()
         {
-            if (dragHandler != null)
-                dragHandler.OnDragEnded += HandleDragEnded;
+            if (distributor != null)
+                distributor.OnDragEnded += HandleDragEnded;
         }
 
         private void OnDisable()
         {
-            if (dragHandler != null)
-                dragHandler.OnDragEnded -= HandleDragEnded;
+            if (distributor != null)
+                distributor.OnDragEnded -= HandleDragEnded;
         }
 
         private void Update()
@@ -50,7 +49,7 @@ namespace PetGame
             if (!isInertiaActive) return;
 
             // If user starts dragging again, cancel inertia
-            if (dragHandler != null && dragHandler.IsDragging)
+            if (distributor != null && distributor.IsDragging)
             {
                 CancelInertia();
                 return;
@@ -80,8 +79,8 @@ namespace PetGame
         }
 
         /// <summary>
-        /// Called when drag ends. Starts inertia if velocity is significant,
-        /// otherwise snaps immediately.
+        /// Called when drag ends (forwarded from any CardDragHandler via CardSplineDistributor).
+        /// Starts inertia if velocity is significant, otherwise snaps immediately.
         /// </summary>
         private void HandleDragEnded(float velocity)
         {
@@ -160,6 +159,16 @@ namespace PetGame
                     focusDisplay.UpdateVisuals(distributor.FocusIndex, true);
                 }
             }
+        }
+
+        /// <summary>
+        /// Stops all inertia scrolling and snap animations.
+        /// Called externally when the card group is being hidden.
+        /// </summary>
+        public void StopAll()
+        {
+            CancelInertia();
+            KillSnapTween();
         }
 
         /// <summary>

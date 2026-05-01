@@ -43,28 +43,13 @@ namespace PetGame
         [Range(0.0001f, 0.01f)]
         public float dragSensitivity = 0.001f;
 
-        [Header("Hand Fan Layout")]
-        [Tooltip("Angle (degrees) between adjacent cards in the fan. Positive = spread wider")]
-        [Range(0f, 30f)]
-        public float fanAnglePerCard = 5f;
-
-        [Tooltip("Radius of the virtual circle that cards fan around (in world units). Larger = flatter arc")]
-        [Range(100f, 5000f)]
-        public float fanRadius = 1200f;
-
-        [Tooltip("Vertical offset of the fan circle center below the focus point (in local units)")]
-        [Range(0f, 3000f)]
-        public float fanCenterYOffset = 800f;
-
-        [Tooltip("Duration of the rotation transition when focus changes")]
-        [Range(0.05f, 1f)]
-        public float rotationTransitionDuration = 0.2f;
-
-        [Tooltip("Ease curve for the rotation transition")]
-        public Ease rotationTransitionEase = Ease.OutQuad;
+        [Header("Spline Edge Visibility")]
+        [Tooltip("Cards with t-value within this margin from the Spline endpoints (0 or 1) will be hidden to avoid ugly edge rotation")]
+        [Range(0f, 0.3f)]
+        public float splineEdgeMargin = 0.05f;
 
         [Header("Focus Card Pop-up")]
-        [Tooltip("How far the focused card pops up from the fan arc (in UI units). Simulates the card rising out of the deck")]
+        [Tooltip("How far the focused card pops up along the Spline normal (in UI units). Simulates the card rising out of the deck")]
         [Range(0f, 300f)]
         public float focusPopUpOffset = 50f;
 
@@ -74,6 +59,18 @@ namespace PetGame
 
         [Tooltip("Ease curve for the pop-up animation")]
         public Ease focusPopUpEase = Ease.OutBack;
+
+        [Header("Focus Card Scale")]
+        [Tooltip("Scale multiplier applied to the focused card (1 = no change)")]
+        [Range(1f, 2f)]
+        public float focusScale = 1.2f;
+
+        [Tooltip("Duration of the scale animation in seconds")]
+        [Range(0.05f, 1f)]
+        public float focusScaleDuration = 0.25f;
+
+        [Tooltip("Ease curve for the scale animation")]
+        public Ease focusScaleEase = Ease.OutBack;
 
         // =====================================================================
         // Singleton-style global access

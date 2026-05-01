@@ -5,21 +5,30 @@ using UnityEngine.EventSystems;
 namespace PetGame
 {
     /// <summary>
-    /// Handles mouse drag input to scroll cards along the Spline.
-    /// Attach to a transparent UI panel that covers the card interaction area.
+    /// Handles mouse drag input on individual cards to scroll all cards along the Spline.
+    /// Attach to each card prefab (or added dynamically at runtime).
     /// Implements IBeginDragHandler, IDragHandler, IEndDragHandler for UI-based drag detection.
+    /// Requires a Graphic component (e.g. Image) with Raycast Target enabled on the card.
     /// </summary>
     public class CardDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
     {
-        [Header("References")]
-        [Tooltip("The CardSplineDistributor that manages card positions")]
-        [SerializeField] private CardSplineDistributor distributor;
-
-        [Tooltip("The CardFocusDisplay that manages card visuals")]
-        [SerializeField] private CardFocusDisplay focusDisplay;
+        /// <summary>
+        /// The CardSplineDistributor that manages card positions. Injected via Initialize().
+        /// </summary>
+        private CardSplineDistributor distributor;
 
         /// <summary>
-        /// Whether the user is currently dragging.
+        /// The CardFocusDisplay that manages card visuals. Injected via Initialize().
+        /// </summary>
+        private CardFocusDisplay focusDisplay;
+
+        /// <summary>
+        /// Whether this handler has been properly initialized with references.
+        /// </summary>
+        private bool isInitialized;
+
+        /// <summary>
+        /// Whether the user is currently dragging via this card.
         /// </summary>
         public bool IsDragging { get; private set; }
 
@@ -38,15 +47,22 @@ namespace PetGame
         private int velocitySampleIndex;
 
         /// <summary>
-        /// Event fired when drag ends, passing the final velocity for inertia handling.
+        /// Initializes this drag handler with the required references.
+        /// Called by CardSplineDistributor after instantiating the card.
         /// </summary>
-        public event System.Action<float> OnDragEnded;
+        public void Initialize(CardSplineDistributor distributor, CardFocusDisplay focusDisplay)
+        {
+            this.distributor = distributor;
+            this.focusDisplay = focusDisplay;
+            isInitialized = true;
+        }
 
         public void OnBeginDrag(PointerEventData eventData)
         {
-            if (distributor == null || distributor.CardCount <= 1) return;
+            if (!isInitialized || distributor == null || distributor.CardCount <= 1) return;
 
             IsDragging = true;
+            distributor.IsDragging = true;
             DragVelocity = 0f;
             previousDragOffset = 0f;
             velocitySampleTime = Time.unscaledTime;
@@ -55,7 +71,7 @@ namespace PetGame
             if (focusDisplay != null)
                 focusDisplay.NotifyDragStart();
 
-            // Kill any active DOTween scale animations on cards to prevent fighting
+            // Kill any active DOTween animations on cards to prevent fighting
             for (int i = 0; i < distributor.CardCount; i++)
             {
                 CharacterCard card = distributor.Cards[i];
@@ -104,11 +120,31 @@ namespace PetGame
             }
         }
 
+        /// <summary>
+        /// Forcefully cancels any active drag operation without triggering inertia.
+        /// Called externally when the card group is being hidden during a drag.
+        /// </summary>
+        public void CancelDrag()
+        {
+            if (!IsDragging) return;
+
+            IsDragging = false;
+            DragVelocity = 0f;
+
+            if (distributor != null)
+                distributor.IsDragging = false;
+
+            if (focusDisplay != null)
+                focusDisplay.NotifyDragEnd();
+        }
+
         public void OnEndDrag(PointerEventData eventData)
         {
             if (!IsDragging) return;
 
             IsDragging = false;
+            if (distributor != null)
+                distributor.IsDragging = false;
 
             // Notify focus display that drag ended
             if (focusDisplay != null)
@@ -128,7 +164,9 @@ namespace PetGame
                 DragVelocity = 0f;
             }
 
-            OnDragEnded?.Invoke(DragVelocity);
+            // Forward drag-ended event through the distributor for centralized handling
+            if (distributor != null)
+                distributor.NotifyDragEnded(DragVelocity);
         }
     }
 }

@@ -19,11 +19,10 @@ MonoBehaviour:
   cardSpacing: 0.1
   focusT: 0.5
   dragSensitivity: 0.001
-  fanAnglePerCard: 5
-  fanRadius: 1189
-  fanCenterYOffset: 1800
-  rotationTransitionDuration: 0.2
-  rotationTransitionEase: 6
-  focusPopUpOffset: 110
+  splineEdgeMargin: 0.134
+  focusPopUpOffset: 0
   focusPopUpDuration: 0.25
   focusPopUpEase: 27
+  focusScale: 1.3
+  focusScaleDuration: 0.1
+  focusScaleEase: 27
