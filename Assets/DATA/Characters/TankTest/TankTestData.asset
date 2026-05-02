@@ -36,5 +36,5 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 14dada5195316f54298b52c029c4749f, type: 2}
   characterDescription: This is Tank
   sprite: {fileID: -408986372, guid: d8c68a76bc1fd164b930310ffdd7390f, type: 3}
-  portraitSprite: {fileID: 0}
+  portraitSprite: {fileID: -102904646, guid: 3340b330c3b87c8418a78d48086dd261, type: 3}
   animatorController: {fileID: 9100000, guid: 4243dde28c9ea274db0468e715146b22, type: 2}
