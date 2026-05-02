@@ -80,8 +80,7 @@ namespace PetGame
             }
 
             CharacterEntity entity = CreatePlayerCharacter(data, spawnPos);
-
-            // Spawn player characters
+            PlayerCharacters.Add(entity);
             //SpawnPlayerCharacters(saveData);
 
             saveTimer = 0f;
@@ -134,9 +133,61 @@ namespace PetGame
         }
 
         /// <summary>
+        /// Switches the current player character to a new one based on the given CharacterData.
+        /// Returns true if the switch was successful, false otherwise.
+        /// </summary>
+        public bool SwitchPlayerCharacter(CharacterData newData)
+        {
+            if (newData == null)
+            {
+                Debug.LogError("[GameCharacterManager] Cannot switch character: CharacterData is null!");
+                return false;
+            }
+
+            // Find the current player character (use the first one in the list, or find by tag)
+            CharacterEntity currentEntity = null;
+            if (PlayerCharacters.Count > 0)
+            {
+                currentEntity = PlayerCharacters[0];
+            }
+            else
+            {
+                // Try to find by tag as fallback
+                GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+                if (playerObj != null)
+                    currentEntity = playerObj.GetComponent<CharacterEntity>();
+            }
+
+            // Check if the new data is the same as the current character (avoid redundant switch)
+            if (currentEntity != null && currentEntity.characterData == newData)
+            {
+                Debug.Log("[GameCharacterManager] Character is already active, skipping switch.");
+                return false;
+            }
+
+            // Record current position before destroying
+            Vector3 spawnPos = Vector3.zero;
+            if (currentEntity != null)
+            {
+                spawnPos = currentEntity.transform.position;
+
+                // Destroy or recycle the old character
+                PlayerCharacters.Remove(currentEntity);
+                Destroy(currentEntity.gameObject);
+            }
+
+            // Create the new character at the same position
+            CharacterEntity newEntity = CreatePlayerCharacter(newData, spawnPos);
+            PlayerCharacters.Add(newEntity);
+
+            Debug.Log($"[GameCharacterManager] Switched to character: {newData.characterName}");
+            return true;
+        }
+
+        /// <summary>
         /// Create a single player character with all required components.
         /// </summary>
-        private CharacterEntity CreatePlayerCharacter(CharacterData data, Vector3 position)
+        public CharacterEntity CreatePlayerCharacter(CharacterData data, Vector3 position)
         {
             GameObject playerObj = PoolMgr.Instance.GetNode(playerPrefabName);
             if (playerObj == null)

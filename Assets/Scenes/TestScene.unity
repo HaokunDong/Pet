@@ -1120,7 +1120,7 @@ MonoBehaviour:
   cardParent: {fileID: 2135925740}
   characterDataList:
   - {fileID: 11400000, guid: a07fe24d25144484d9c9e8290258d622, type: 2}
-  - {fileID: 11400000, guid: 6c1fd654ef15d054c93497b7da9b63c7, type: 2}
+  - {fileID: 11400000, guid: 2842bc16e4357c34e9eba347828fa215, type: 2}
 --- !u!4 &1303202849
 Transform:
   m_ObjectHideFlags: 0

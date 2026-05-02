@@ -90,6 +90,11 @@ namespace PetGame
         private CardInertiaAndSnap inertiaAndSnap;
 
         /// <summary>
+        /// Cached reference to the GameCharacterManager for character switching.
+        /// </summary>
+        private GameCharacterManager gameCharacterManager;
+
+        /// <summary>
         /// Whether the card group is currently visible.
         /// </summary>
         public bool IsVisible { get; private set; }
@@ -168,7 +173,7 @@ namespace PetGame
                 CardDragHandler dragHandler = cardObj.GetComponent<CardDragHandler>();
                 if (dragHandler == null)
                     dragHandler = cardObj.AddComponent<CardDragHandler>();
-                dragHandler.Initialize(this, focusDisplay);
+                dragHandler.Initialize(this, focusDisplay, inertiaAndSnap);
             }
 
             currentOffset = 0f;
@@ -375,6 +380,12 @@ namespace PetGame
         public event System.Action<int> OnFocusChanged;
 
         /// <summary>
+        /// Event fired when the focus card is clicked, passing the CharacterData of the clicked card.
+        /// Used to trigger character switching.
+        /// </summary>
+        public event System.Action<CharacterData> OnFocusCardClicked;
+
+        /// <summary>
         /// Event fired when any card's drag ends, passing the final velocity for inertia handling.
         /// Used to decouple CardDragHandler from CardInertiaAndSnap.
         /// </summary>
@@ -459,6 +470,45 @@ namespace PetGame
                     if (dragHandler != null)
                         dragHandler.CancelDrag();
                 }
+            }
+        }
+
+        /// <summary>
+        /// Returns the index of the given card in the cards list, or -1 if not found.
+        /// </summary>
+        public int GetCardIndex(CharacterCard card)
+        {
+            if (card == null) return -1;
+            return cards.IndexOf(card);
+        }
+
+        /// <summary>
+        /// Called by CardDragHandler when the focus card is clicked.
+        /// Triggers the OnFocusCardClicked event and handles character switching.
+        /// </summary>
+        public void NotifyFocusCardClicked(CharacterData data)
+        {
+            if (data == null) return;
+
+            // Fire the event for external subscribers
+            OnFocusCardClicked?.Invoke(data);
+
+            // Perform character switch via GameCharacterManager
+            if (gameCharacterManager == null)
+                gameCharacterManager = FindObjectOfType<GameCharacterManager>();
+
+            if (gameCharacterManager != null)
+            {
+                bool success = gameCharacterManager.SwitchPlayerCharacter(data);
+                if (success)
+                {
+                    // Close the card panel after successful switch
+                    Hide();
+                }
+            }
+            else
+            {
+                Debug.LogError("[CardSplineDistributor] GameCharacterManager not found in scene!");
             }
         }
 

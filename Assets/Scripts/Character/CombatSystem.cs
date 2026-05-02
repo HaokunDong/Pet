@@ -31,6 +31,12 @@ namespace PetGame
         public int CachedSkillIndex => _cachedSkillIndex;
 
         /// <summary>
+        /// The cached facing sign at the time the attack/skill was initiated.
+        /// 1 = facing right, -1 = facing left. Used by SkillEffectData implementations.
+        /// </summary>
+        public float CachedFacingSign => _cachedFacingSign;
+
+        /// <summary>
         /// Whether the character is currently in an attack/skill animation waiting for hit frame.
         /// </summary>
         public bool IsAttacking => _isAttacking;

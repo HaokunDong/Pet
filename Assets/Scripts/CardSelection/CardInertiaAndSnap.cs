@@ -32,6 +32,12 @@ namespace PetGame
         /// </summary>
         private Tween snapTween;
 
+        /// <summary>
+        /// Whether inertia scrolling or snap animation is currently active.
+        /// Used by click detection to prevent accidental clicks during animation.
+        /// </summary>
+        public bool IsAnimating => isInertiaActive || (snapTween != null && snapTween.IsActive() && snapTween.IsPlaying());
+
         private void OnEnable()
         {
             if (distributor != null)
