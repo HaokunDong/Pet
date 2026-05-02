@@ -16,18 +16,15 @@ namespace PetGame
 
     /// <summary>
     /// Manages the control mode switching interaction for a player character.
-    /// Handles click detection, flash effect, button display, and mode transitions.
+    /// Handles click detection, flash effect, button panel display, and mode transitions.
     /// </summary>
     [RequireComponent(typeof(CharacterEntity))]
     [RequireComponent(typeof(FlashEffect))]
     [RequireComponent(typeof(Collider2D))]
     public class ControlModeManager : MonoBehaviour
     {
-        [Header("UI References")]
-        [Tooltip("Button prefab for control mode switching (should contain a Button + Text)")]
-        public GameObject buttonPrefab;
-
-        [Tooltip("Offset from character position to place the button (left side)")]
+        [Header("UI Settings")]
+        [Tooltip("Offset from character position to place the button panel")]
         public Vector2 buttonOffset = new Vector2(-1.5f, 0.5f);
 
         /// <summary>
@@ -45,12 +42,18 @@ namespace PetGame
         private AIController aiController;
         private ManualController manualController;
 
-        // Button UI
-        private GameObject buttonInstance;
-        private Button actionButton;
-        private Text buttonText;
-        private Canvas worldCanvas;
+        // Button Panel UI
+        private GameObject panelInstance;
+        private Canvas sceneCanvas;
         private bool isButtonShowing;
+
+        // Three button references
+        private Button changeCharacterBtn;
+        private Button trainBtn;
+        private Button controlBtn;
+
+        // Cached reference to the card selection system
+        private CardSplineDistributor cardDistributor;
 
         private void Awake()
         {
@@ -79,16 +82,19 @@ namespace PetGame
         }
 
         /// <summary>
-        /// Handle character being clicked: flash effect → pause → show button.
+        /// Handle character being clicked: flash effect → pause → show button panel.
         /// </summary>
         private void HandleCharacterClicked()
         {
             // Ignore if flash is playing (anti-repeat)
             if (flashEffect != null && flashEffect.IsFlashing) return;
 
-            // Ignore if button is already showing (click on character while button visible
-            // is treated as "non-button area" click, handled in Update)
-            if (isButtonShowing) return;
+            // If button panel is already showing, dismiss it
+            if (isButtonShowing)
+            {
+                DismissButton();
+                return;
+            }
 
             // Trigger flash effect
             if (flashEffect != null)
@@ -108,50 +114,48 @@ namespace PetGame
                 entity.CharAnimator.PlayIdle();
             }
 
-            // Show the appropriate button
+            // Show the button panel
             ShowButton();
         }
 
         private void Update()
         {
-            // Check for click on non-button area to dismiss button
+            // Check for click on non-button area to dismiss button panel
             if (isButtonShowing && Input.GetMouseButtonDown(0))
             {
-                // Check if the click is NOT on the button or the character
+                // Check if the click is NOT on the panel or the character
                 if (!IsClickOnButton() && !IsClickOnCharacter())
                 {
                     DismissButton();
                 }
             }
+
+            // Keep panel position following the character
+            if (isButtonShowing)
+            {
+                UpdatePanelPosition();
+            }
         }
 
         /// <summary>
-        /// Show the control/exit button on the left side of the character.
+        /// Show the CharacterButtonPanel on the side of the character.
         /// </summary>
         private void ShowButton()
         {
-            if (buttonInstance == null)
+            if (panelInstance == null)
             {
                 CreateButtonUI();
             }
 
-            // Set button text based on previous mode
-            if (previousMode == ControlMode.AI_Auto)
-            {
-                buttonText.text = "操控";
-            }
-            else if (previousMode == ControlMode.Manual)
-            {
-                buttonText.text = "退出操控";
-            }
+            if (panelInstance == null) return; // Failed to create
 
-            buttonInstance.SetActive(true);
+            panelInstance.SetActive(true);
             isButtonShowing = true;
             CurrentMode = ControlMode.Paused_ShowingButton;
         }
 
         /// <summary>
-        /// Dismiss the button and restore previous mode.
+        /// Dismiss the button panel and restore previous mode.
         /// </summary>
         private void DismissButton()
         {
@@ -162,22 +166,43 @@ namespace PetGame
         }
 
         /// <summary>
-        /// Handle the action button being clicked.
+        /// Handle the ChangeCharacter button being clicked.
+        /// Opens the card selection panel.
         /// </summary>
-        private void OnActionButtonClicked()
+        private void OnChangeCharacterClicked()
+        {
+            DismissButton();
+
+            // Find and toggle card selection visibility
+            if (cardDistributor == null)
+                cardDistributor = FindObjectOfType<CardSplineDistributor>();
+
+            if (cardDistributor != null)
+                cardDistributor.ToggleVisibility();
+        }
+
+        /// <summary>
+        /// Handle the Train button being clicked.
+        /// </summary>
+        private void OnTrainClicked()
+        {
+            Debug.Log("Train");
+            DismissButton();
+        }
+
+        /// <summary>
+        /// Handle the Control button being clicked.
+        /// Toggles between manual control mode and AI auto mode.
+        /// </summary>
+        private void OnControlClicked()
         {
             HideButton();
 
-            if (previousMode == ControlMode.AI_Auto)
-            {
-                // Switch to manual control
-                SetMode(ControlMode.Manual);
-            }
-            else if (previousMode == ControlMode.Manual)
-            {
-                // Switch back to AI auto
+            // If previously in manual mode, return to AI auto; otherwise enter manual mode
+            if (previousMode == ControlMode.Manual)
                 SetMode(ControlMode.AI_Auto);
-            }
+            else
+                SetMode(ControlMode.Manual);
         }
 
         /// <summary>
@@ -215,96 +240,97 @@ namespace PetGame
         }
 
         /// <summary>
-        /// Hide the button UI.
+        /// Hide the button panel UI.
         /// </summary>
         private void HideButton()
         {
-            if (buttonInstance != null)
+            if (panelInstance != null)
             {
-                buttonInstance.SetActive(false);
+                panelInstance.SetActive(false);
             }
             isButtonShowing = false;
         }
 
         /// <summary>
-        /// Create the button UI using a world-space canvas.
+        /// Create the button panel UI by loading CharacterButtonPanel prefab into the scene Canvas.
         /// </summary>
         private void CreateButtonUI()
         {
-            // Create world canvas
-            GameObject canvasObj = new GameObject("ControlButtonCanvas");
-            canvasObj.transform.SetParent(transform);
-            canvasObj.transform.localPosition = new Vector3(buttonOffset.x, buttonOffset.y, 0f);
-
-            worldCanvas = canvasObj.AddComponent<Canvas>();
-            worldCanvas.renderMode = RenderMode.WorldSpace;
-            worldCanvas.sortingOrder = 100;
-
-            CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
-            scaler.dynamicPixelsPerUnit = 100;
-
-            canvasObj.AddComponent<GraphicRaycaster>();
-
-            RectTransform canvasRect = canvasObj.GetComponent<RectTransform>();
-            canvasRect.sizeDelta = new Vector2(2f, 1f);
-            canvasRect.localScale = Vector3.one * 0.01f;
-
-            // Create button
-            if (buttonPrefab != null)
+            // Load the CharacterButtonPanel prefab
+            GameObject prefab = Resources.Load<GameObject>("Prefabs/UI/CharacterButtonPanel");
+            if (prefab == null)
             {
-                buttonInstance = Instantiate(buttonPrefab, canvasObj.transform);
-            }
-            else
-            {
-                // Create a simple button programmatically
-                buttonInstance = new GameObject("ActionButton");
-                buttonInstance.transform.SetParent(canvasObj.transform, false);
-
-                RectTransform btnRect = buttonInstance.AddComponent<RectTransform>();
-                btnRect.sizeDelta = new Vector2(160f, 50f);
-                btnRect.anchoredPosition = Vector2.zero;
-
-                Image btnImage = buttonInstance.AddComponent<Image>();
-                btnImage.color = new Color(0.2f, 0.2f, 0.2f, 0.85f);
-
-                actionButton = buttonInstance.AddComponent<Button>();
-                actionButton.targetGraphic = btnImage;
-
-                // Create text
-                GameObject textObj = new GameObject("Text");
-                textObj.transform.SetParent(buttonInstance.transform, false);
-
-                RectTransform textRect = textObj.AddComponent<RectTransform>();
-                textRect.anchorMin = Vector2.zero;
-                textRect.anchorMax = Vector2.one;
-                textRect.sizeDelta = Vector2.zero;
-
-                buttonText = textObj.AddComponent<Text>();
-                buttonText.text = "操控";
-                buttonText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-                buttonText.fontSize = 28;
-                buttonText.color = Color.white;
-                buttonText.alignment = TextAnchor.MiddleCenter;
+                Debug.LogWarning("ControlModeManager: Failed to load CharacterButtonPanel prefab from Resources/Prefabs/UI/CharacterButtonPanel");
+                return;
             }
 
-            // Get references if using prefab
-            if (actionButton == null)
-                actionButton = buttonInstance.GetComponentInChildren<Button>();
-            if (buttonText == null)
-                buttonText = buttonInstance.GetComponentInChildren<Text>();
+            // Find the existing scene Canvas
+            if (sceneCanvas == null)
+                sceneCanvas = FindObjectOfType<Canvas>();
 
-            // Bind click event
-            actionButton.onClick.AddListener(OnActionButtonClicked);
+            if (sceneCanvas == null)
+            {
+                Debug.LogWarning("ControlModeManager: No Canvas found in scene");
+                return;
+            }
 
-            buttonInstance.SetActive(false);
+            // Instantiate the panel prefab directly under the scene Canvas
+            panelInstance = Instantiate(prefab, sceneCanvas.transform);
+
+            // Get button references by finding child objects
+            Transform changeCharacterTrans = panelInstance.transform.Find("ChangeCharacter");
+            Transform trainTrans = panelInstance.transform.Find("Train");
+            Transform controlTrans = panelInstance.transform.Find("Control");
+
+            if (changeCharacterTrans != null)
+                changeCharacterBtn = changeCharacterTrans.GetComponent<Button>();
+            if (trainTrans != null)
+                trainBtn = trainTrans.GetComponent<Button>();
+            if (controlTrans != null)
+                controlBtn = controlTrans.GetComponent<Button>();
+
+            // Bind click events
+            if (changeCharacterBtn != null)
+                changeCharacterBtn.onClick.AddListener(OnChangeCharacterClicked);
+            if (trainBtn != null)
+                trainBtn.onClick.AddListener(OnTrainClicked);
+            if (controlBtn != null)
+                controlBtn.onClick.AddListener(OnControlClicked);
+
+            panelInstance.SetActive(false);
         }
 
         /// <summary>
-        /// Check if the current mouse click is on the button.
+        /// Update the panel position to follow the character in screen space.
+        /// </summary>
+        private void UpdatePanelPosition()
+        {
+            if (panelInstance == null || sceneCanvas == null) return;
+
+            Camera cam = Camera.main;
+            if (cam == null) return;
+
+            // Convert character world position (with offset) to screen position
+            Vector3 worldPos = transform.position + new Vector3(buttonOffset.x, buttonOffset.y, 0f);
+            Vector2 screenPos = cam.WorldToScreenPoint(worldPos);
+
+            // Convert screen position to canvas local position
+            RectTransform canvasRect = sceneCanvas.GetComponent<RectTransform>();
+            RectTransform panelRect = panelInstance.GetComponent<RectTransform>();
+
+            Vector2 localPoint;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                canvasRect, screenPos, sceneCanvas.worldCamera, out localPoint);
+
+            panelRect.anchoredPosition = localPoint;
+        }
+
+        /// <summary>
+        /// Check if the current mouse click is on the button panel.
         /// </summary>
         private bool IsClickOnButton()
         {
-            if (!isButtonShowing || actionButton == null) return false;
+            if (!isButtonShowing) return false;
 
             // Use EventSystem to check if pointer is over UI
             return UnityEngine.EventSystems.EventSystem.current != null &&
@@ -327,10 +353,12 @@ namespace PetGame
 
         private void OnDestroy()
         {
-            if (actionButton != null)
-            {
-                actionButton.onClick.RemoveAllListeners();
-            }
+            if (changeCharacterBtn != null)
+                changeCharacterBtn.onClick.RemoveAllListeners();
+            if (trainBtn != null)
+                trainBtn.onClick.RemoveAllListeners();
+            if (controlBtn != null)
+                controlBtn.onClick.RemoveAllListeners();
         }
     }
 }

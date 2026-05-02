@@ -142,11 +142,7 @@ namespace PetGame
                     outlineMat.name = "SpriteOutline_Runtime";
                     sr.material = outlineMat;
                 }
-                else
-                {
-                    Debug.LogWarning($"[CharacterEntity] {gameObject.name}: Could not find shader 'Game/SpriteOutline'. " +
-                        "Outline and flash effects may not work. Ensure SpriteOutline.shader is included in the build.");
-                }
+
             }
         }
         /// <summary>
@@ -214,11 +210,7 @@ namespace PetGame
             {
                 CharAnimator.PlayHit();
             }
-            else
-            {
-                Debug.LogWarning($"[Combat] {gameObject.name} has no CharAnimator — cannot play Hit animation. " +
-                    "Ensure CharacterAnimator component is attached and Initialize() was called.");
-            }
+
 
             // Trigger flash white effect (even on lethal hit — Die() will not cancel it)
             if (FlashFx != null)
@@ -316,21 +308,7 @@ namespace PetGame
             CancelInvoke();
         }
 
-        /// <summary>
-        /// Debug: detect if physics collision actually occurs.
-        /// </summary>
-        private void OnCollisionEnter2D(Collision2D collision)
-        {
-            Debug.LogWarning($"[CollisionCheck] '{gameObject.name}'(layer={gameObject.layer}) <-> '{collision.gameObject.name}'(layer={collision.gameObject.layer}) contacts={collision.contactCount}");
-        }
 
-        private void OnCollisionStay2D(Collision2D collision)
-        {
-            if (Time.frameCount % 120 == 0)
-            {
-                Debug.LogWarning($"[CollisionCheck] STAY '{gameObject.name}'(layer={gameObject.layer}) <-> '{collision.gameObject.name}'(layer={collision.gameObject.layer})");
-            }
-        }
 
         private void OnDestroy()
         {

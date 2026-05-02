@@ -1121,13 +1121,6 @@ MonoBehaviour:
   characterDataList:
   - {fileID: 11400000, guid: a07fe24d25144484d9c9e8290258d622, type: 2}
   - {fileID: 11400000, guid: 6c1fd654ef15d054c93497b7da9b63c7, type: 2}
-  - {fileID: 11400000, guid: 9e6dce96a51b9fb48b45054117cbf8c0, type: 2}
-  - {fileID: 11400000, guid: 2447e7457f537e947b3b2257fae31e52, type: 2}
-  - {fileID: 11400000, guid: ff52ee0e031cd0646a62c61b9708a7ea, type: 2}
-  - {fileID: 11400000, guid: b481efd2d2e4343468a315fd76054a7a, type: 2}
-  - {fileID: 11400000, guid: d72e3c3f4197db742a9576388963de6b, type: 2}
-  - {fileID: 11400000, guid: 7b9d203d0ada0414daf218deeb284037, type: 2}
-  - {fileID: 11400000, guid: 3ce5cc40ab69d7f40bdb1f7b2c6a2f99, type: 2}
 --- !u!4 &1303202849
 Transform:
   m_ObjectHideFlags: 0

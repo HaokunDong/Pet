@@ -179,7 +179,6 @@ namespace PetGame
             if (_cachedSkillIndex < 0 || entity.characterData.skills == null ||
                 _cachedSkillIndex >= entity.characterData.skills.Length)
             {
-                Debug.LogWarning($"[CombatSystem] {gameObject.name}: Invalid cached skill index {_cachedSkillIndex}, skipping skill damage.");
                 ClearAttackState();
                 return;
             }
@@ -187,7 +186,6 @@ namespace PetGame
             SkillData skillData = entity.characterData.skills[_cachedSkillIndex];
             if (skillData == null)
             {
-                Debug.LogWarning($"[CombatSystem] {gameObject.name}: SkillData at index {_cachedSkillIndex} is null, skipping skill damage.");
                 ClearAttackState();
                 return;
             }
@@ -210,8 +208,6 @@ namespace PetGame
                 return;
             }
 
-            // No SkillEffectData assigned — warn and skip
-            Debug.LogWarning($"[CombatSystem] {gameObject.name}: SkillData \"{skillData.skillName}\" has no SkillEffectData assigned. Skipping skill effect.");
             ClearAttackState();
         }
 

@@ -18,6 +18,9 @@ GameObject:
   - component: {fileID: 4649569251312808839}
   - component: {fileID: 800866984162691023}
   - component: {fileID: 5695150033332502739}
+  - component: {fileID: 2165474623745202224}
+  - component: {fileID: 548140950170055688}
+  - component: {fileID: 4487188800466315416}
   m_Layer: 8
   m_Name: PlayerPrefab
   m_TagString: Player
@@ -255,3 +258,43 @@ MonoBehaviour:
   postCombatDuration: 1.5
   wanderWalkDuration: {x: 1.5, y: 3.5}
   wanderPauseDuration: {x: 0.5, y: 1.5}
+--- !u!114 &2165474623745202224
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5516931510916368851}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5f2b829b8c65b4bc9bb2954c59bb111f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  buttonOffset: {x: -1, y: 0.2}
+--- !u!114 &548140950170055688
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5516931510916368851}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7137950c431f2413d8470f102ee56faf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  flashDuration: 0.35
+  flashHoldDuration: 0.1
+  flashColor: {r: 1, g: 1, b: 1, a: 1}
+--- !u!114 &4487188800466315416
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5516931510916368851}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5554bc95c9df04ef99fdcb739e82ad46, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 

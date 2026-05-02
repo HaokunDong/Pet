@@ -33,11 +33,7 @@ namespace PetGame
         /// </summary>
         public void OnAttackHit()
         {
-            if (combatSystem == null)
-            {
-                Debug.LogWarning($"[AnimEventReceiver] {gameObject.name}: CombatSystem is null, skipping OnAttackHit.");
-                return;
-            }
+            if (combatSystem == null) return;
 
             if (!combatSystem.IsAttacking)
             {
@@ -54,11 +50,7 @@ namespace PetGame
         /// </summary>
         public void OnSkillHit()
         {
-            if (combatSystem == null)
-            {
-                Debug.LogWarning($"[AnimEventReceiver] {gameObject.name}: CombatSystem is null, skipping OnSkillHit.");
-                return;
-            }
+            if (combatSystem == null) return;
 
             if (!combatSystem.IsAttacking)
             {
