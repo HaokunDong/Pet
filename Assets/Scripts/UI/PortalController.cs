@@ -70,6 +70,7 @@ namespace PetGame
         /// <summary>
         /// Called by the Button component's OnClick event.
         /// Only triggers if the interaction was a click (not a drag).
+        /// Starts the Boss fight and passes this portal reference to BossFightManager.
         /// </summary>
         public void OnPortalClicked()
         {
@@ -79,7 +80,18 @@ namespace PetGame
                 return;
             }
 
-            Debug.Log("传送门被点击");
+            Debug.Log("[PortalController] Portal clicked, triggering Boss fight.");
+
+            // Find BossFightManager and start Boss fight with this portal reference
+            BossFightManager bossFightManager = FindObjectOfType<BossFightManager>();
+            if (bossFightManager != null)
+            {
+                bossFightManager.StartBossFight(gameObject);
+            }
+            else
+            {
+                Debug.LogWarning("[PortalController] BossFightManager not found. Boss fight will not be triggered.");
+            }
         }
 
         // =====================================================================

@@ -43,11 +43,13 @@ namespace PetGame
 
         private float spawnTimer;
         private int currentEnemyCount;
+        private bool isPaused;
 
         private void Start()
         {
             spawnTimer = 0f;
             currentEnemyCount = 0;
+            isPaused = false;
 
             if (spawnCenter == null)
                 spawnCenter = transform;
@@ -55,6 +57,8 @@ namespace PetGame
 
         private void Update()
         {
+            if (isPaused) return;
+
             spawnTimer += Time.deltaTime;
 
             if (spawnTimer >= spawnInterval && currentEnemyCount < maxEnemies)
@@ -193,6 +197,57 @@ namespace PetGame
             deadEnemy.OnDeath -= OnEnemyDeath;
             currentEnemyCount--;
             if (currentEnemyCount < 0) currentEnemyCount = 0;
+        }
+
+        // =====================================================================
+        // Boss Fight Integration — Pause / Resume / Clear
+        // =====================================================================
+
+        /// <summary>
+        /// Pauses enemy spawning. No new enemies will be generated while paused.
+        /// </summary>
+        public void PauseSpawning()
+        {
+            isPaused = true;
+            Logger.Log("[EnemySpawner] Spawning paused.");
+        }
+
+        /// <summary>
+        /// Resumes enemy spawning and resets the spawn timer.
+        /// </summary>
+        public void ResumeSpawning()
+        {
+            isPaused = false;
+            spawnTimer = 0f;
+            Logger.Log("[EnemySpawner] Spawning resumed.");
+        }
+
+        /// <summary>
+        /// Whether the spawner is currently paused.
+        /// </summary>
+        public bool IsPaused => isPaused;
+
+        /// <summary>
+        /// Destroys all active enemies from the scene by finding all GameObjects
+        /// tagged "Enemy" and calling Destroy on them.
+        /// This ensures AI systems cannot detect or target them anymore.
+        /// </summary>
+        public void ClearAllEnemies()
+        {
+            GameObject[] enemies = GameObject.FindGameObjectsWithTag("Enemy");
+            foreach (GameObject enemyObj in enemies)
+            {
+                CharacterEntity entity = enemyObj.GetComponent<CharacterEntity>();
+                if (entity != null)
+                {
+                    entity.OnDeath -= OnEnemyDeath;
+                }
+
+                Destroy(enemyObj);
+            }
+
+            currentEnemyCount = 0;
+            Logger.Log($"[EnemySpawner] Destroyed {enemies.Length} enemies from scene.");
         }
     }
 }

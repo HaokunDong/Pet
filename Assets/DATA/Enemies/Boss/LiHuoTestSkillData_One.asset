@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e008fbfcb086b4309bd7c12f80de35ab, type: 3}
+  m_Name: LiHuoTestSkillData_One
+  m_EditorClassIdentifier: 
+  skillId: LihuoTestSkill_One
+  skillName: LihuoTestSkill_One
+  cooldown: 6
+  damage: 10
+  skillRange: 2
+  icon: {fileID: 0}
+  skillEffect: {fileID: 11400000, guid: 867ed275f0eaea147b2f5ae478816992, type: 2}

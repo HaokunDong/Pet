@@ -29,6 +29,12 @@ namespace PetGame
         [SerializeField] private CharacterData[] characterDataList;
 
         /// <summary>
+        /// Public read-only access to the character data list.
+        /// Used by BossFightManager to check if a CharacterData already exists.
+        /// </summary>
+        public CharacterData[] CharacterDataList => characterDataList;
+
+        /// <summary>
         /// All instantiated card instances, in order.
         /// </summary>
         private readonly List<CharacterCard> cards = new List<CharacterCard>();
@@ -532,6 +538,50 @@ namespace PetGame
         private void OnDestroy()
         {
             ClearCards();
+        }
+
+        /// <summary>
+        /// Dynamically adds a new CharacterData to the card list and refreshes all cards.
+        /// Used by BossFightManager to add defeated Boss characters to the player's deck.
+        /// </summary>
+        /// <param name="data">The CharacterData to add.</param>
+        /// <returns>True if added successfully, false if data is null or already exists.</returns>
+        public bool AddCharacterData(CharacterData data)
+        {
+            if (data == null)
+            {
+                Debug.LogWarning("[CardSplineDistributor] Cannot add null CharacterData.");
+                return false;
+            }
+
+            // Check if already exists
+            if (characterDataList != null)
+            {
+                foreach (var existing in characterDataList)
+                {
+                    if (existing == data)
+                    {
+                        Debug.LogWarning($"[CardSplineDistributor] CharacterData '{data.characterName}' already exists in the list.");
+                        return false;
+                    }
+                }
+            }
+
+            // Append to array
+            int oldLength = characterDataList != null ? characterDataList.Length : 0;
+            CharacterData[] newList = new CharacterData[oldLength + 1];
+            if (characterDataList != null)
+            {
+                characterDataList.CopyTo(newList, 0);
+            }
+            newList[oldLength] = data;
+            characterDataList = newList;
+
+            // Re-initialize to refresh all cards
+            Initialize();
+
+            Debug.Log($"[CardSplineDistributor] Added '{data.characterName}' to card list. Total cards: {characterDataList.Length}");
+            return true;
         }
     }
 }

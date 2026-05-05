@@ -142,6 +142,7 @@ namespace PetGame
                     portalRect.localPosition = new Vector3(localPoint.x, localPoint.y, 0f);
                 }
             }
+
         }
 
         // =====================================================================

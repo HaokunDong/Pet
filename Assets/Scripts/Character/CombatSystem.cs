@@ -95,23 +95,23 @@ namespace PetGame
         /// <returns>True if skill was used.</returns>
         public bool TryUseSkill(int skillIndex, CharacterEntity target)
         {
-            if (entity == null || !entity.RuntimeStats.IsAlive) return false;
-            if (target == null || !target.RuntimeStats.IsAlive) return false;
+            if (entity == null || !entity.RuntimeStats.IsAlive) { Debug.Log($"[CombatSystem] {gameObject.name}: TryUseSkill - entity null or dead"); return false; }
+            if (target == null || !target.RuntimeStats.IsAlive) { Debug.Log($"[CombatSystem] {gameObject.name}: TryUseSkill - target null or dead"); return false; }
 
             // Validate skill index
-            if (entity.characterData.skills == null) return false;
-            if (skillIndex < 0 || skillIndex >= entity.characterData.skills.Length) return false;
-            if (skillIndex >= entity.characterData.GetMaxSkillCount()) return false;
+            if (entity.characterData.skills == null) { Debug.Log($"[CombatSystem] {gameObject.name}: TryUseSkill - skills null"); return false; }
+            if (skillIndex < 0 || skillIndex >= entity.characterData.skills.Length) { Debug.Log($"[CombatSystem] {gameObject.name}: TryUseSkill - skillIndex {skillIndex} out of range (length={entity.characterData.skills.Length})"); return false; }
+            if (skillIndex >= entity.characterData.GetMaxSkillCount()) { Debug.Log($"[CombatSystem] {gameObject.name}: TryUseSkill - skillIndex {skillIndex} >= maxSkillCount {entity.characterData.GetMaxSkillCount()}"); return false; }
 
             // Check cooldown
-            if (!entity.RuntimeStats.IsSkillReady(skillIndex)) return false;
+            if (!entity.RuntimeStats.IsSkillReady(skillIndex)) { Debug.Log($"[CombatSystem] {gameObject.name}: TryUseSkill - skill {skillIndex} not ready (on cooldown)"); return false; }
 
             SkillData skillData = entity.characterData.skills[skillIndex];
-            if (skillData == null) return false;
+            if (skillData == null) { Debug.Log($"[CombatSystem] {gameObject.name}: TryUseSkill - skillData null"); return false; }
 
             // Check skill range
             float dist = Vector2.Distance(transform.position, target.transform.position);
-            if (dist > skillData.skillRange) return false;
+            if (dist > skillData.skillRange) { Debug.Log($"[CombatSystem] {gameObject.name}: TryUseSkill - out of range (dist={dist:F2}, skillRange={skillData.skillRange})"); return false; }
 
             // Cache target and skill index for frame event callback
             _cachedTarget = target;
@@ -219,7 +219,8 @@ namespace PetGame
 
         /// <summary>
         /// Clear all cached attack state. Called when attack is interrupted or completed.
-        /// Also clears skill animation protection if active.
+        /// Also clears skill animation protection state so the character can immediately
+        /// transition to other actions (e.g. normal attack while skills are on cooldown).
         /// </summary>
         public void ClearAttackState()
         {
@@ -228,9 +229,11 @@ namespace PetGame
             _cachedSkillIndex = -1;
             _isAttacking = false;
 
-            // Also clear skill animation protection so the character can transition
+            // Clear skill animation protection so the character can act again immediately
             if (entity != null && entity.CharAnimator != null)
+            {
                 entity.CharAnimator.ClearSkillState();
+            }
         }
 
         // ==================== Utility ====================
@@ -241,12 +244,19 @@ namespace PetGame
         /// </summary>
         public int GetFirstReadySkillIndex()
         {
-            if (entity.characterData.skills == null) return -1;
+            if (entity.characterData.skills == null)
+            {
+                Debug.Log($"[CombatSystem] {gameObject.name}: GetFirstReadySkillIndex - skills array is null");
+                return -1;
+            }
 
             int maxSkills = entity.characterData.GetMaxSkillCount();
+            Debug.Log($"[CombatSystem] {gameObject.name}: GetFirstReadySkillIndex - skills.Length={entity.characterData.skills.Length}, maxSkills={maxSkills}");
             for (int i = 0; i < entity.characterData.skills.Length && i < maxSkills; i++)
             {
-                if (entity.RuntimeStats.IsSkillReady(i))
+                bool ready = entity.RuntimeStats.IsSkillReady(i);
+                Debug.Log($"[CombatSystem] {gameObject.name}: Skill[{i}] ready={ready}");
+                if (ready)
                     return i;
             }
 

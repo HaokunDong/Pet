@@ -1,0 +1,41 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6d4e6ea0883364f97a8ead9ca8741b5c, type: 3}
+  m_Name: LiHuoTest
+  m_EditorClassIdentifier: 
+  characterId: LihuoTest_01
+  characterName: LihuoTest
+  attackPower: 20
+  maxHealth: 100
+  defense: 5
+  moveSpeed: 1.52
+  attackSpeed: 1
+  engageDistance: 0.49
+  minAttackDistance: 0.29
+  attackRangeShapes:
+  - shapeType: 0
+    offset: {x: 0.06, y: 0}
+    radius: 0.57
+    size: {x: 0, y: 0}
+  defaultFacesRight: 1
+  knockbackHorizontalSpeed: 2
+  knockbackVerticalSpeed: 1.5
+  knockbackGravity: 8
+  qualityLevel: 1
+  characterType: 2
+  skills:
+  - {fileID: 11400000, guid: ba5bd530bafd48643b70b5586697ad5d, type: 2}
+  - {fileID: 11400000, guid: 89f04f18836862a4585dbe1372cc4e76, type: 2}
+  characterDescription: 
+  sprite: {fileID: -303992534, guid: 84a25ba6e798a7b4ea8d4051db05c35a, type: 3}
+  portraitSprite: {fileID: 0}
+  animatorController: {fileID: 9100000, guid: ff9687d3be02dce4981c06f517315ebb, type: 2}

@@ -89,6 +89,11 @@ namespace PetGame
             if (CharAnimator != null)
             {
                 CharAnimator.SyncDefaultFacing(data.defaultFacesRight);
+
+                // Set skill count so CharacterAnimator knows whether to use
+                // Skill Trigger (single skill) or Skills Int (multi-skill) mode
+                int skillCount = (data.skills != null) ? data.skills.Length : 0;
+                CharAnimator.SetSkillCount(skillCount);
             }
 
             // Ensure FlashEffect component exists and SpriteRenderer uses the outline+flash material

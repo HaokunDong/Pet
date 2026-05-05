@@ -23,9 +23,12 @@ namespace PetGame
         private static readonly int HashWalk = Animator.StringToHash("Walk");
         private static readonly int HashAttack = Animator.StringToHash("Attack");
         private static readonly int HashSkill = Animator.StringToHash("Skill");
+        private static readonly int HashSkillOne = Animator.StringToHash("SkillOne");
+        private static readonly int HashSkillTwo = Animator.StringToHash("SkillTwo");
+        private static readonly int HashSkillThree = Animator.StringToHash("SkillThree");
+        private static readonly int HashSkillFour = Animator.StringToHash("SkillFour");
         private static readonly int HashHit = Animator.StringToHash("Hit");
         private static readonly int HashDeath = Animator.StringToHash("Death");
-        private static readonly int HashSkillIndex = Animator.StringToHash("SkillIndex");
 
         /// <summary>
         /// Duration of the hit animation protection period (seconds).
@@ -53,8 +56,18 @@ namespace PetGame
 
         // Flags indicating whether the Animator Controller has optional parameters
         private bool hasSkillParam;
-        private bool hasSkillIndexParam;
+        private bool hasSkillOneParam;
+        private bool hasSkillTwoParam;
+        private bool hasSkillThreeParam;
+        private bool hasSkillFourParam;
         private bool hasDeathParam;
+
+        /// <summary>
+        /// Whether this character has multiple skills (> 1).
+        /// If true, uses SkillOne/SkillTwo/SkillThree/SkillFour Triggers.
+        /// If false, uses single Skill Trigger.
+        /// </summary>
+        private bool useMultiSkillTriggers;
 
         /// <summary>
         /// Whether the sprite asset faces right by default.
@@ -106,7 +119,10 @@ namespace PetGame
         private void CacheParameterFlags()
         {
             hasSkillParam = false;
-            hasSkillIndexParam = false;
+            hasSkillOneParam = false;
+            hasSkillTwoParam = false;
+            hasSkillThreeParam = false;
+            hasSkillFourParam = false;
             hasDeathParam = false;
 
             if (animator == null || animator.runtimeAnimatorController == null) return;
@@ -118,8 +134,17 @@ namespace PetGame
                     case var h when h == HashSkill:
                         hasSkillParam = true;
                         break;
-                    case var h when h == HashSkillIndex:
-                        hasSkillIndexParam = true;
+                    case var h when h == HashSkillOne:
+                        hasSkillOneParam = true;
+                        break;
+                    case var h when h == HashSkillTwo:
+                        hasSkillTwoParam = true;
+                        break;
+                    case var h when h == HashSkillThree:
+                        hasSkillThreeParam = true;
+                        break;
+                    case var h when h == HashSkillFour:
+                        hasSkillFourParam = true;
                         break;
                     case var h when h == HashDeath:
                         hasDeathParam = true;
@@ -143,7 +168,7 @@ namespace PetGame
                 }
             }
 
-            // Count down skill state protection timer
+            // Count down skill state protection timer (safety timeout)
             if (isInSkillState)
             {
                 skillStateTimer -= Time.deltaTime;
@@ -176,6 +201,18 @@ namespace PetGame
                 animator.runtimeAnimatorController = controller;
                 CacheParameterFlags();
             }
+        }
+
+        /// <summary>
+        /// Set the skill count to determine which animation parameter mode to use.
+        /// Called by CharacterEntity during initialization.
+        /// - count == 0: no skills (will fall back to normal attack)
+        /// - count == 1: use Skill Trigger parameter
+        /// - count > 1: use SkillOne/SkillTwo/SkillThree/SkillFour Trigger parameters
+        /// </summary>
+        public void SetSkillCount(int count)
+        {
+            useMultiSkillTriggers = count > 1;
         }
 
         /// <summary>
@@ -226,25 +263,61 @@ namespace PetGame
 
         /// <summary>
         /// Play skill animation with a specific skill index.
+        /// All skills use Trigger parameters:
+        /// - Single-skill characters: uses "Skill" Trigger.
+        /// - Multi-skill characters: uses "SkillOne", "SkillTwo", "SkillThree", "SkillFour" Triggers.
+        /// skillIndex is 0-based: 0=SkillOne, 1=SkillTwo, 2=SkillThree, 3=SkillFour.
         /// </summary>
         public void PlaySkill(int skillIndex)
         {
-            if (!hasSkillParam)
+            ResetAllTriggers();
+
+            if (useMultiSkillTriggers)
             {
-                // Animator Controller does not have Skill parameter; fall back to Attack
-                PlayAttack();
-                return;
+                // Multi-skill mode: trigger the corresponding SkillOne/Two/Three/Four
+                int triggerHash = GetSkillTriggerHash(skillIndex);
+                if (triggerHash == 0)
+                {
+                    // No valid trigger for this skill index; fall back to Attack
+                    PlayAttack();
+                    return;
+                }
+
+                animator.SetTrigger(triggerHash);
+            }
+            else
+            {
+                // Single-skill mode: use Skill Trigger
+                if (!hasSkillParam)
+                {
+                    PlayAttack();
+                    return;
+                }
+
+                animator.SetTrigger(HashSkill);
             }
 
-            ResetAllTriggers();
-            if (hasSkillIndexParam)
-                animator.SetInteger(HashSkillIndex, skillIndex);
-            animator.SetTrigger(HashSkill);
             currentAnimState = AnimState.Skill;
 
             // Set skill state protection period so the animation is not interrupted
             isInSkillState = true;
             skillStateTimer = SKILL_STATE_MAX_DURATION;
+        }
+
+        /// <summary>
+        /// Get the Trigger hash for a given skill index (0-based).
+        /// Returns 0 if the skill index is out of range or the parameter does not exist.
+        /// </summary>
+        private int GetSkillTriggerHash(int skillIndex)
+        {
+            switch (skillIndex)
+            {
+                case 0: return hasSkillOneParam ? HashSkillOne : 0;
+                case 1: return hasSkillTwoParam ? HashSkillTwo : 0;
+                case 2: return hasSkillThreeParam ? HashSkillThree : 0;
+                case 3: return hasSkillFourParam ? HashSkillFour : 0;
+                default: return 0;
+            }
         }
 
         /// <summary>
@@ -291,10 +364,16 @@ namespace PetGame
         }
 
         /// <summary>
-        /// Play death animation. Clears any pending attack state.
+        /// Play death animation. Clears any pending attack state and skill state.
         /// </summary>
         public void PlayDeath()
         {
+            // Clear skill state protection so death is not blocked
+            isInSkillState = false;
+            skillStateTimer = 0f;
+            isInHitState = false;
+            hitStateTimer = 0f;
+
             ClearAttackStateIfNeeded();
             ResetAllTriggers();
             if (hasDeathParam)
@@ -341,6 +420,7 @@ namespace PetGame
 
         /// <summary>
         /// Reset all animation triggers to prevent queued transitions.
+        /// Resets all skill triggers that exist in the Animator Controller.
         /// </summary>
         private void ResetAllTriggers()
         {
@@ -348,6 +428,10 @@ namespace PetGame
             animator.ResetTrigger(HashWalk);
             animator.ResetTrigger(HashAttack);
             if (hasSkillParam) animator.ResetTrigger(HashSkill);
+            if (hasSkillOneParam) animator.ResetTrigger(HashSkillOne);
+            if (hasSkillTwoParam) animator.ResetTrigger(HashSkillTwo);
+            if (hasSkillThreeParam) animator.ResetTrigger(HashSkillThree);
+            if (hasSkillFourParam) animator.ResetTrigger(HashSkillFour);
             animator.ResetTrigger(HashHit);
             if (hasDeathParam) animator.ResetTrigger(HashDeath);
         }
