@@ -36,7 +36,6 @@ namespace PetGame
             // Early out if no shapes configured
             if (skillRangeShapes == null || skillRangeShapes.Length == 0)
             {
-                Debug.Log("[MeleeSkillEffectData] No skill range shapes configured, skipping damage.");
                 return;
             }
 
@@ -70,15 +69,6 @@ namespace PetGame
                     candidateEntity.TakeDamage(skillData.damage, casterEntity);
                     hitCount++;
                 }
-            }
-
-            if (hitCount == 0)
-            {
-                Debug.Log($"[MeleeSkillEffectData] {caster.gameObject.name}: No targets in skill range at hit frame.");
-            }
-            else
-            {
-                Debug.Log($"[MeleeSkillEffectData] {caster.gameObject.name}: Skill hit {hitCount} target(s).");
             }
         }
     }

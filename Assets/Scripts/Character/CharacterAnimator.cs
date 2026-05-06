@@ -1,16 +1,58 @@
 using UnityEngine;
+using PetGame.States;
 
 namespace PetGame
 {
     /// <summary>
     /// Wraps Animator state transitions for character animations.
     /// Attach alongside CharacterEntity on the character GameObject.
-    /// When a non-attack animation is played (Idle, Walk), any pending attack state
-    /// in CombatSystem is cleared to prevent stale damage events.
+    /// Internally uses a Finite State Machine (EntityStateMachine) to manage
+    /// all animation state transitions with Bool condition-driven logic.
+    /// 
+    /// Uses Entry/Exit mode in Animator Controller:
+    /// - Each state has a Bool parameter (Idle, Walk, Attack, Hit, Death, SkillOne~Four).
+    /// - Entry evaluates Bool conditions to route to the correct state.
+    /// - When a state's Bool becomes false, it transitions to Exit.
+    /// - Exit loops back to Entry for re-evaluation.
+    /// - Idle is the default path from Entry (no condition / fallback).
+    /// - State transitions rely on OnExit() clearing the current Bool and OnEnter() setting the new Bool.
+    /// - ResetAllBools() is only used for forced scenarios (Death, Reset).
+    /// 
+    /// === ANIMATOR CONTROLLER CONFIGURATION GUIDE ===
+    /// 
+    /// Parameters (all Bool type):
+    ///   Idle, Walk, Attack, Hit, Death, SkillOne, SkillTwo, SkillThree, SkillFour
+    /// 
+    /// Entry → State transitions (left side):
+    ///   - Entry → Idle:      (default, no condition — lowest priority / fallback)
+    ///   - Entry → Walk:      condition Walk == true
+    ///   - Entry → Attack:    condition Attack == true
+    ///   - Entry → Hit:       condition Hit == true
+    ///   - Entry → Death:     condition Death == true
+    ///   - Entry → SkillOne:  condition SkillOne == true
+    ///   - Entry → SkillTwo:  condition SkillTwo == true
+    ///   - Entry → SkillThree: condition SkillThree == true
+    ///   - Entry → SkillFour: condition SkillFour == true
+    /// 
+    /// State → Exit transitions (right side):
+    ///   - Idle → Exit:       condition Idle == false
+    ///   - Walk → Exit:       condition Walk == false
+    ///   - Attack → Exit:     condition Attack == false
+    ///   - Hit → Exit:        condition Hit == false
+    ///   - Death → Exit:      condition Death == false
+    ///   - SkillOne → Exit:   condition SkillOne == false
+    ///   - SkillTwo → Exit:   condition SkillTwo == false
+    ///   - SkillThree → Exit: condition SkillThree == false
+    ///   - SkillFour → Exit:  condition SkillFour == false
+    /// 
+    /// All transitions settings:
+    ///   - Has Exit Time = false (unchecked)
+    ///   - Transition Duration = 0 (instant)
+    ///   - Can Transition To Self = false (for non-Hit states)
     /// 
     /// IMPORTANT Animator Controller setup:
+    /// - All transitions MUST have Has Exit Time = false.
     /// - Hit animation state MUST have Loop Time = false (non-looping).
-    /// - Hit state should have an Exit Time transition back to Idle (no condition needed).
     /// - Attack animation clips MUST have Animation Events configured:
     ///   add an event at the hit frame calling "OnAttackHit" (normal attack) or "OnSkillHit" (skill).
     /// </summary>
@@ -18,7 +60,7 @@ namespace PetGame
     [RequireComponent(typeof(SpriteRenderer))]
     public class CharacterAnimator : MonoBehaviour
     {
-        // Animator parameter hashes for performance
+        // Animator parameter hashes for performance (used by ResetAllBools)
         private static readonly int HashIdle = Animator.StringToHash("Idle");
         private static readonly int HashWalk = Animator.StringToHash("Walk");
         private static readonly int HashAttack = Animator.StringToHash("Attack");
@@ -29,19 +71,6 @@ namespace PetGame
         private static readonly int HashSkillFour = Animator.StringToHash("SkillFour");
         private static readonly int HashHit = Animator.StringToHash("Hit");
         private static readonly int HashDeath = Animator.StringToHash("Death");
-
-        /// <summary>
-        /// Duration of the hit animation protection period (seconds).
-        /// During this time, behavior tree ticks will not interrupt the Hit animation.
-        /// </summary>
-        private const float HIT_STATE_DURATION = 0.4f;
-
-        /// <summary>
-        /// Duration of the skill animation protection period (seconds).
-        /// During this time, behavior tree ticks and hit animations will not interrupt the Skill animation.
-        /// This is set dynamically when PlaySkill is called, based on the animation clip length.
-        /// </summary>
-        private const float SKILL_STATE_MAX_DURATION = 5f;
 
         [Header("Sprite Orientation")]
         [Tooltip("Whether the sprite asset faces right by default. " +
@@ -63,11 +92,16 @@ namespace PetGame
         private bool hasDeathParam;
 
         /// <summary>
-        /// Whether this character has multiple skills (> 1).
-        /// If true, uses SkillOne/SkillTwo/SkillThree/SkillFour Triggers.
-        /// If false, uses single Skill Trigger.
+        /// The internal state machine managing all animation state transitions.
         /// </summary>
-        private bool useMultiSkillTriggers;
+        private EntityStateMachine stateMachine;
+
+        /// <summary>
+        /// Whether this character has multiple skills (> 1).
+        /// If true, uses SkillOne/SkillTwo/SkillThree/SkillFour Bool parameters.
+        /// If false, uses single Skill Bool parameter.
+        /// </summary>
+        private bool useMultiSkillBools;
 
         /// <summary>
         /// Whether the sprite asset faces right by default.
@@ -75,23 +109,22 @@ namespace PetGame
         /// </summary>
         public bool DefaultFacesRight => defaultFacesRight;
 
-        private bool isInHitState;
-        private float hitStateTimer;
-
-        private bool isInSkillState;
-        private float skillStateTimer;
-
         /// <summary>
         /// Whether the character is currently in the Hit animation protection period.
         /// When true, behavior tree nodes should avoid overriding the current animation.
         /// </summary>
-        public bool IsInHitState => isInHitState;
+        public bool IsInHitState => stateMachine != null && stateMachine.IsInHitState;
 
         /// <summary>
         /// Whether the character is currently in the Skill animation protection period.
         /// When true, behavior tree ticks and hit animations should not interrupt the skill.
         /// </summary>
-        public bool IsInSkillState => isInSkillState;
+        public bool IsInSkillState => stateMachine != null && stateMachine.IsInSkillState;
+
+        /// <summary>
+        /// Whether the character is currently attacking.
+        /// </summary>
+        public bool IsAttacking => stateMachine != null && stateMachine.IsAttacking;
 
         /// <summary>
         /// Current facing direction: 1 = right, -1 = left.
@@ -99,11 +132,9 @@ namespace PetGame
         public int FacingDirection { get; private set; } = 1;
 
         /// <summary>
-        /// Tracks the current animation state to avoid re-triggering the same state every frame,
-        /// which would cause AnyState self-transitions to restart the animation (visual jitter).
+        /// Expose the state machine for external systems that need direct access.
         /// </summary>
-        private enum AnimState { None, Idle, Walk, Attack, Skill, Hit, Death }
-        private AnimState currentAnimState = AnimState.None;
+        public EntityStateMachine StateMachine => stateMachine;
 
         private void Awake()
         {
@@ -155,28 +186,10 @@ namespace PetGame
 
         private void Update()
         {
-            // Count down hit state protection timer
-            if (isInHitState)
+            // Delegate per-frame update to the state machine
+            if (stateMachine != null)
             {
-                hitStateTimer -= Time.deltaTime;
-                if (hitStateTimer <= 0f)
-                {
-                    isInHitState = false;
-                    // Reset anim state so behavior tree can transition to Idle/Walk
-                    // (the Animator Controller's Exit Time transition handles the actual clip change)
-                    currentAnimState = AnimState.None;
-                }
-            }
-
-            // Count down skill state protection timer (safety timeout)
-            if (isInSkillState)
-            {
-                skillStateTimer -= Time.deltaTime;
-                if (skillStateTimer <= 0f)
-                {
-                    isInSkillState = false;
-                    currentAnimState = AnimState.None;
-                }
+                stateMachine.Update();
             }
         }
 
@@ -207,178 +220,199 @@ namespace PetGame
         /// Set the skill count to determine which animation parameter mode to use.
         /// Called by CharacterEntity during initialization.
         /// - count == 0: no skills (will fall back to normal attack)
-        /// - count == 1: use Skill Trigger parameter
-        /// - count > 1: use SkillOne/SkillTwo/SkillThree/SkillFour Trigger parameters
+        /// - count == 1: use Skill Bool parameter
+        /// - count > 1: use SkillOne/SkillTwo/SkillThree/SkillFour Bool parameters
         /// </summary>
         public void SetSkillCount(int count)
         {
-            useMultiSkillTriggers = count > 1;
+            useMultiSkillBools = count > 1;
         }
 
         /// <summary>
-        /// Play idle animation. Clears any pending attack state.
-        /// Skipped if the character is in the Hit animation protection period.
+        /// Initialize the state machine based on character type.
+        /// Must be called after SetAnimatorController and SetSkillCount.
+        /// </summary>
+        /// <param name="characterType">The type of character (Player, MinorEnemy, Boss).</param>
+        /// <param name="skillCount">Number of skills the character has.</param>
+        public void InitializeStateMachine(CharacterType characterType, int skillCount)
+        {
+            if (animator == null)
+                animator = GetComponent<Animator>();
+
+            // Ensure parameter flags are cached before configuring skills.
+            // This handles the case where the Animator already has a controller
+            // from the Prefab but SetAnimatorController() was not called beforehand.
+            CacheParameterFlags();
+
+            // Create the appropriate state machine based on character type
+            if (characterType == CharacterType.Player)
+            {
+                var playerMachine = new PlayerStateMachine();
+                playerMachine.Initialize(animator, this);
+                playerMachine.ConfigureSkills(skillCount, hasSkillParam, hasSkillOneParam,
+                    hasSkillTwoParam, hasSkillThreeParam, hasSkillFourParam, hasDeathParam);
+                stateMachine = playerMachine;
+            }
+            else
+            {
+                var enemyMachine = new EnemyStateMachine();
+                enemyMachine.Initialize(animator, this);
+                enemyMachine.ConfigureSkills(skillCount, hasSkillParam, hasSkillOneParam,
+                    hasSkillTwoParam, hasSkillThreeParam, hasSkillFourParam, hasDeathParam);
+                stateMachine = enemyMachine;
+            }
+
+            // Start in Idle state
+            stateMachine.ForceChangeState<IdleState>();
+        }
+
+        /// <summary>
+        /// Play idle animation. Delegates to state machine.
+        /// Skipped if the character is in a protected state (Attack/Skill/Hit).
+        /// In Entry/Exit mode, OnExit() of the current state clears its Bool,
+        /// then OnEnter() of IdleState sets Idle Bool = true.
         /// </summary>
         public void PlayIdle()
         {
-            // Do not interrupt Hit or Skill animation during protection period
-            if (isInHitState) return;
-            if (isInSkillState) return;
+            if (stateMachine == null) return;
 
-            // Skip if already in Idle state to prevent AnyState self-transition restart
-            if (currentAnimState == AnimState.Idle) return;
+            // Skip if already in Idle state (no need to re-enter from Entry)
+            if (stateMachine.isIdle)
+            {
+                // Diagnostic: check if Animator Bool is out of sync with state machine
+                if (animator != null && !animator.GetBool(HashIdle))
+                {
+                    Debug.LogWarning($"[CharacterAnimator] {gameObject.name}: PlayIdle skipped (isIdle=true) but Animator Idle Bool is FALSE! Forcing sync.");
+                    animator.SetBool(HashIdle, true);
+                }
+                return;
+            }
 
+            Debug.Log($"[CharacterAnimator] {gameObject.name}: PlayIdle() - transitioning from current state (isWalking={stateMachine.isWalking}, isAttacking={stateMachine.isAttacking}, isUsingSkill={stateMachine.isUsingSkill}, isHit={stateMachine.isHit})");
             ClearAttackStateIfNeeded();
-            ResetAllTriggers();
-            animator.SetTrigger(HashIdle);
-            currentAnimState = AnimState.Idle;
+            stateMachine.ChangeState<IdleState>();
         }
 
         /// <summary>
-        /// Play walk/run animation. Clears any pending attack state.
+        /// Play walk/run animation. Delegates to state machine.
+        /// In Entry/Exit mode, OnExit() of the current state clears its Bool,
+        /// then OnEnter() of WalkState sets Walk Bool = true.
         /// </summary>
         public void PlayWalk()
         {
-            // Do not interrupt Skill animation during protection period
-            if (isInSkillState) return;
+            if (stateMachine == null) return;
 
-            // Skip if already in Walk state to prevent AnyState self-transition restart
-            if (currentAnimState == AnimState.Walk) return;
+            // Skip if already in Walk state (no need to re-enter from Entry)
+            if (stateMachine.isWalking) return;
 
+            Debug.Log($"[CharacterAnimator] {gameObject.name}: PlayWalk() - transitioning from current state (isIdle={stateMachine.isIdle}, isAttacking={stateMachine.isAttacking})");
             ClearAttackStateIfNeeded();
-            ResetAllTriggers();
-            animator.SetTrigger(HashWalk);
-            currentAnimState = AnimState.Walk;
+            stateMachine.ChangeState<WalkState>();
         }
 
         /// <summary>
-        /// Play normal attack animation.
+        /// Play normal attack animation. Delegates to state machine.
+        /// In Entry/Exit mode, OnExit() of the current state clears its Bool,
+        /// then OnEnter() of AttackState sets Attack Bool = true.
         /// </summary>
         public void PlayAttack()
         {
-            ResetAllTriggers();
-            animator.SetTrigger(HashAttack);
-            currentAnimState = AnimState.Attack;
+            if (stateMachine == null) return;
+
+            Debug.Log($"[CharacterAnimator] {gameObject.name}: PlayAttack() - canBeInterrupted={stateMachine.canBeInterrupted}");
+            stateMachine.ChangeState<AttackState>(); 
         }
 
         /// <summary>
         /// Play skill animation with a specific skill index.
-        /// All skills use Trigger parameters:
-        /// - Single-skill characters: uses "Skill" Trigger.
-        /// - Multi-skill characters: uses "SkillOne", "SkillTwo", "SkillThree", "SkillFour" Triggers.
+        /// All skills use Bool parameters:
+        /// - Single-skill characters: uses "Skill" Bool.
+        /// - Multi-skill characters: uses "SkillOne", "SkillTwo", "SkillThree", "SkillFour" Bools.
         /// skillIndex is 0-based: 0=SkillOne, 1=SkillTwo, 2=SkillThree, 3=SkillFour.
         /// </summary>
         public void PlaySkill(int skillIndex)
         {
-            ResetAllTriggers();
+            if (stateMachine == null) return;
 
-            if (useMultiSkillTriggers)
+            // Configure the skill state with the correct index before transitioning
+            var skillState = stateMachine.GetState<SkillState>(); 
+            if (skillState != null)
             {
-                // Multi-skill mode: trigger the corresponding SkillOne/Two/Three/Four
-                int triggerHash = GetSkillTriggerHash(skillIndex);
-                if (triggerHash == 0)
-                {
-                    // No valid trigger for this skill index; fall back to Attack
-                    PlayAttack();
-                    return;
-                }
-
-                animator.SetTrigger(triggerHash);
-            }
-            else
-            {
-                // Single-skill mode: use Skill Trigger
-                if (!hasSkillParam)
-                {
-                    PlayAttack();
-                    return;
-                }
-
-                animator.SetTrigger(HashSkill);
+                skillState.SetSkillIndex(skillIndex);
             }
 
-            currentAnimState = AnimState.Skill;
-
-            // Set skill state protection period so the animation is not interrupted
-            isInSkillState = true;
-            skillStateTimer = SKILL_STATE_MAX_DURATION;
+            if (!stateMachine.ChangeState<SkillState>())
+            {
+                // If state transition failed (e.g. in protection), do nothing
+                return;
+            }
         }
 
         /// <summary>
-        /// Get the Trigger hash for a given skill index (0-based).
-        /// Returns 0 if the skill index is out of range or the parameter does not exist.
+        /// Called when the current state animation finishes (via animation event or CombatSystem).
+        /// Clears the protection so the character can transition to other states,
+        /// then automatically transitions back to Idle state.
+        /// In Entry/Exit mode, this triggers: current state OnExit() (Bool=false → Exit)
+        /// then IdleState OnEnter() (Idle Bool=true → Entry → Idle).
+        /// Applicable to Attack, Skill, and Hit states.
         /// </summary>
-        private int GetSkillTriggerHash(int skillIndex)
+        public void ClearCurrentState()
         {
-            switch (skillIndex)
+            if (stateMachine == null) return;
+
+            Debug.Log($"[CharacterAnimator] {gameObject.name}: ClearCurrentState() - isIdle={stateMachine.isIdle}, isWalking={stateMachine.isWalking}, isAttacking={stateMachine.isAttacking}, isUsingSkill={stateMachine.isUsingSkill}, isHit={stateMachine.isHit}, canBeInterrupted={stateMachine.canBeInterrupted}");
+
+            stateMachine.ClearProtection();
+
+            // After protection is cleared, automatically return to Idle
+            // (unless the character is already dead or in a non-protected state)
+            if (!stateMachine.isDead && !stateMachine.isIdle && !stateMachine.isWalking)
             {
-                case 0: return hasSkillOneParam ? HashSkillOne : 0;
-                case 1: return hasSkillTwoParam ? HashSkillTwo : 0;
-                case 2: return hasSkillThreeParam ? HashSkillThree : 0;
-                case 3: return hasSkillFourParam ? HashSkillFour : 0;
-                default: return 0;
+                ClearAttackStateIfNeeded();
+                stateMachine.ChangeState<IdleState>();
             }
         }
 
         /// <summary>
-        /// Called when the skill animation finishes (via animation event or CombatSystem).
-        /// Clears the skill state protection so the character can transition to other states.
-        /// </summary>
-        public void ClearSkillState()
-        {
-            isInSkillState = false;
-            skillStateTimer = 0f;
-            currentAnimState = AnimState.None;
-        }
-
-        /// <summary>
-        /// Play hit/hurt animation.
+        /// Play hit/hurt animation. Delegates to state machine.
         /// Does NOT clear pending attack state — an ongoing attack should still
         /// deal damage even if the attacker is hit mid-swing (animation event fires normally).
-        /// If already in Hit state, replays the animation from the beginning.
+        /// If already in Hit state, replays the animation from the beginning
+        /// (in Entry/Exit mode: exits to Exit then re-enters from Entry).
         /// Sets a protection period so behavior tree ticks don't interrupt the animation.
         /// </summary>
         public void PlayHit()
         {
-            // Do not interrupt Skill animation during protection period
-            if (isInSkillState) return;
+            if (stateMachine == null) return;
 
             // NOTE: intentionally NOT calling ClearAttackStateIfNeeded() here.
             // The attack's damage frame event should still fire even if we get hit.
-            ResetAllTriggers();
-
-            // If already in hit state, force replay from beginning
-            if (isInHitState)
-            {
-                animator.Play("Hit", 0, 0f);
-            }
-            else
-            {
-                animator.SetTrigger(HashHit);
-            }
-
-            // Set hit state protection period
-            isInHitState = true;
-            hitStateTimer = HIT_STATE_DURATION;
-            currentAnimState = AnimState.Hit;
+            stateMachine.ChangeState<HitState>();
         }
 
         /// <summary>
-        /// Play death animation. Clears any pending attack state and skill state.
+        /// Play death animation. Uses ForceChangeState to bypass all protection.
+        /// Clears any pending attack state and skill state.
         /// </summary>
         public void PlayDeath()
         {
-            // Clear skill state protection so death is not blocked
-            isInSkillState = false;
-            skillStateTimer = 0f;
-            isInHitState = false;
-            hitStateTimer = 0f;
+            if (stateMachine == null) return;
 
             ClearAttackStateIfNeeded();
-            ResetAllTriggers();
-            if (hasDeathParam)
-                animator.SetTrigger(HashDeath);
-            currentAnimState = AnimState.Death;
+            ResetAllBools();
+            stateMachine.ForceChangeState<DeathState>();
+        }
+
+        /// <summary>
+        /// Reset the state machine to Idle. Used when characters are recycled by the object pool.
+        /// </summary>
+        public void ResetStateMachine()
+        {
+            if (stateMachine != null)
+            {
+                ResetAllBools();
+                stateMachine.Reset();
+            }
         }
 
         /// <summary>
@@ -419,21 +453,26 @@ namespace PetGame
         }
 
         /// <summary>
-        /// Reset all animation triggers to prevent queued transitions.
-        /// Resets all skill triggers that exist in the Animator Controller.
+        /// Reset all animation Bool parameters to false.
+        /// In Entry/Exit mode, this is only used for forced scenarios:
+        /// - PlayDeath(): force all Bools off before entering Death state.
+        /// - ResetStateMachine(): force clean slate when recycling characters.
+        /// Normal state transitions rely on OnExit()/OnEnter() to manage Bools.
         /// </summary>
-        private void ResetAllTriggers()
+        public void ResetAllBools()
         {
-            animator.ResetTrigger(HashIdle);
-            animator.ResetTrigger(HashWalk);
-            animator.ResetTrigger(HashAttack);
-            if (hasSkillParam) animator.ResetTrigger(HashSkill);
-            if (hasSkillOneParam) animator.ResetTrigger(HashSkillOne);
-            if (hasSkillTwoParam) animator.ResetTrigger(HashSkillTwo);
-            if (hasSkillThreeParam) animator.ResetTrigger(HashSkillThree);
-            if (hasSkillFourParam) animator.ResetTrigger(HashSkillFour);
-            animator.ResetTrigger(HashHit);
-            if (hasDeathParam) animator.ResetTrigger(HashDeath);
+            if (animator == null) return;
+
+            animator.SetBool(HashIdle, false);
+            animator.SetBool(HashWalk, false);
+            animator.SetBool(HashAttack, false);
+            if (hasSkillParam) animator.SetBool(HashSkill, false);
+            if (hasSkillOneParam) animator.SetBool(HashSkillOne, false);
+            if (hasSkillTwoParam) animator.SetBool(HashSkillTwo, false);
+            if (hasSkillThreeParam) animator.SetBool(HashSkillThree, false);
+            if (hasSkillFourParam) animator.SetBool(HashSkillFour, false);
+            animator.SetBool(HashHit, false);
+            if (hasDeathParam) animator.SetBool(HashDeath, false);
         }
     }
 }

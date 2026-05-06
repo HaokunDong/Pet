@@ -23,8 +23,8 @@ MonoBehaviour:
   minAttackDistance: 0.29
   attackRangeShapes:
   - shapeType: 0
-    offset: {x: 0.06, y: 0}
-    radius: 0.57
+    offset: {x: 0.12, y: 0.42}
+    radius: 1.85
     size: {x: 0, y: 0}
   defaultFacesRight: 1
   knockbackHorizontalSpeed: 2

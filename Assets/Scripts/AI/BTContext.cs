@@ -54,6 +54,8 @@ namespace PetGame.AI
         public bool HasFiredFirstStrike { get; set; }
         /// <summary>When AI enters Combat or switches target, whether the target was behind the owner (opposite to facing direction).</summary>
         public bool TargetWasBehindOnEngage { get; set; }
+        /// <summary>Time when Strike state was entered. Used to enforce minimum stay duration to prevent jitter.</summary>
+        public float StrikeEnteredTime { get; set; }
 
         // --- PostCombat sub-state ---
         /// <summary>Time at which the PostCombat cooldown ends.</summary>

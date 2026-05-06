@@ -580,7 +580,6 @@ namespace PetGame
             // Re-initialize to refresh all cards
             Initialize();
 
-            Debug.Log($"[CardSplineDistributor] Added '{data.characterName}' to card list. Total cards: {characterDataList.Length}");
             return true;
         }
     }

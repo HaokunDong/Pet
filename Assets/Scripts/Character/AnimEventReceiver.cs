@@ -3,8 +3,8 @@ using UnityEngine;
 namespace PetGame
 {
     /// <summary>
-    /// Receives Unity Animation Events from attack/skill animation clips
-    /// and delegates damage application to CombatSystem.
+    /// Receives Unity Animation Events from attack/skill/hit animation clips
+    /// and delegates damage application to CombatSystem or state clearing to CharacterAnimator.
     ///
     /// [Unity Editor Setup]
     /// 1. Attach this component to the character GameObject (same object as Animator).
@@ -17,15 +17,21 @@ namespace PetGame
     ///    - Add an Animation Event at the hit frame.
     ///    - Set Function to "OnSkillHit" (no parameters).
     ///    - The skill index is read from CombatSystem's cached state.
+    /// 4. For any state animation that should auto-exit after playing once (Attack, Skill, Hit):
+    ///    - Add an Animation Event at the last frame of the clip.
+    ///    - Set Function to "OnStateEnd" (no parameters).
     /// </summary>
     [RequireComponent(typeof(CombatSystem))]
+    [RequireComponent(typeof(CharacterAnimator))]
     public class AnimEventReceiver : MonoBehaviour
     {
         private CombatSystem combatSystem;
+        private CharacterAnimator characterAnimator;
 
         private void Awake()
         {
             combatSystem = GetComponent<CombatSystem>();
+            characterAnimator = GetComponent<CharacterAnimator>();
         }
 
         /// <summary>
@@ -37,7 +43,6 @@ namespace PetGame
 
             if (!combatSystem.IsAttacking)
             {
-                Debug.Log($"[AnimEventReceiver] {gameObject.name}: OnAttackHit called but not in attacking state, skipping.");
                 return;
             }
 
@@ -54,11 +59,22 @@ namespace PetGame
 
             if (!combatSystem.IsAttacking)
             {
-                Debug.Log($"[AnimEventReceiver] {gameObject.name}: OnSkillHit called but not in attacking state, skipping.");
                 return;
             }
 
             combatSystem.ApplySkillDamage();
+        }
+
+        /// <summary>
+        /// Called by Unity Animation Event at the last frame of any state animation
+        /// (Attack, Skill, Hit) that should auto-exit after playing once.
+        /// Clears the current state protection and transitions back to Idle.
+        /// </summary>
+        public void OnStateEnd()
+        {
+            if (characterAnimator == null) return;
+
+            characterAnimator.ClearCurrentState();
         }
     }
 }

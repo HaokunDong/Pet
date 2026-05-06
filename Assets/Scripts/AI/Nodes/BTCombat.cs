@@ -97,20 +97,21 @@ namespace PetGame.AI
                 return BTState.Success;
             }
 
+            // If the owner is in attack animation (waiting for OnStateEnd), skip all logic.
+            if (owner.CharAnimator != null && owner.CharAnimator.IsAttacking)
+            {
+                return BTState.Success;
+            }
+
             float dist = Mathf.Abs(owner.transform.position.x - target.transform.position.x);
             float engageDist = Mathf.Max(owner.RuntimeStats.engageDistance, MinEngageDistance);
             float engageExitDist = engageDist + context.EngageExitHysteresis;
 
             // Use the actual attack range shape check to decide Strike eligibility.
             // This avoids the mismatch between X-axis engageDistance and 2D shape checks.
-            float facingSign = 1f;
-            if (owner.CharAnimator != null)
-                facingSign = owner.CharAnimator.FacingDirection;
-            else
-            {
-                float dx = target.transform.position.x - owner.transform.position.x;
-                facingSign = dx >= 0f ? 1f : -1f;
-            }
+            // Always use target direction for range check consistency with TickEngage.
+            float dx = target.transform.position.x - owner.transform.position.x;
+            float facingSign = dx >= 0f ? 1f : -1f;
             bool inAttackRange = owner.RuntimeStats.IsTargetInAttackRange(
                 owner.transform.position, facingSign, target.transform.position);
 
@@ -121,10 +122,14 @@ namespace PetGame.AI
 
             // Decide Engage vs Strike:
             // - Enter Strike when within engageDistance OR actually in attack range OR in skill range.
-            // - Exit Strike only when both out of attack range AND beyond engageExitDist AND not in skill range.
+            // - Exit Strike only when both out of attack range AND beyond engageExitDist AND not in skill range
+            //   AND minimum stay duration has elapsed (prevents jitter at boundary).
             if (context.CurrentState == AIState.Strike)
             {
-                if (!inAttackRange && !inSkillRange && dist > engageExitDist)
+                // Minimum stay in Strike: at least one attack interval to prevent oscillation
+                float minStrikeDuration = 0.3f;
+                bool minStayElapsed = (Time.time - context.StrikeEnteredTime) >= minStrikeDuration;
+                if (minStayElapsed && !inAttackRange && !inSkillRange && dist > engageExitDist)
                 {
                     context.CurrentState = AIState.Engage;
                 }
@@ -133,9 +138,15 @@ namespace PetGame.AI
             {
                 // Coming from Wander / PostCombat / Engage.
                 // Enter Strike if in attack range OR within engageDistance OR in skill range.
-                context.CurrentState = (inAttackRange || inSkillRange || dist <= engageDist)
-                    ? AIState.Strike
-                    : AIState.Engage;
+                if (inAttackRange || inSkillRange || dist <= engageDist)
+                {
+                    context.CurrentState = AIState.Strike;
+                    context.StrikeEnteredTime = Time.time;
+                }
+                else
+                {
+                    context.CurrentState = AIState.Engage;
+                }
             }
 
             if (context.CurrentState == AIState.Strike)
@@ -167,12 +178,9 @@ namespace PetGame.AI
             float minDist = Mathf.Max(ownerMinDist, targetMinDist);
 
             // If already in attack range, snap to Strike immediately — no movement.
-            // Also check engageDistance as a secondary condition for backward compatibility.
-            float facingForCheck = dir;
-            if (owner.CharAnimator != null)
-                facingForCheck = owner.CharAnimator.FacingDirection;
+            // Always use target direction (dir) for consistency with Execute()'s range check.
             bool inRange = owner.RuntimeStats.IsTargetInAttackRange(
-                owner.transform.position, facingForCheck, target.transform.position);
+                owner.transform.position, dir, target.transform.position);
 
             // Also check skill range — if a skill is ready and target is in skill range,
             // enter Strike immediately so the character can use the skill.
@@ -181,6 +189,7 @@ namespace PetGame.AI
             if (inRange || inSkillRangeEngage || absDx <= engageDist)
             {
                 context.CurrentState = AIState.Strike;
+                context.StrikeEnteredTime = Time.time;
                 if (owner.CharAnimator != null)
                 {
                     owner.CharAnimator.PlayIdle();
@@ -221,27 +230,32 @@ namespace PetGame.AI
                 step = Mathf.Max(maxAllowedStep, 0f);
             }
 
+            // If step was clamped to zero, we've reached the stop distance — enter Strike directly.
+            bool clampedToStop = (step <= 0.001f && maxAllowedStep <= 0f);
+
             Vector3 newPos = owner.transform.position;
             newPos.x += dir * step;
             owner.transform.position = newPos;
 
             // After clamped move, check if we've entered attack range or engage distance → switch to Strike.
             float newAbsDx = Mathf.Abs(targetX - newPos.x);
-            float newFacing = dir;
-            if (owner.CharAnimator != null)
-                newFacing = owner.CharAnimator.FacingDirection;
             bool nowInRange = owner.RuntimeStats.IsTargetInAttackRange(
-                newPos, newFacing, target.transform.position);
+                newPos, dir, target.transform.position);
             bool nowInSkillRange = IsTargetInSkillRange(owner, target);
-            if (nowInRange || nowInSkillRange || newAbsDx <= engageDist)
+            bool enteredStrike = nowInRange || nowInSkillRange || newAbsDx <= engageDist || clampedToStop;
+            if (enteredStrike)
             {
                 context.CurrentState = AIState.Strike;
+                context.StrikeEnteredTime = Time.time;
             }
 
             if (owner.CharAnimator != null)
             {
-                // If we actually moved, play walk; otherwise idle (clamped to zero step).
-                if (step > 0.001f)
+                // If we just entered Strike range, play idle (Strike will handle attack next frame).
+                // Otherwise, if we actually moved, play walk; if clamped to zero step, play idle.
+                if (enteredStrike)
+                    owner.CharAnimator.PlayIdle();
+                else if (step > 0.001f)
                     owner.CharAnimator.PlayWalk();
                 else
                     owner.CharAnimator.PlayIdle();
@@ -271,12 +285,13 @@ namespace PetGame.AI
 
         private void TickStrike(CharacterEntity owner, CharacterEntity target)
         {
-            // Face the target while in Strike, but apply a dead-zone to prevent
-            // flip-flopping when the two characters are nearly overlapping on X.
+            // Face the target while in Strike. Use SetFacingDirection with the target direction
+            // to ensure facing is always correct, even when characters are very close.
+            // Only skip if dx is exactly 0 (complete overlap) to avoid division issues.
             float facingDx = target.transform.position.x - owner.transform.position.x;
-            if (owner.CharAnimator != null && Mathf.Abs(facingDx) >= StrikeFacingDeadzone)
+            if (owner.CharAnimator != null && !Mathf.Approximately(facingDx, 0f))
             {
-                owner.CharAnimator.FaceTowards(target.transform.position);
+                owner.CharAnimator.SetFacingDirection(facingDx);
             }
 
             // Do not interrupt Hit animation.
@@ -292,7 +307,14 @@ namespace PetGame.AI
             }
 
             // If already mid-attack (animation playing, waiting for frame event), don't stack new attacks.
+            // Check both CombatSystem._isAttacking (pre-hit-frame) and StateMachine.isAttacking
+            // (post-hit-frame but animation still playing until OnStateEnd).
             if (combatSystem != null && combatSystem.IsAttacking)
+            {
+                return;
+            }
+            if (owner.CharAnimator != null && owner.CharAnimator.StateMachine != null 
+                && owner.CharAnimator.StateMachine.isAttacking)
             {
                 return;
             }
@@ -341,11 +363,13 @@ namespace PetGame.AI
             {
                 context.LastAttackTime = Time.time;
                 context.HasFiredFirstStrike = true;
+                Debug.Log($"[BTCombat] {owner.gameObject.name}: Attack fired successfully");
             }
             else if (owner.CharAnimator != null)
             {
                 // Attack range check may have failed this frame; stay in Strike and idle.
                 // Execute() will re-evaluate next frame and switch to Engage if needed.
+                Debug.Log($"[BTCombat] {owner.gameObject.name}: Attack NOT fired, calling PlayIdle(). isIdle={owner.CharAnimator.StateMachine?.isIdle}");
                 owner.CharAnimator.PlayIdle();
             }
         }

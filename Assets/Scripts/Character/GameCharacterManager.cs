@@ -161,7 +161,6 @@ namespace PetGame
             // Check if the new data is the same as the current character (avoid redundant switch)
             if (currentEntity != null && currentEntity.characterData == newData)
             {
-                Debug.Log("[GameCharacterManager] Character is already active, skipping switch.");
                 return false;
             }
 
@@ -180,7 +179,6 @@ namespace PetGame
             CharacterEntity newEntity = CreatePlayerCharacter(newData, spawnPos);
             PlayerCharacters.Add(newEntity);
 
-            Debug.Log($"[GameCharacterManager] Switched to character: {newData.characterName}");
             return true;
         }
 

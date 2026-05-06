@@ -14,8 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   skillRangeShapes:
   - shapeType: 0
-    offset: {x: -0.03, y: 0.15}
-    radius: 0.45
+    offset: {x: -0.36, y: 0.15}
+    radius: 0.84
     size: {x: 0, y: 0}
   previewSprite: {fileID: 872235809, guid: 1eadb1b61052a544abd602cfc74bea4d, type: 3}
   defaultFacesRight: 1

@@ -12,11 +12,14 @@ namespace PetGame
     public class MeleeSkillEffectDataEditor : Editor
     {
         // Preview area settings
-        private const float PREVIEW_SIZE = 256f;
-        private const float PIXELS_PER_UNIT = 80f;
+        private const float PREVIEW_SIZE = 400f;
+        private const float BASE_PIXELS_PER_UNIT = 80f;
 
         // Cached textures for shape rendering
         private Texture2D circleTexture;
+
+        // Effective pixels-per-unit after auto-fit calculation
+        private float effectivePixelsPerUnit = BASE_PIXELS_PER_UNIT;
 
         public override void OnInspectorGUI()
         {
@@ -58,6 +61,9 @@ namespace PetGame
             // Center of the preview area (character position)
             Vector2 center = previewRect.center;
 
+            // Auto-fit: calculate the best scale so content fills the preview area
+            CalculateAutoFitScale(data, previewRect);
+
             // Draw crosshair at center
             DrawCrosshair(center);
 
@@ -66,6 +72,59 @@ namespace PetGame
 
             // Draw skill range shapes
             DrawSkillRangeShapes(data, center);
+        }
+
+        /// <summary>
+        /// Calculate the best pixels-per-unit so that the largest element
+        /// (sprite or skill range) fills the preview area nicely.
+        /// </summary>
+        private void CalculateAutoFitScale(MeleeSkillEffectData data, Rect previewRect)
+        {
+            float maxWorldExtent = 0f;
+
+            // Consider sprite size
+            if (data.previewSprite != null)
+            {
+                float ppu = data.previewSprite.pixelsPerUnit;
+                Rect spriteRect = data.previewSprite.textureRect;
+                float worldWidth = spriteRect.width / ppu;
+                float worldHeight = spriteRect.height / ppu;
+                maxWorldExtent = Mathf.Max(maxWorldExtent, worldWidth * 0.5f, worldHeight * 0.5f);
+            }
+
+            // Consider skill range shapes
+            if (data.skillRangeShapes != null)
+            {
+                for (int i = 0; i < data.skillRangeShapes.Length; i++)
+                {
+                    AttackRangeShape shape = data.skillRangeShapes[i];
+                    if (shape == null) continue;
+
+                    float shapeExtent = 0f;
+                    switch (shape.shapeType)
+                    {
+                        case AttackShapeType.Circle:
+                            shapeExtent = new Vector2(shape.offset.x, shape.offset.y).magnitude + shape.radius;
+                            break;
+                        case AttackShapeType.Box:
+                            shapeExtent = new Vector2(shape.offset.x, shape.offset.y).magnitude
+                                          + Mathf.Max(shape.size.x, shape.size.y) * 0.5f;
+                            break;
+                    }
+                    maxWorldExtent = Mathf.Max(maxWorldExtent, shapeExtent);
+                }
+            }
+
+            // Calculate effective scale: fill 80% of the half-preview size
+            if (maxWorldExtent > 0.01f)
+            {
+                float availablePixels = Mathf.Min(previewRect.width, previewRect.height) * 0.4f;
+                effectivePixelsPerUnit = availablePixels / maxWorldExtent;
+            }
+            else
+            {
+                effectivePixelsPerUnit = BASE_PIXELS_PER_UNIT;
+            }
         }
 
         /// <summary>
@@ -102,21 +161,12 @@ namespace PetGame
                     spriteRect.height / tex.height
                 );
 
-                // Scale sprite to preview: use sprite's pixels-per-unit for accurate sizing
+                // Scale sprite to preview using the auto-fit effectivePixelsPerUnit
                 float ppu = sprite.pixelsPerUnit;
                 float worldWidth = spriteRect.width / ppu;
                 float worldHeight = spriteRect.height / ppu;
-                float drawWidth = worldWidth * PIXELS_PER_UNIT;
-                float drawHeight = worldHeight * PIXELS_PER_UNIT;
-
-                // Clamp to reasonable size
-                float maxDim = PREVIEW_SIZE * 0.6f;
-                if (drawWidth > maxDim || drawHeight > maxDim)
-                {
-                    float scale = maxDim / Mathf.Max(drawWidth, drawHeight);
-                    drawWidth *= scale;
-                    drawHeight *= scale;
-                }
+                float drawWidth = worldWidth * effectivePixelsPerUnit;
+                float drawHeight = worldHeight * effectivePixelsPerUnit;
 
                 Rect drawRect = new Rect(
                     center.x - drawWidth * 0.5f,
@@ -162,20 +212,20 @@ namespace PetGame
                 // Mirror offset.x based on defaultFacesRight
                 float facingSign = data.defaultFacesRight ? 1f : -1f;
                 Vector2 shapeCenter = center + new Vector2(
-                    shape.offset.x * facingSign * PIXELS_PER_UNIT,
-                    -shape.offset.y * PIXELS_PER_UNIT
+                    shape.offset.x * facingSign * effectivePixelsPerUnit,
+                    -shape.offset.y * effectivePixelsPerUnit
                 );
 
                 switch (shape.shapeType)
                 {
                     case AttackShapeType.Circle:
-                        DrawCircleFilled(shapeCenter, shape.radius * PIXELS_PER_UNIT, new Color(1f, 0.2f, 0.2f, 0.2f));
-                        DrawCircleOutline(shapeCenter, shape.radius * PIXELS_PER_UNIT, new Color(1f, 0.2f, 0.2f, 0.6f));
+                        DrawCircleFilled(shapeCenter, shape.radius * effectivePixelsPerUnit, new Color(1f, 0.2f, 0.2f, 0.2f));
+                        DrawCircleOutline(shapeCenter, shape.radius * effectivePixelsPerUnit, new Color(1f, 0.2f, 0.2f, 0.6f));
                         break;
 
                     case AttackShapeType.Box:
-                        float w = shape.size.x * PIXELS_PER_UNIT;
-                        float h = shape.size.y * PIXELS_PER_UNIT;
+                        float w = shape.size.x * effectivePixelsPerUnit;
+                        float h = shape.size.y * effectivePixelsPerUnit;
                         Rect boxRect = new Rect(shapeCenter.x - w * 0.5f, shapeCenter.y - h * 0.5f, w, h);
 
                         // Filled

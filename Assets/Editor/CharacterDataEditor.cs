@@ -12,12 +12,15 @@ namespace PetGame
     public class CharacterDataEditor : Editor
     {
         // Preview area settings
-        private const float PREVIEW_SIZE = 256f;
-        private const float PIXELS_PER_UNIT = 80f; // Scale factor: world units to preview pixels
+        private const float PREVIEW_SIZE = 400f;
+        private const float BASE_PIXELS_PER_UNIT = 80f; // Base scale factor: world units to preview pixels
 
         // Cached textures for shape rendering
         private Texture2D circleTexture;
         private Texture2D boxTexture;
+
+        // Effective pixels-per-unit after auto-fit calculation (used to keep shapes in sync with sprite)
+        private float effectivePixelsPerUnit = BASE_PIXELS_PER_UNIT;
 
         public override void OnInspectorGUI()
         {
@@ -60,6 +63,9 @@ namespace PetGame
             // Center of the preview area (character position)
             Vector2 center = previewRect.center;
 
+            // Auto-fit: calculate the best scale so content fills the preview area
+            CalculateAutoFitScale(data, previewRect);
+
             // Draw crosshair at center
             DrawCrosshair(center, previewRect);
 
@@ -72,8 +78,8 @@ namespace PetGame
             // Draw engageDistance as a yellow dashed circle
             if (data.engageDistance > 0f)
             {
-                DrawCircleOutline(center, data.engageDistance * PIXELS_PER_UNIT, new Color(1f, 1f, 0f, 0.4f));
-                Vector2 engLabelPos = new Vector2(center.x + data.engageDistance * PIXELS_PER_UNIT + 4, center.y - 8);
+                DrawCircleOutline(center, data.engageDistance * effectivePixelsPerUnit, new Color(1f, 1f, 0f, 0.4f));
+                Vector2 engLabelPos = new Vector2(center.x + data.engageDistance * effectivePixelsPerUnit + 4, center.y - 8);
                 Rect engLabelRect = new Rect(engLabelPos.x, engLabelPos.y, 100, 16);
                 GUI.Label(engLabelRect, $"Engage: {data.engageDistance:F2}", EditorStyles.centeredGreyMiniLabel);
             }
@@ -81,9 +87,9 @@ namespace PetGame
             // Draw minAttackDistance as a green circle
             if (data.minAttackDistance > 0f)
             {
-                DrawCircleFilled(center, data.minAttackDistance * PIXELS_PER_UNIT, new Color(0f, 1f, 0f, 0.1f));
-                DrawCircleOutline(center, data.minAttackDistance * PIXELS_PER_UNIT, new Color(0f, 1f, 0f, 0.6f));
-                Vector2 minLabelPos = new Vector2(center.x + data.minAttackDistance * PIXELS_PER_UNIT + 4, center.y + 4);
+                DrawCircleFilled(center, data.minAttackDistance * effectivePixelsPerUnit, new Color(0f, 1f, 0f, 0.1f));
+                DrawCircleOutline(center, data.minAttackDistance * effectivePixelsPerUnit, new Color(0f, 1f, 0f, 0.6f));
+                Vector2 minLabelPos = new Vector2(center.x + data.minAttackDistance * effectivePixelsPerUnit + 4, center.y + 4);
                 Rect minLabelRect = new Rect(minLabelPos.x, minLabelPos.y, 100, 16);
                 GUI.Label(minLabelRect, $"MinAtk: {data.minAttackDistance:F2}", EditorStyles.centeredGreyMiniLabel);
             }
@@ -101,6 +107,67 @@ namespace PetGame
             EditorGUI.DrawRect(new Rect(center.x - halfLen, center.y - 0.5f, halfLen * 2, 1f), crossColor);
             // Vertical line
             EditorGUI.DrawRect(new Rect(center.x - 0.5f, center.y - halfLen, 1f, halfLen * 2), crossColor);
+        }
+
+        /// <summary>
+        /// Calculate the best pixels-per-unit so that the largest element
+        /// (sprite or attack range) fills the preview area nicely.
+        /// </summary>
+        private void CalculateAutoFitScale(CharacterData data, Rect previewRect)
+        {
+            float maxWorldExtent = 0f;
+
+            // Consider sprite size
+            if (data.sprite != null)
+            {
+                float ppu = data.sprite.pixelsPerUnit;
+                Rect spriteRect = data.sprite.textureRect;
+                float worldWidth = spriteRect.width / ppu;
+                float worldHeight = spriteRect.height / ppu;
+                maxWorldExtent = Mathf.Max(maxWorldExtent, worldWidth * 0.5f, worldHeight * 0.5f);
+            }
+
+            // Consider engage distance
+            if (data.engageDistance > 0f)
+                maxWorldExtent = Mathf.Max(maxWorldExtent, data.engageDistance);
+
+            // Consider min attack distance
+            if (data.minAttackDistance > 0f)
+                maxWorldExtent = Mathf.Max(maxWorldExtent, data.minAttackDistance);
+
+            // Consider attack range shapes
+            if (data.attackRangeShapes != null)
+            {
+                for (int i = 0; i < data.attackRangeShapes.Length; i++)
+                {
+                    AttackRangeShape shape = data.attackRangeShapes[i];
+                    if (shape == null) continue;
+
+                    float shapeExtent = 0f;
+                    switch (shape.shapeType)
+                    {
+                        case AttackShapeType.Circle:
+                            shapeExtent = new Vector2(shape.offset.x, shape.offset.y).magnitude + shape.radius;
+                            break;
+                        case AttackShapeType.Box:
+                            shapeExtent = new Vector2(shape.offset.x, shape.offset.y).magnitude
+                                          + Mathf.Max(shape.size.x, shape.size.y) * 0.5f;
+                            break;
+                    }
+                    maxWorldExtent = Mathf.Max(maxWorldExtent, shapeExtent);
+                }
+            }
+
+            // Calculate effective scale: fill 80% of the half-preview size
+            if (maxWorldExtent > 0.01f)
+            {
+                float availablePixels = Mathf.Min(previewRect.width, previewRect.height) * 0.4f;
+                effectivePixelsPerUnit = availablePixels / maxWorldExtent;
+            }
+            else
+            {
+                effectivePixelsPerUnit = BASE_PIXELS_PER_UNIT;
+            }
         }
 
         /// <summary>
@@ -123,21 +190,12 @@ namespace PetGame
                     spriteRect.height / tex.height
                 );
 
-                // Scale sprite to preview: use sprite's pixels-per-unit for accurate sizing
+                // Scale sprite to preview using the auto-fit effectivePixelsPerUnit
                 float ppu = sprite.pixelsPerUnit;
                 float worldWidth = spriteRect.width / ppu;
                 float worldHeight = spriteRect.height / ppu;
-                float drawWidth = worldWidth * PIXELS_PER_UNIT;
-                float drawHeight = worldHeight * PIXELS_PER_UNIT;
-
-                // Clamp to reasonable size
-                float maxDim = PREVIEW_SIZE * 0.6f;
-                if (drawWidth > maxDim || drawHeight > maxDim)
-                {
-                    float scale = maxDim / Mathf.Max(drawWidth, drawHeight);
-                    drawWidth *= scale;
-                    drawHeight *= scale;
-                }
+                float drawWidth = worldWidth * effectivePixelsPerUnit;
+                float drawHeight = worldHeight * effectivePixelsPerUnit;
 
                 Rect drawRect = new Rect(
                     center.x - drawWidth * 0.5f,
@@ -183,18 +241,18 @@ namespace PetGame
                 // Use the sprite's native facing direction: if defaultFacesRight, offset.x is positive to the right;
                 // if defaultFacesLeft, offset.x is positive to the left (which is screen-left in preview).
                 float facingSign = data.defaultFacesRight ? 1f : -1f;
-                Vector2 shapeCenter = center + new Vector2(shape.offset.x * facingSign * PIXELS_PER_UNIT, -shape.offset.y * PIXELS_PER_UNIT);
+                Vector2 shapeCenter = center + new Vector2(shape.offset.x * facingSign * effectivePixelsPerUnit, -shape.offset.y * effectivePixelsPerUnit);
 
                 switch (shape.shapeType)
                 {
                     case AttackShapeType.Circle:
-                        DrawCircleFilled(shapeCenter, shape.radius * PIXELS_PER_UNIT, new Color(1f, 0.2f, 0.2f, 0.2f));
-                        DrawCircleOutline(shapeCenter, shape.radius * PIXELS_PER_UNIT, new Color(1f, 0.2f, 0.2f, 0.6f));
+                        DrawCircleFilled(shapeCenter, shape.radius * effectivePixelsPerUnit, new Color(1f, 0.2f, 0.2f, 0.2f));
+                        DrawCircleOutline(shapeCenter, shape.radius * effectivePixelsPerUnit, new Color(1f, 0.2f, 0.2f, 0.6f));
                         break;
 
                     case AttackShapeType.Box:
-                        float w = shape.size.x * PIXELS_PER_UNIT;
-                        float h = shape.size.y * PIXELS_PER_UNIT;
+                        float w = shape.size.x * effectivePixelsPerUnit;
+                        float h = shape.size.y * effectivePixelsPerUnit;
                         Rect boxRect = new Rect(shapeCenter.x - w * 0.5f, shapeCenter.y - h * 0.5f, w, h);
 
                         // Filled

@@ -94,6 +94,9 @@ namespace PetGame
                 // Skill Trigger (single skill) or Skills Int (multi-skill) mode
                 int skillCount = (data.skills != null) ? data.skills.Length : 0;
                 CharAnimator.SetSkillCount(skillCount);
+
+                // Initialize the FSM after animator controller and skill count are set
+                CharAnimator.InitializeStateMachine(data.characterType, skillCount);
             }
 
             // Ensure FlashEffect component exists and SpriteRenderer uses the outline+flash material
@@ -199,9 +202,6 @@ namespace PetGame
             float actualDamage = Mathf.Max(1f, attackPower - RuntimeStats.defense);
             RuntimeStats.currentHealth -= actualDamage;
 
-            Debug.Log($"[Combat] {gameObject.name} took {actualDamage} damage (ATK:{attackPower} - DEF:{RuntimeStats.defense}). " +
-                      $"HP: {RuntimeStats.currentHealth}/{RuntimeStats.maxHealth}");
-
             OnDamageTaken?.Invoke(this, actualDamage);
 
             // Update health bar
@@ -294,6 +294,12 @@ namespace PetGame
             OnDeath = null;
             OnDamageTaken = null;
             IsInitialized = false;
+
+            // Reset state machine when recycled
+            if (CharAnimator != null)
+            {
+                CharAnimator.ResetStateMachine();
+            }
 
             // Hide health bar when recycled (will be re-shown on next Initialize)
             if (healthBar != null)

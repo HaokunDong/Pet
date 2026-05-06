@@ -186,7 +186,6 @@ namespace PetGame
         /// </summary>
         private void OnTrainClicked()
         {
-            Debug.Log("Train");
             DismissButton();
         }
 
