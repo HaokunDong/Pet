@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using System.Linq;
+using PetGame.UI;
 
 public class MainView : BaseView
 {
@@ -14,6 +15,9 @@ public class MainView : BaseView
     private GameObject button2;
     private GameObject button3;
     private GameObject button4;
+
+    [Header("Lobby")]
+    [SerializeField] private LobbyPanel lobbyPanel;
 
     // Map buttons to their sprite animation components
     private Dictionary<GameObject, ButtonSpriteAnimation> _btnAnimMap = new Dictionary<GameObject, ButtonSpriteAnimation>();
@@ -105,7 +109,14 @@ public class MainView : BaseView
         }
         else if (go == button3)
         {
-            Debug.Log("button3");
+            if (lobbyPanel != null)
+            {
+                lobbyPanel.Show();
+            }
+            else
+            {
+                Debug.LogWarning("[MainView] LobbyPanel reference not set!");
+            }
         }
         else if (go == button4)
         {
