@@ -16,12 +16,8 @@ namespace PetGame
                  "Each shape supports independent offset and size.")]
         public AttackRangeShape[] skillRangeShapes;
 
-        [Header("Editor Preview")]
-        [Tooltip("Character sprite displayed in the Inspector preview to help adjust skill range shapes.")]
-        public Sprite previewSprite;
-
-        [Tooltip("Whether the preview sprite faces right by default. " +
-                 "Used to correctly mirror shape offsets in the preview and at runtime.")]
+        [Tooltip("Whether the character's sprite faces right by default. " +
+                 "Used to correctly mirror shape offsets at runtime.")]
         public bool defaultFacesRight = true;
 
         /// <summary>
@@ -53,22 +49,74 @@ namespace PetGame
 
             Vector2 casterPos = caster.transform.position;
 
-            // Find all candidates and check against skill range shapes
-            GameObject[] candidates = GameObject.FindGameObjectsWithTag(targetTag);
-            int hitCount = 0;
-
-            for (int i = 0; i < candidates.Length; i++)
+            // If damagesDuringDisplacement is enabled and displacement is configured,
+            // delegate damage detection to the displacement controller (continuous hit along path).
+            // For LockOn type, displacement is already started by OnSkillLockTarget event,
+            // so we only do instant damage here (continuous damage is handled by the controller).
+            if (displacementType == SkillDisplacementType.LockOn)
             {
-                CharacterEntity candidateEntity = candidates[i].GetComponent<CharacterEntity>();
-                if (candidateEntity == null || !candidateEntity.RuntimeStats.IsAlive) continue;
-
-                Vector2 candidatePos = candidateEntity.transform.position;
-
-                if (AttackRangeHelper.IsTargetInRange(casterPos, effectiveFacingSign, skillRangeShapes, candidatePos))
+                // LockOn displacement: displacement was already started by OnSkillLockTarget.
+                // If damagesDuringDisplacement is enabled, damage is already being handled by the controller.
+                // If not, do instant damage at current position (hit frame).
+                if (!damagesDuringDisplacement)
                 {
-                    candidateEntity.TakeDamage(skillData.damage, casterEntity);
-                    hitCount++;
+                    GameObject[] candidates = GameObject.FindGameObjectsWithTag(targetTag);
+                    for (int i = 0; i < candidates.Length; i++)
+                    {
+                        CharacterEntity candidateEntity = candidates[i].GetComponent<CharacterEntity>();
+                        if (candidateEntity == null || !candidateEntity.RuntimeStats.IsAlive) continue;
+
+                        Vector2 candidatePos = candidateEntity.transform.position;
+
+                        if (AttackRangeHelper.IsTargetInRange(casterPos, effectiveFacingSign, skillRangeShapes, candidatePos))
+                        {
+                            candidateEntity.TakeDamage(skillData.damage, casterEntity);
+                        }
+                    }
                 }
+            }
+            else if (damagesDuringDisplacement && displacementDirection != SkillDisplacementDirection.None && displacementDistance > 0f)
+            {
+                // Do an initial hit check at the starting position
+                GameObject[] candidates = GameObject.FindGameObjectsWithTag(targetTag);
+                for (int i = 0; i < candidates.Length; i++)
+                {
+                    CharacterEntity candidateEntity = candidates[i].GetComponent<CharacterEntity>();
+                    if (candidateEntity == null || !candidateEntity.RuntimeStats.IsAlive) continue;
+
+                    Vector2 candidatePos = candidateEntity.transform.position;
+
+                    if (AttackRangeHelper.IsTargetInRange(casterPos, effectiveFacingSign, skillRangeShapes, candidatePos))
+                    {
+                        candidateEntity.TakeDamage(skillData.damage, casterEntity);
+                    }
+                }
+
+                // Start displacement with continuous damage detection
+                ApplyDisplacementWithDamage(caster, skillData, skillRangeShapes, effectiveFacingSign, targetTag);
+            }
+            else
+            {
+                // Standard behavior: instant damage at current position, then displace
+                GameObject[] candidates = GameObject.FindGameObjectsWithTag(targetTag);
+                int hitCount = 0;
+
+                for (int i = 0; i < candidates.Length; i++)
+                {
+                    CharacterEntity candidateEntity = candidates[i].GetComponent<CharacterEntity>();
+                    if (candidateEntity == null || !candidateEntity.RuntimeStats.IsAlive) continue;
+
+                    Vector2 candidatePos = candidateEntity.transform.position;
+
+                    if (AttackRangeHelper.IsTargetInRange(casterPos, effectiveFacingSign, skillRangeShapes, candidatePos))
+                    {
+                        candidateEntity.TakeDamage(skillData.damage, casterEntity);
+                        hitCount++;
+                    }
+                }
+
+                // Apply displacement if configured (no continuous damage)
+                ApplyDisplacement(caster);
             }
         }
     }

@@ -12,10 +12,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a6a0b0d820e370e4ba3c9378a58acab8, type: 3}
   m_Name: LiHuoTestSkillEffect_Two
   m_EditorClassIdentifier: 
+  displacementType: 1
+  displacementDirection: 1
+  displacementDistance: 0
+  displacementDuration: 0.2
+  damagesDuringDisplacement: 1
   skillRangeShapes:
   - shapeType: 0
     offset: {x: -0.36, y: 0.15}
-    radius: 0.84
+    radius: 0.81
     size: {x: 0, y: 0}
-  previewSprite: {fileID: 872235809, guid: 1eadb1b61052a544abd602cfc74bea4d, type: 3}
   defaultFacesRight: 1

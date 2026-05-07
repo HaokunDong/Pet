@@ -288,9 +288,10 @@ namespace PetGame
                 return;
             }
 
-            Debug.Log($"[CharacterAnimator] {gameObject.name}: PlayIdle() - transitioning from current state (isWalking={stateMachine.isWalking}, isAttacking={stateMachine.isAttacking}, isUsingSkill={stateMachine.isUsingSkill}, isHit={stateMachine.isHit})");
-            ClearAttackStateIfNeeded();
-            stateMachine.ChangeState<IdleState>();
+            if (stateMachine.ChangeState<IdleState>())
+            {
+                ClearAttackStateIfNeeded();
+            }
         }
 
         /// <summary>
@@ -305,9 +306,10 @@ namespace PetGame
             // Skip if already in Walk state (no need to re-enter from Entry)
             if (stateMachine.isWalking) return;
 
-            Debug.Log($"[CharacterAnimator] {gameObject.name}: PlayWalk() - transitioning from current state (isIdle={stateMachine.isIdle}, isAttacking={stateMachine.isAttacking})");
-            ClearAttackStateIfNeeded();
-            stateMachine.ChangeState<WalkState>();
+            if (stateMachine.ChangeState<WalkState>())
+            {
+                ClearAttackStateIfNeeded();
+            }
         }
 
         /// <summary>
@@ -319,8 +321,7 @@ namespace PetGame
         {
             if (stateMachine == null) return;
 
-            Debug.Log($"[CharacterAnimator] {gameObject.name}: PlayAttack() - canBeInterrupted={stateMachine.canBeInterrupted}");
-            stateMachine.ChangeState<AttackState>(); 
+            stateMachine.ChangeState<AttackState>();
         }
 
         /// <summary>
@@ -359,8 +360,6 @@ namespace PetGame
         public void ClearCurrentState()
         {
             if (stateMachine == null) return;
-
-            Debug.Log($"[CharacterAnimator] {gameObject.name}: ClearCurrentState() - isIdle={stateMachine.isIdle}, isWalking={stateMachine.isWalking}, isAttacking={stateMachine.isAttacking}, isUsingSkill={stateMachine.isUsingSkill}, isHit={stateMachine.isHit}, canBeInterrupted={stateMachine.canBeInterrupted}");
 
             stateMachine.ClearProtection();
 

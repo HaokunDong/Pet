@@ -17,7 +17,11 @@ namespace PetGame
     ///    - Add an Animation Event at the hit frame.
     ///    - Set Function to "OnSkillHit" (no parameters).
     ///    - The skill index is read from CombatSystem's cached state.
-    /// 4. For any state animation that should auto-exit after playing once (Attack, Skill, Hit):
+    /// 4. For lock-on displacement skills:
+    ///    - Add an Animation Event at the frame BEFORE the hit frame (where dash should start).
+    ///    - Set Function to "OnSkillLockTarget" (no parameters).
+    ///    - This locks the target's position and starts moving toward it.
+    /// 5. For any state animation that should auto-exit after playing once (Attack, Skill, Hit):
     ///    - Add an Animation Event at the last frame of the clip.
     ///    - Set Function to "OnStateEnd" (no parameters).
     /// </summary>
@@ -63,6 +67,33 @@ namespace PetGame
             }
 
             combatSystem.ApplySkillDamage();
+        }
+
+        /// <summary>
+        /// Called by Unity Animation Event on a frame BEFORE the skill hit frame.
+        /// Used for lock-on displacement: locks the target's position and starts
+        /// moving toward it. Add this event to the skill animation clip at the
+        /// desired frame where the character should begin dashing toward the target.
+        /// </summary>
+        public void OnSkillLockTarget()
+        {
+            Debug.Log($"[AnimEventReceiver] {gameObject.name}: OnSkillLockTarget() called. IsAttacking={combatSystem?.IsAttacking}, IsInSkillState={characterAnimator?.IsInSkillState}, CachedSkillIndex={combatSystem?.CachedSkillIndex}");
+
+            if (combatSystem == null)
+            {
+                Debug.LogWarning($"[AnimEventReceiver] {gameObject.name}: OnSkillLockTarget - combatSystem is null!");
+                return;
+            }
+
+            // Use either CombatSystem.IsAttacking OR state machine's IsInSkillState
+            // because IsAttacking may have been cleared by edge cases while the skill animation is still playing
+            if (!combatSystem.IsAttacking && !characterAnimator.IsInSkillState)
+            {
+                Debug.LogWarning($"[AnimEventReceiver] {gameObject.name}: OnSkillLockTarget - neither IsAttacking nor IsInSkillState, skipping.");
+                return;
+            }
+
+            combatSystem.ApplySkillLockOnDisplacement();
         }
 
         /// <summary>

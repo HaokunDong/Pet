@@ -113,10 +113,17 @@ namespace PetGame
             float dist = Vector2.Distance(transform.position, target.transform.position);
             if (dist > skillData.skillRange) return false;
 
-            // Cache target and skill index for frame event callback
+            // Compute facing sign toward target
+            float dx = target.transform.position.x - transform.position.x;
+            float facingSign = dx >= 0f ? 1f : -1f;
+
+            // Cache target, facing, and skill index for frame event callback
             _cachedTarget = target;
+            _cachedFacingSign = facingSign;
             _cachedSkillIndex = skillIndex;
             _isAttacking = true;
+
+            Debug.Log($"[CombatSystem] {gameObject.name}: TryUseSkill SUCCESS. skillIndex={skillIndex}, _isAttacking=true");
 
             // Face the target and play skill animation
             if (entity.CharAnimator != null)
@@ -193,7 +200,14 @@ namespace PetGame
             if (skillData.skillEffect != null)
             {
                 skillData.skillEffect.Execute(this, _cachedTarget, skillData);
-                ClearAttackState();
+
+                // For lock-on displacement skills, do NOT clear attack state here.
+                // The state will be cleared after the lock-on displacement completes
+                // (OnSkillLockTarget fires after OnSkillHit for these skills).
+                if (!skillData.skillEffect.UsesLockOnDisplacement)
+                {
+                    ClearAttackState();
+                }
                 return;
             }
 
@@ -215,6 +229,7 @@ namespace PetGame
         /// </summary>
         public void ClearAttackState()
         {
+            Debug.Log($"[CombatSystem] {gameObject.name}: ClearAttackState() called. Was: skillIndex={_cachedSkillIndex}, isAttacking={_isAttacking}\n{UnityEngine.StackTraceUtility.ExtractStackTrace()}");
             _cachedTarget = null;
             _cachedFacingSign = 0f;
             _cachedSkillIndex = -1;
@@ -222,6 +237,94 @@ namespace PetGame
         }
 
         // ==================== Utility ====================
+
+        /// <summary>
+        /// Called by AnimEventReceiver when the skill animation reaches the lock-target frame
+        /// (before the hit frame). Locks the target's current position and starts lock-on displacement.
+        /// </summary>
+        public void ApplySkillLockOnDisplacement()
+        {
+            Debug.Log($"[CombatSystem] {gameObject.name}: ApplySkillLockOnDisplacement() called. SkillIndex={_cachedSkillIndex}");
+
+            if (_cachedSkillIndex < 0 || entity.characterData.skills == null ||
+                _cachedSkillIndex >= entity.characterData.skills.Length)
+            {
+                Debug.LogWarning($"[CombatSystem] {gameObject.name}: ApplySkillLockOnDisplacement - invalid skill index {_cachedSkillIndex}");
+                return;
+            }
+
+            SkillData skillData = entity.characterData.skills[_cachedSkillIndex];
+            if (skillData == null || skillData.skillEffect == null)
+            {
+                Debug.LogWarning($"[CombatSystem] {gameObject.name}: ApplySkillLockOnDisplacement - skillData or skillEffect is null");
+                return;
+            }
+
+            SkillEffectData skillEffect = skillData.skillEffect;
+            if (!skillEffect.UsesLockOnDisplacement)
+            {
+                Debug.LogWarning($"[CombatSystem] {gameObject.name}: ApplySkillLockOnDisplacement - skill does NOT use LockOn displacement (type={skillEffect.displacementType})");
+                return;
+            }
+
+            // Lock the target's current position
+            if (_cachedTarget == null || !_cachedTarget.RuntimeStats.IsAlive)
+            {
+                Debug.LogWarning($"[CombatSystem] {gameObject.name}: ApplySkillLockOnDisplacement - target is null or dead");
+                return;
+            }
+            Vector2 lockedPos = _cachedTarget.transform.position;
+            Debug.Log($"[CombatSystem] {gameObject.name}: LockOn target position locked at {lockedPos}");
+
+
+            // Check if we need continuous damage during lock-on displacement
+            if (skillEffect.damagesDuringDisplacement)
+            {
+                // For MeleeSkillEffectData, we need the shapes and facing info
+                MeleeSkillEffectData meleeEffect = skillEffect as MeleeSkillEffectData;
+                if (meleeEffect != null && meleeEffect.skillRangeShapes != null && meleeEffect.skillRangeShapes.Length > 0)
+                {
+                    CharacterEntity casterEntity = GetComponent<CharacterEntity>();
+                    string targetTag = (casterEntity.RuntimeStats.characterType == CharacterType.Player)
+                        ? "Enemy"
+                        : "Player";
+
+                    float rawFacingSign = _cachedFacingSign;
+                    float effectiveFacingSign = meleeEffect.defaultFacesRight ? rawFacingSign : -rawFacingSign;
+
+                    // Do initial damage at starting position
+                    Vector2 casterPos = transform.position;
+                    GameObject[] candidates = GameObject.FindGameObjectsWithTag(targetTag);
+                    for (int i = 0; i < candidates.Length; i++)
+                    {
+                        CharacterEntity candidateEntity = candidates[i].GetComponent<CharacterEntity>();
+                        if (candidateEntity == null || !candidateEntity.RuntimeStats.IsAlive) continue;
+
+                        Vector2 candidatePos = candidateEntity.transform.position;
+                        if (AttackRangeHelper.IsTargetInRange(casterPos, effectiveFacingSign, meleeEffect.skillRangeShapes, candidatePos))
+                        {
+                            candidateEntity.TakeDamage(skillData.damage, casterEntity);
+                        }
+                    }
+
+                    skillEffect.ApplyLockOnDisplacementWithDamage(this, lockedPos, skillData,
+                        meleeEffect.skillRangeShapes, effectiveFacingSign, targetTag);
+                }
+                else
+                {
+                    // No shapes, just do lock-on displacement without damage
+                    skillEffect.ApplyLockOnDisplacement(this, lockedPos);
+                }
+            }
+            else
+            {
+                skillEffect.ApplyLockOnDisplacement(this, lockedPos);
+            }
+
+            // Clear attack state after lock-on displacement has been initiated.
+            // The displacement controller will handle the actual movement independently.
+            ClearAttackState();
+        }
 
         /// <summary>
         /// Get the index of the first skill that is ready to use.

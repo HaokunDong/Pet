@@ -26,7 +26,6 @@ namespace PetGame.States
             if (machine.Animator != null)
             {
                 machine.Animator.SetBool(HashIdle, true);
-                Debug.Log($"[IdleState] {machine.CharAnimator.gameObject.name}: OnEnter - Idle Bool set to TRUE");
             }
             else
             {
@@ -41,7 +40,6 @@ namespace PetGame.States
             if (machine.Animator != null)
             {
                 machine.Animator.SetBool(HashIdle, false);
-                Debug.Log($"[IdleState] {machine.CharAnimator.gameObject.name}: OnExit - Idle Bool set to FALSE");
             }
         }
 

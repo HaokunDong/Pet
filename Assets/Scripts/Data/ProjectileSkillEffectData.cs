@@ -131,6 +131,9 @@ namespace PetGame
                     PoolMgr.Instance.PutNode(projectileObj);
                 }
             );
+
+            // Apply displacement if configured
+            ApplyDisplacement(caster);
         }
 
 #if UNITY_EDITOR

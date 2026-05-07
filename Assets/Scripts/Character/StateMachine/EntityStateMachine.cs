@@ -176,18 +176,15 @@ namespace PetGame
             // Check transition conditions
             if (currentState != null && !isHitReentry && !currentState.CanExit())
             {
-                Debug.Log($"[EntityStateMachine] ChangeState<{type.Name}> REJECTED: current state {currentState.GetType().Name} CanExit()=false (canBeInterrupted={canBeInterrupted})");
                 return false;
             }
 
             if (!targetState.CanEnter())
             {
-                Debug.Log($"[EntityStateMachine] ChangeState<{type.Name}> REJECTED: CanEnter()=false");
                 return false;
             }
 
             // Execute transition
-            Debug.Log($"[EntityStateMachine] ChangeState: {currentState?.GetType().Name ?? "null"} -> {type.Name}");
             ExecuteTransition(targetState);
             return true;
         }

@@ -16,6 +16,6 @@ MonoBehaviour:
   skillName: Throw
   cooldown: 10
   damage: 100
-  skillRange: 10
+  skillRange: 6
   icon: {fileID: -653641005, guid: 325996c4e6f1740778132667857c1356, type: 3}
   skillEffect: {fileID: 11400000, guid: ae6269cd1cb14e841996ca03b3a82c77, type: 2}

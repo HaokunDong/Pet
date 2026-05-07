@@ -36,6 +36,7 @@ namespace PetGame.AI
         private readonly BTContext context;
         private CombatSystem combatSystem;
         private KnockbackController knockbackController;
+        private SkillDisplacementController displacementController;
 
         public BTCombat(BTContext context)
         {
@@ -85,8 +86,17 @@ namespace PetGame.AI
             if (knockbackController == null)
                 knockbackController = owner.GetComponent<KnockbackController>();
 
+            if (displacementController == null)
+                displacementController = owner.GetComponent<SkillDisplacementController>();
+
             // If the owner is being knocked back, skip all movement and attack logic this frame.
             if (knockbackController != null && knockbackController.IsInKnockback)
+            {
+                return BTState.Success;
+            }
+
+            // If the owner is being displaced by a skill, skip all movement and attack logic.
+            if (displacementController != null && displacementController.IsDisplacing)
             {
                 return BTState.Success;
             }
@@ -99,6 +109,12 @@ namespace PetGame.AI
 
             // If the owner is in attack animation (waiting for OnStateEnd), skip all logic.
             if (owner.CharAnimator != null && owner.CharAnimator.IsAttacking)
+            {
+                return BTState.Success;
+            }
+
+            // If the owner is in Hit state, skip all movement and attack logic this frame.
+            if (owner.CharAnimator != null && owner.CharAnimator.IsInHitState)
             {
                 return BTState.Success;
             }
@@ -363,13 +379,11 @@ namespace PetGame.AI
             {
                 context.LastAttackTime = Time.time;
                 context.HasFiredFirstStrike = true;
-                Debug.Log($"[BTCombat] {owner.gameObject.name}: Attack fired successfully");
             }
             else if (owner.CharAnimator != null)
             {
                 // Attack range check may have failed this frame; stay in Strike and idle.
                 // Execute() will re-evaluate next frame and switch to Engage if needed.
-                Debug.Log($"[BTCombat] {owner.gameObject.name}: Attack NOT fired, calling PlayIdle(). isIdle={owner.CharAnimator.StateMachine?.isIdle}");
                 owner.CharAnimator.PlayIdle();
             }
         }

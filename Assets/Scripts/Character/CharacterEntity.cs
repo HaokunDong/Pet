@@ -349,8 +349,11 @@ namespace PetGame
         /// </summary>
         private void OnDrawGizmosSelected()
         {
-            if (RuntimeStats == null) return;
-            DrawAttackRangeGizmos(selected: true);
+            if (RuntimeStats != null)
+            {
+                DrawAttackRangeGizmos(selected: true);
+            }
+            DrawSkillRangeGizmos(selected: true);
         }
 
         /// <summary>
@@ -358,8 +361,11 @@ namespace PetGame
         /// </summary>
         private void OnDrawGizmos()
         {
-            if (RuntimeStats == null) return;
-            DrawAttackRangeGizmos(selected: false);
+            if (RuntimeStats != null)
+            {
+                DrawAttackRangeGizmos(selected: false);
+            }
+            DrawSkillRangeGizmos(selected: false);
         }
 
         /// <summary>
@@ -434,6 +440,132 @@ namespace PetGame
                 Color engDistWire = new Color(1f, 1f, 0f, selected ? 0.5f : 0.15f);
                 Gizmos.color = engDistWire;
                 Gizmos.DrawWireSphere(pos, engDist);
+            }
+
+        }
+
+        /// <summary>
+        /// Draw skill range circles and skill effect shapes for each skill slot.
+        /// This method reads directly from characterData (serialized field),
+        /// so it works both in Edit mode and Play mode.
+        /// </summary>
+        private void DrawSkillRangeGizmos(bool selected)
+        {
+            if (characterData == null || characterData.skills == null) return;
+
+            Vector3 pos = transform.position;
+            int maxSkills = characterData.GetMaxSkillCount();
+            float facingSign = GetFacingSign();
+
+            // Colors for different skill slots: cyan, magenta, orange, purple
+            Color[] skillColors = new Color[]
+            {
+                new Color(0f, 1f, 1f, 1f),    // Cyan - Skill 1
+                new Color(1f, 0f, 1f, 1f),    // Magenta - Skill 2
+                new Color(1f, 0.5f, 0f, 1f),  // Orange - Skill 3
+                new Color(0.6f, 0.2f, 1f, 1f) // Purple - Skill 4
+            };
+
+            for (int i = 0; i < characterData.skills.Length && i < maxSkills; i++)
+            {
+                SkillData skill = characterData.skills[i];
+                if (skill == null) continue;
+
+                Color baseColor = skillColors[i % skillColors.Length];
+
+                // Draw skillRange circle (trigger distance)
+                if (skill.skillRange > 0f)
+                {
+                    Color wireCol = new Color(baseColor.r, baseColor.g, baseColor.b, selected ? 0.6f : 0.2f);
+                    Gizmos.color = wireCol;
+                    Gizmos.DrawWireSphere(pos, skill.skillRange);
+
+                    if (selected)
+                    {
+                        // Draw a faint filled disc for selected state
+                        UnityEditor.Handles.color = new Color(baseColor.r, baseColor.g, baseColor.b, 0.05f);
+                        UnityEditor.Handles.DrawSolidDisc(pos, Vector3.forward, skill.skillRange);
+
+                        // Draw label showing skill name and range
+                        string label = string.IsNullOrEmpty(skill.skillName)
+                            ? $"Skill {i + 1}: {skill.skillRange:F2}"
+                            : $"{skill.skillName}: {skill.skillRange:F2}";
+                        Vector3 labelPos = pos + Vector3.up * skill.skillRange;
+                        UnityEditor.Handles.color = wireCol;
+                        UnityEditor.Handles.Label(labelPos, label);
+                    }
+                }
+
+                // Draw skill effect shapes (actual damage area) from MeleeSkillEffectData
+                if (skill.skillEffect is MeleeSkillEffectData meleeEffect && meleeEffect.skillRangeShapes != null)
+                {
+                    // Determine effective facing sign for shape offset mirroring
+                    float effectiveFacingSign = meleeEffect.defaultFacesRight ? facingSign : -facingSign;
+
+                    float effectFillAlpha = selected ? 0.12f : 0.04f;
+                    float effectWireAlpha = selected ? 0.7f : 0.2f;
+                    Color effectFillColor = new Color(baseColor.r, baseColor.g, baseColor.b, effectFillAlpha);
+                    Color effectWireColor = new Color(baseColor.r, baseColor.g, baseColor.b, effectWireAlpha);
+
+                    for (int j = 0; j < meleeEffect.skillRangeShapes.Length; j++)
+                    {
+                        AttackRangeShape shape = meleeEffect.skillRangeShapes[j];
+                        if (shape == null) continue;
+
+                        Vector2 shapeCenter = (Vector2)pos + new Vector2(
+                            shape.offset.x * effectiveFacingSign,
+                            shape.offset.y
+                        );
+
+                        switch (shape.shapeType)
+                        {
+                            case AttackShapeType.Circle:
+                                Gizmos.color = effectWireColor;
+                                Gizmos.DrawWireSphere(shapeCenter, shape.radius);
+                                if (selected)
+                                {
+                                    UnityEditor.Handles.color = effectFillColor;
+                                    UnityEditor.Handles.DrawSolidDisc(shapeCenter, Vector3.forward, shape.radius);
+                                }
+                                break;
+
+                            case AttackShapeType.Box:
+                                Vector3 boxCenter = new Vector3(shapeCenter.x, shapeCenter.y, pos.z);
+                                Vector3 boxSize = new Vector3(shape.size.x, shape.size.y, 0f);
+                                Gizmos.color = effectWireColor;
+                                Gizmos.DrawWireCube(boxCenter, boxSize);
+                                if (selected)
+                                {
+                                    Gizmos.color = effectFillColor;
+                                    Gizmos.DrawCube(boxCenter, boxSize);
+                                }
+                                break;
+                        }
+                    }
+
+                    // Draw a label for the skill effect shapes
+                    if (selected && meleeEffect.skillRangeShapes.Length > 0)
+                    {
+                        string effectLabel = string.IsNullOrEmpty(skill.skillName)
+                            ? $"Skill {i + 1} Effect"
+                            : $"{skill.skillName} Effect";
+                        // Place label below the skill range label
+                        AttackRangeShape firstShape = meleeEffect.skillRangeShapes[0];
+                        if (firstShape != null)
+                        {
+                            Vector2 firstCenter = (Vector2)pos + new Vector2(
+                                firstShape.offset.x * effectiveFacingSign,
+                                firstShape.offset.y
+                            );
+                            float labelOffset = firstShape.shapeType == AttackShapeType.Circle
+                                ? firstShape.radius
+                                : firstShape.size.y * 0.5f;
+                            Vector3 effectLabelPos = new Vector3(firstCenter.x, firstCenter.y + labelOffset + 0.1f, pos.z);
+                            UnityEditor.Handles.color = effectWireColor;
+                            UnityEditor.Handles.Label(effectLabelPos, effectLabel);
+                        }
+                    }
+                }
             }
         }
 #endif

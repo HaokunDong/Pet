@@ -16,6 +16,6 @@ MonoBehaviour:
   skillName: LihuoTestSkill_One
   cooldown: 6
   damage: 10
-  skillRange: 2
+  skillRange: 5
   icon: {fileID: 0}
   skillEffect: {fileID: 11400000, guid: 867ed275f0eaea147b2f5ae478816992, type: 2}
