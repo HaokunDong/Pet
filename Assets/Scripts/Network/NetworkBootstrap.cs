@@ -16,8 +16,13 @@ namespace PetGame.Network
         [Tooltip("Maximum number of players in a lobby")]
         public int maxPlayers = 2;
 
+        [Header("Network Player Prefab")]
+        [Tooltip("Path to the network player prefab in Resources folder")]
+        public string networkPlayerPrefabPath = "Prefabs/Network/NetworkPlayerPrefab";
+
         private NetworkManager networkManager;
         private UnityTransport transport;
+        private GameObject networkPlayerPrefab;
 
         /// <summary>
         /// Whether the network system has been initialized.
@@ -74,8 +79,42 @@ namespace PetGame.Network
             // Set transport on NetworkManager
             networkManager.NetworkConfig.NetworkTransport = transport;
 
+            // Load and register the network player prefab
+            RegisterNetworkPlayerPrefab();
+
             IsInitialized = true;
             Debug.Log("[NetworkBootstrap] Network system initialized.");
+        }
+
+        /// <summary>
+        /// Load the network player prefab from Resources and register it with NetworkManager.
+        /// </summary>
+        private void RegisterNetworkPlayerPrefab()
+        {
+            // Load the network player prefab
+            networkPlayerPrefab = Resources.Load<GameObject>(networkPlayerPrefabPath);
+            if (networkPlayerPrefab == null)
+            {
+                Debug.LogError($"[NetworkBootstrap] Network player prefab not found at: Resources/{networkPlayerPrefabPath}. " +
+                    "Please create a prefab with NetworkObject component at this path. " +
+                    "Use menu: Tools/PetGame/Create Network Player Prefab");
+                return;
+            }
+
+            // Verify it has NetworkObject
+            if (networkPlayerPrefab.GetComponent<NetworkObject>() == null)
+            {
+                Debug.LogError("[NetworkBootstrap] Network player prefab is missing NetworkObject component!");
+                return;
+            }
+
+            // Set as player prefab (auto-spawn on connect)
+            networkManager.NetworkConfig.PlayerPrefab = networkPlayerPrefab;
+
+            // Register the prefab with NetworkManager using the proper API
+            networkManager.AddNetworkPrefab(networkPlayerPrefab);
+
+            Debug.Log($"[NetworkBootstrap] Network player prefab registered: {networkPlayerPrefab.name}");
         }
 
         /// <summary>
