@@ -146,15 +146,29 @@ namespace PetGame
             // Add network components in multiplayer mode
             if (NetworkBootstrap.Instance != null && NetworkBootstrap.Instance.IsMultiplayerActive)
             {
-                if (enemyObj.GetComponent<NetworkObject>() == null)
-                    enemyObj.AddComponent<NetworkObject>();
+                var netObj = enemyObj.GetComponent<NetworkObject>();
+                if (netObj == null)
+                {
+                    netObj = enemyObj.AddComponent<NetworkObject>();
+                }
                 if (enemyObj.GetComponent<NetworkEnemyController>() == null)
                     enemyObj.AddComponent<NetworkEnemyController>();
 
                 // Spawn on network so clients can see it
-                var netObj = enemyObj.GetComponent<NetworkObject>();
                 if (netObj != null && !netObj.IsSpawned)
-                    netObj.Spawn();
+                {
+                    try
+                    {
+                        netObj.Spawn();
+                    }
+                    catch (System.Exception e)
+                    {
+                        Logger.Log($"[EnemySpawner] Failed to network spawn enemy: {e.Message}");
+                        // Fallback: destroy and skip
+                        Destroy(enemyObj);
+                        return;
+                    }
+                }
             }
 
             // Listen for death to update count
@@ -219,14 +233,27 @@ namespace PetGame
             // Add network components in multiplayer mode
             if (NetworkBootstrap.Instance != null && NetworkBootstrap.Instance.IsMultiplayerActive)
             {
-                if (enemyObj.GetComponent<NetworkObject>() == null)
-                    enemyObj.AddComponent<NetworkObject>();
+                var netObj = enemyObj.GetComponent<NetworkObject>();
+                if (netObj == null)
+                {
+                    netObj = enemyObj.AddComponent<NetworkObject>();
+                }
                 if (enemyObj.GetComponent<NetworkEnemyController>() == null)
                     enemyObj.AddComponent<NetworkEnemyController>();
 
-                var netObj = enemyObj.GetComponent<NetworkObject>();
                 if (netObj != null && !netObj.IsSpawned)
-                    netObj.Spawn();
+                {
+                    try
+                    {
+                        netObj.Spawn();
+                    }
+                    catch (System.Exception e)
+                    {
+                        Logger.Log($"[EnemySpawner] Failed to network spawn specific enemy: {e.Message}");
+                        Destroy(enemyObj);
+                        return;
+                    }
+                }
             }
 
             entity.OnDeath += OnEnemyDeath;

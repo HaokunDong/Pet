@@ -73,11 +73,15 @@ public class PoolMgr : Singleton<PoolMgr>
         if (this.dictPool.ContainsKey(name))
         {
             NodePool pool = this.dictPool[name];
-            if (pool.GetSize() > 0)
+            // Keep trying to get a valid (non-destroyed) object from the pool
+            while (pool.GetSize() > 0)
             {
                 node = pool.GetObj();
+                if (node != null) break;
+                // Object was destroyed externally (e.g. network despawn), skip it
+                node = null;
             }
-            else
+            if (node == null)
             {
                 node = GameObject.Instantiate(tempPre);
             }
@@ -111,6 +115,14 @@ public class PoolMgr : Singleton<PoolMgr>
     public void PutNode(GameObject node, Transform parent = null)
     {
         if (!node) return;
+
+        // Safety check: do not pool NetworkObjects that are still spawned
+        var netObj = node.GetComponent<Unity.Netcode.NetworkObject>();
+        if (netObj != null && netObj.IsSpawned)
+        {
+            Debug.LogWarning($"[PoolMgr] Attempted to pool a spawned NetworkObject '{node.name}'. Skipping.");
+            return;
+        }
 
         string name = node.name;
         NodePool pool = null;
