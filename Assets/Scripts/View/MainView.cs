@@ -111,7 +111,11 @@ public class MainView : BaseView
         {
             if (lobbyPanel != null)
             {
-                lobbyPanel.Show();
+                // Toggle: if already active, hide; otherwise show
+                if (lobbyPanel.gameObject.activeSelf)
+                    lobbyPanel.Hide();
+                else
+                    lobbyPanel.Show();
             }
             else
             {

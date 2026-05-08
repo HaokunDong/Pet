@@ -12,16 +12,20 @@ namespace PetGame
     ///    - Open the Animation window, select the attack clip.
     ///    - Add an Animation Event at the hit frame.
     ///    - Set Function to "OnAttackHit" (no parameters).
-    /// 3. For skill animation clips:
+    /// 3. For normal attack with LockOn displacement:
+    ///    - Add an Animation Event at the frame BEFORE the hit frame (where dash should start).
+    ///    - Set Function to "OnAttackLockTarget" (no parameters).
+    ///    - This locks the target's position and starts moving toward it.
+    /// 4. For skill animation clips:
     ///    - Open the Animation window, select the skill clip.
     ///    - Add an Animation Event at the hit frame.
     ///    - Set Function to "OnSkillHit" (no parameters).
     ///    - The skill index is read from CombatSystem's cached state.
-    /// 4. For lock-on displacement skills:
+    /// 5. For lock-on displacement skills:
     ///    - Add an Animation Event at the frame BEFORE the hit frame (where dash should start).
     ///    - Set Function to "OnSkillLockTarget" (no parameters).
     ///    - This locks the target's position and starts moving toward it.
-    /// 5. For any state animation that should auto-exit after playing once (Attack, Skill, Hit):
+    /// 6. For any state animation that should auto-exit after playing once (Attack, Skill, Hit):
     ///    - Add an Animation Event at the last frame of the clip.
     ///    - Set Function to "OnStateEnd" (no parameters).
     /// </summary>
@@ -51,6 +55,25 @@ namespace PetGame
             }
 
             combatSystem.ApplyNormalAttackDamage();
+        }
+
+        /// <summary>
+        /// Called by Unity Animation Event on a frame BEFORE the normal attack hit frame.
+        /// Used for LockOn displacement: locks the target's position and starts
+        /// moving toward it. Add this event to the attack animation clip at the
+        /// desired frame where the character should begin dashing toward the target.
+        /// Only triggers if CharacterData.attackDisplacementType is LockOn.
+        /// </summary>
+        public void OnAttackLockTarget()
+        {
+            if (combatSystem == null) return;
+
+            if (!combatSystem.IsAttacking && (characterAnimator == null || !characterAnimator.IsAttacking))
+            {
+                return;
+            }
+
+            combatSystem.ApplyNormalAttackLockOnDisplacement();
         }
 
         /// <summary>

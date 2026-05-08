@@ -193,6 +193,8 @@ namespace PetGame
             }
         }
 
+
+
         /// <summary>
         /// Sync the defaultFacesRight setting from CharacterData.
         /// Called by CharacterEntity during initialization.
@@ -361,6 +363,9 @@ namespace PetGame
         {
             if (stateMachine == null) return;
 
+            // Unlock facing direction now that the animation has fully finished.
+            facingLocked = false;
+
             stateMachine.ClearProtection();
 
             // After protection is cleared, automatically return to Idle
@@ -397,6 +402,7 @@ namespace PetGame
         {
             if (stateMachine == null) return;
 
+            facingLocked = false; // Ensure facing is unlocked
             ClearAttackStateIfNeeded();
             ResetAllBools();
             stateMachine.ForceChangeState<DeathState>();
@@ -407,6 +413,7 @@ namespace PetGame
         /// </summary>
         public void ResetStateMachine()
         {
+            facingLocked = false; // Ensure facing is unlocked
             if (stateMachine != null)
             {
                 ResetAllBools();
@@ -415,15 +422,46 @@ namespace PetGame
         }
 
         /// <summary>
+        /// When true, facing direction is locked and cannot be changed.
+        /// Used during attacks to prevent jitter from overlapping targets.
+        /// </summary>
+        private bool facingLocked;
+
+        /// <summary>
+        /// Lock the current facing direction. While locked, SetFacingDirection and FaceTowards
+        /// will be ignored. Call UnlockFacing() when the attack/action completes.
+        /// </summary>
+        public void LockFacing()
+        {
+            facingLocked = true;
+        }
+
+        /// <summary>
+        /// Unlock the facing direction so it can be changed again.
+        /// </summary>
+        public void UnlockFacing()
+        {
+            facingLocked = false;
+        }
+
+        /// <summary>
+        /// Whether facing is currently locked.
+        /// </summary>
+        public bool IsFacingLocked => facingLocked;
+
+        /// <summary>
         /// Flip the sprite to face the movement direction.
         /// Positive moveDirection = face right, negative = face left.
         /// Respects the defaultFacesRight setting for sprites with different native orientations.
+        /// Ignored while facing is locked (during attacks).
         /// </summary>
         public void SetFacingDirection(float moveDirection)
         {
+            if (facingLocked) return;
             if (Mathf.Approximately(moveDirection, 0f)) return;
 
-            FacingDirection = moveDirection > 0f ? 1 : -1;
+            int newFacing = moveDirection > 0f ? 1 : -1;
+            FacingDirection = newFacing;
 
             // If sprite natively faces right: flip when we want to face left
             // If sprite natively faces left:  flip when we want to face right
@@ -433,10 +471,15 @@ namespace PetGame
 
         /// <summary>
         /// Face towards a world position.
+        /// Uses a small deadzone to prevent flip-flopping when overlapping with the target.
+        /// Ignored while facing is locked (during attacks).
         /// </summary>
         public void FaceTowards(Vector3 targetPosition)
         {
+            if (facingLocked) return;
             float direction = targetPosition.x - transform.position.x;
+            // Deadzone: if the target is extremely close horizontally, don't change facing.
+            if (Mathf.Abs(direction) < 0.15f) return;
             SetFacingDirection(direction);
         }
 

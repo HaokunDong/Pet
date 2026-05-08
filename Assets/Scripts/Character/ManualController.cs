@@ -115,17 +115,23 @@ namespace PetGame
                 }
 
                 // Check if already in attack range using multi-shape system
-                float facingSign1 = attackTarget.transform.position.x >= transform.position.x ? 1f : -1f;
-                if (entity.CharAnimator != null)
-                    facingSign1 = entity.CharAnimator.FacingDirection;
+                float atkDx = attackTarget.transform.position.x - transform.position.x;
+                float facingSign1 = atkDx >= 0f ? 1f : -1f;
+                bool inRangeForAttack = entity.RuntimeStats.IsTargetInAttackRange(
+                    transform.position, facingSign1, attackTarget.transform.position);
 
-                if (entity.RuntimeStats.IsTargetInAttackRange(
-                        transform.position, facingSign1, attackTarget.transform.position))
+                if (inRangeForAttack)
                 {
                     // In range: enter sustained attack mode
                     isChasing = false;
                     isMoving = false;
                     isAttacking = true;
+
+                    // Set facing toward target
+                    if (entity.CharAnimator != null)
+                    {
+                        entity.CharAnimator.SetFacingDirection(atkDx);
+                    }
                 }
                 else
                 {
@@ -213,9 +219,8 @@ namespace PetGame
                 return;
             }
 
-            float facingSign2 = attackTarget.transform.position.x >= transform.position.x ? 1f : -1f;
-            if (entity.CharAnimator != null)
-                facingSign2 = entity.CharAnimator.FacingDirection;
+            float dx = attackTarget.transform.position.x - transform.position.x;
+            float facingSign2 = dx >= 0f ? 1f : -1f;
 
             if (entity.RuntimeStats.IsTargetInAttackRange(
                     transform.position, facingSign2, attackTarget.transform.position))
@@ -224,12 +229,18 @@ namespace PetGame
                 isChasing = false;
                 isMoving = false;
                 isAttacking = true;
+
+                // Set facing toward target
+                if (entity.CharAnimator != null)
+                {
+                    entity.CharAnimator.SetFacingDirection(dx);
+                }
             }
             else
             {
                 // Move towards target
                 float speed = entity.RuntimeStats.moveSpeed;
-                float direction = attackTarget.transform.position.x > transform.position.x ? 1f : -1f;
+                float direction = dx > 0f ? 1f : -1f;
 
                 Vector3 pos = transform.position;
                 pos.x += direction * speed * Time.deltaTime;
@@ -260,13 +271,15 @@ namespace PetGame
                 return;
             }
 
-            // Check if target moved out of attack range using multi-shape system
-            float facingSign3 = attackTarget.transform.position.x >= transform.position.x ? 1f : -1f;
-            if (entity.CharAnimator != null)
-                facingSign3 = entity.CharAnimator.FacingDirection;
+            // Check if target moved out of attack range.
+            float dx = attackTarget.transform.position.x - transform.position.x;
+            float facingSign3 = entity.CharAnimator != null
+                ? entity.CharAnimator.FacingDirection
+                : (dx >= 0f ? 1f : -1f);
+            bool inRange = entity.RuntimeStats.IsTargetInAttackRange(
+                transform.position, facingSign3, attackTarget.transform.position);
 
-            if (!entity.RuntimeStats.IsTargetInAttackRange(
-                    transform.position, facingSign3, attackTarget.transform.position))
+            if (!inRange)
             {
                 // Target left range — stop attacking, stay idle
                 isAttacking = false;
@@ -274,13 +287,9 @@ namespace PetGame
                 return;
             }
 
-            // Face the target
-            if (entity.CharAnimator != null)
-            {
-                entity.CharAnimator.FaceTowards(attackTarget.transform.position);
-            }
-
             // Attempt attack — CombatSystem handles attack speed interval internally
+            // Note: TryNormalAttack no longer updates facing direction internally.
+            // Facing was set once when entering attack mode and remains locked during animations.
             combatSystem.TryNormalAttack(attackTarget);
         }
 
@@ -386,6 +395,7 @@ namespace PetGame
                 hoveredEnemy = null;
             }
         }
+
 
         // =====================================================================
         // Arrow Indicator Helpers

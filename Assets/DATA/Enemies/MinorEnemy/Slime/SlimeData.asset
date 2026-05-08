@@ -19,13 +19,18 @@ MonoBehaviour:
   defense: 5
   moveSpeed: 1
   attackSpeed: 1
-  engageDistance: 0.43
-  minAttackDistance: 0.35
+  engageDistance: 0.55
+  minAttackDistance: 0.22
   attackRangeShapes:
   - shapeType: 0
-    offset: {x: 0, y: 0}
-    radius: 0.53
+    offset: {x: 0.25, y: 0}
+    radius: 0.43
     size: {x: 0, y: 0}
+  attackDisplacementType: 0
+  attackDisplacementDirection: 1
+  attackDisplacementDistance: 0.5
+  attackDisplacementDuration: 0.1
+  attackDamagesDuringDisplacement: 1
   defaultFacesRight: 1
   knockbackHorizontalSpeed: 2
   knockbackVerticalSpeed: 1.5
@@ -33,5 +38,7 @@ MonoBehaviour:
   qualityLevel: 0
   characterType: 1
   skills: []
+  characterDescription: 
   sprite: {fileID: -1798011705, guid: afc3f8ed9e4f84d5c9bce596f8394d2b, type: 3}
+  portraitSprite: {fileID: 0}
   animatorController: {fileID: 9100000, guid: e451f540dc69b460c8b9268817298615, type: 2}

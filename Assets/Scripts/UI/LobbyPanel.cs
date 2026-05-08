@@ -117,6 +117,13 @@ namespace PetGame.UI
 
         private void Update()
         {
+            // Close panel on Escape key
+            if (Input.GetKeyDown(KeyCode.Escape))
+            {
+                OnCloseClicked();
+                return;
+            }
+
             // Auto-hide error text after duration
             if (errorText != null && errorText.gameObject.activeSelf)
             {

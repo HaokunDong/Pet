@@ -26,6 +26,11 @@ MonoBehaviour:
     offset: {x: 0.12, y: 0.42}
     radius: 1.85
     size: {x: 0, y: 0}
+  attackDisplacementType: 0
+  attackDisplacementDirection: 0
+  attackDisplacementDistance: 0
+  attackDisplacementDuration: 0.2
+  attackDamagesDuringDisplacement: 1
   defaultFacesRight: 1
   knockbackHorizontalSpeed: 2
   knockbackVerticalSpeed: 1.5

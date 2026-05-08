@@ -53,6 +53,25 @@ namespace PetGame
         [Tooltip("Composable attack range shapes. Union of all shapes defines the final attack area. At least one shape must be defined.")]
         public AttackRangeShape[] attackRangeShapes;
 
+        [Header("Normal Attack Displacement")]
+        [Tooltip("Type of displacement for normal attack: Fixed (set direction + distance) or LockOn (lock target position, move toward it).")]
+        public SkillDisplacementType attackDisplacementType = SkillDisplacementType.Fixed;
+
+        [Tooltip("Direction of displacement for normal attack relative to facing direction. None = no displacement.")]
+        public SkillDisplacementDirection attackDisplacementDirection = SkillDisplacementDirection.None;
+
+        [Tooltip("Distance to displace during normal attack (world units). Used by Fixed type only.")]
+        [Min(0f)]
+        public float attackDisplacementDistance = 0f;
+
+        [Tooltip("Duration of the normal attack displacement movement (seconds).")]
+        [Min(0.01f)]
+        public float attackDisplacementDuration = 0.2f;
+
+        [Tooltip("If true, damage detection continues during normal attack displacement. " +
+                 "Enemies along the path will be hit. Each enemy is only hit once.")]
+        public bool attackDamagesDuringDisplacement = false;
+
         [Header("Sprite Orientation")]
         [Tooltip("Whether the sprite asset faces right by default. " +
                  "Uncheck this if the sprite faces left in its original art. " +

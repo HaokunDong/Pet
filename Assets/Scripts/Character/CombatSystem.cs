@@ -19,6 +19,7 @@ namespace PetGame
         private float _cachedFacingSign;
         private int _cachedSkillIndex = -1;
         private bool _isAttacking;
+        private Vector2 _cachedAttackPosition;
 
         /// <summary>
         /// The current cached attack target (primary target for skills / facing reference).
@@ -57,30 +58,65 @@ namespace PetGame
             if (entity == null || !entity.RuntimeStats.IsAlive) return false;
             if (target == null || !target.RuntimeStats.IsAlive) return false;
 
-            // Check attack range using multi-shape system.
-            // Always use target direction for facing, not the cached FacingDirection,
-            // because FacingDirection may be stale when characters are very close
-            // (StrikeFacingDeadzone prevents updates at < 0.05 distance).
-            float dx = target.transform.position.x - transform.position.x;
-            float facingSign = dx >= 0f ? 1f : -1f;
+            // If the attack animation is still playing (facing is locked), don't start a new attack.
+            // This prevents re-triggering during the window between hit-frame and OnStateEnd.
+            if (entity.CharAnimator != null && entity.CharAnimator.IsFacingLocked)
+            {
+                return false;
+            }
 
-            if (!entity.RuntimeStats.IsTargetInAttackRange(
-                    transform.position, facingSign, target.transform.position))
+            // Check attack range using multi-shape system.
+            // When overlapping (|dx| very small), check BOTH directions to ensure
+            // the attack doesn't fail just because the target is slightly "behind" the facing.
+            float dx = target.transform.position.x - transform.position.x;
+            float facingSign;
+            const float FacingDeadzone = 0.15f;
+            if (Mathf.Abs(dx) < FacingDeadzone && entity.CharAnimator != null)
+            {
+                facingSign = entity.CharAnimator.FacingDirection;
+            }
+            else
+            {
+                facingSign = dx >= 0f ? 1f : -1f;
+            }
+
+            bool inRange;
+            if (Mathf.Abs(dx) < 0.3f)
+            {
+                // Overlapping: check both facing directions for range
+                inRange = entity.RuntimeStats.IsTargetInAttackRange(
+                              transform.position, 1f, target.transform.position) ||
+                          entity.RuntimeStats.IsTargetInAttackRange(
+                              transform.position, -1f, target.transform.position);
+            }
+            else
+            {
+                inRange = entity.RuntimeStats.IsTargetInAttackRange(
+                    transform.position, facingSign, target.transform.position);
+            }
+
+            if (!inRange)
                 return false;
 
             // NOTE: Attack speed interval is managed by BTCombat (context.LastAttackTime).
             // No duplicate check here to avoid desync between two separate timers.
 
-            // Cache target and facing for frame event callback (AOE will find all targets at hit frame)
+            // Cache target, facing, and position for frame event callback (AOE will find all targets at hit frame)
             _cachedTarget = target;
             _cachedFacingSign = facingSign;
             _cachedSkillIndex = -1;
             _isAttacking = true;
+            _cachedAttackPosition = transform.position;
 
-            // Face the target and play attack animation
+            // Lock facing and play attack animation.
+            // NOTE: We do NOT call FaceTowards here. The caller (ManualController / BTCombat)
+            // is responsible for setting the correct facing BEFORE calling TryNormalAttack.
+            // This prevents jitter when overlapping with the target, because the caller
+            // can decide to skip facing updates when the target is too close.
             if (entity.CharAnimator != null)
             {
-                entity.CharAnimator.FaceTowards(target.transform.position);
+                // Lock facing direction for the duration of the attack to prevent jitter
+                entity.CharAnimator.LockFacing();
                 entity.CharAnimator.PlayAttack();
             }
 
@@ -98,6 +134,9 @@ namespace PetGame
             if (entity == null || !entity.RuntimeStats.IsAlive) return false;
             if (target == null || !target.RuntimeStats.IsAlive) return false;
 
+            // If the attack/skill animation is still playing (facing is locked), don't start a new action.
+            if (entity.CharAnimator != null && entity.CharAnimator.IsFacingLocked) return false;
+
             // Validate skill index
             if (entity.characterData.skills == null) return false;
             if (skillIndex < 0 || skillIndex >= entity.characterData.skills.Length) return false;
@@ -113,22 +152,33 @@ namespace PetGame
             float dist = Vector2.Distance(transform.position, target.transform.position);
             if (dist > skillData.skillRange) return false;
 
-            // Compute facing sign toward target
+            // Compute facing sign toward target.
+            // When overlapping, use current facing to avoid jitter.
             float dx = target.transform.position.x - transform.position.x;
-            float facingSign = dx >= 0f ? 1f : -1f;
+            float facingSign;
+            if (Mathf.Abs(dx) < 0.15f && entity.CharAnimator != null)
+            {
+                facingSign = entity.CharAnimator.FacingDirection;
+            }
+            else
+            {
+                facingSign = dx >= 0f ? 1f : -1f;
+            }
 
-            // Cache target, facing, and skill index for frame event callback
+            // Cache target, facing, position, and skill index for frame event callback
             _cachedTarget = target;
             _cachedFacingSign = facingSign;
             _cachedSkillIndex = skillIndex;
             _isAttacking = true;
+            _cachedAttackPosition = transform.position;
 
-            Debug.Log($"[CombatSystem] {gameObject.name}: TryUseSkill SUCCESS. skillIndex={skillIndex}, _isAttacking=true");
-
-            // Face the target and play skill animation
+            // Lock facing and play skill animation.
+            // NOTE: We do NOT call FaceTowards here. The caller is responsible for
+            // setting the correct facing BEFORE calling TryUseSkill.
             if (entity.CharAnimator != null)
             {
-                entity.CharAnimator.FaceTowards(target.transform.position);
+                // Lock facing direction for the duration of the skill to prevent jitter
+                entity.CharAnimator.LockFacing();
                 entity.CharAnimator.PlaySkill(skillIndex);
             }
 
@@ -143,6 +193,7 @@ namespace PetGame
         /// <summary>
         /// Called by AnimEventReceiver when the normal attack animation reaches the hit frame.
         /// Applies AOE damage to ALL enemies within the attack range shapes.
+        /// After dealing damage, applies displacement if configured in CharacterData.
         /// </summary>
         public void ApplyNormalAttackDamage()
         {
@@ -151,8 +202,11 @@ namespace PetGame
                 ? "Enemy"
                 : "Player";
 
-            // Get current facing direction (use cached value from when attack started)
+            // Get cached facing direction and position from when attack started.
+            // Using cached position ensures knockback during the attack animation
+            // does not cause the hit frame to miss targets that were originally in range.
             float facingSign = _cachedFacingSign;
+            Vector2 attackOrigin = _cachedAttackPosition;
 
             // Find all enemies in attack range and apply damage
             GameObject[] candidates = GameObject.FindGameObjectsWithTag(targetTag);
@@ -164,14 +218,144 @@ namespace PetGame
                 if (target == null || !target.RuntimeStats.IsAlive) continue;
 
                 if (entity.RuntimeStats.IsTargetInAttackRange(
-                        transform.position, facingSign, target.transform.position))
+                        attackOrigin, facingSign, target.transform.position))
                 {
                     target.TakeDamage(entity.RuntimeStats.attackPower, entity);
                     hitCount++;
                 }
             }
 
+            // Apply normal attack displacement if configured (Fixed type only)
+            ApplyNormalAttackDisplacement(targetTag, facingSign);
+
             ClearAttackState();
+        }
+
+        /// <summary>
+        /// Called by AnimEventReceiver when the normal attack animation reaches the lock-target frame
+        /// (before the hit frame). Used for LockOn type normal attack displacement.
+        /// Locks the target's current position and starts moving toward it with optional continuous damage.
+        /// </summary>
+        public void ApplyNormalAttackLockOnDisplacement()
+        {
+            CharacterData data = entity.characterData;
+            if (data.attackDisplacementType != SkillDisplacementType.LockOn)
+                return;
+
+            // Lock the target's current position
+            if (_cachedTarget == null || !_cachedTarget.RuntimeStats.IsAlive)
+                return;
+
+            Vector2 lockedPos = _cachedTarget.transform.position;
+
+            // Determine the enemy tag
+            string targetTag = (entity.RuntimeStats.characterType == CharacterType.Player)
+                ? "Enemy"
+                : "Player";
+
+            // Get or add the displacement controller
+            SkillDisplacementController controller = GetComponent<SkillDisplacementController>();
+            if (controller == null)
+            {
+                controller = gameObject.AddComponent<SkillDisplacementController>();
+            }
+
+            if (data.attackDamagesDuringDisplacement)
+            {
+                // Compute effective facing sign for attack range shapes
+                float rawFacingSign = _cachedFacingSign;
+                float effectiveFacingSign = data.defaultFacesRight ? rawFacingSign : -rawFacingSign;
+
+                // Do initial damage at starting position
+                Vector2 casterPos = transform.position;
+                GameObject[] candidates = GameObject.FindGameObjectsWithTag(targetTag);
+                for (int i = 0; i < candidates.Length; i++)
+                {
+                    CharacterEntity candidateEntity = candidates[i].GetComponent<CharacterEntity>();
+                    if (candidateEntity == null || !candidateEntity.RuntimeStats.IsAlive) continue;
+
+                    Vector2 candidatePos = candidateEntity.transform.position;
+                    if (AttackRangeHelper.IsTargetInRange(casterPos, effectiveFacingSign, data.attackRangeShapes, candidatePos))
+                    {
+                        candidateEntity.TakeDamage(entity.RuntimeStats.attackPower, entity);
+                    }
+                }
+
+                controller.StartLockOnDisplacementWithDamage(lockedPos, data.attackDisplacementDuration,
+                    data.attackRangeShapes, effectiveFacingSign, targetTag, entity.RuntimeStats.attackPower, entity);
+            }
+            else
+            {
+                controller.StartLockOnDisplacement(lockedPos, data.attackDisplacementDuration);
+            }
+
+            // Clear attack state after lock-on displacement has been initiated
+            ClearAttackState();
+        }
+
+        /// <summary>
+        /// Apply normal attack displacement (Fixed type) after dealing hit-frame damage.
+        /// If damagesDuringDisplacement is enabled, enemies along the path will also be hit.
+        /// </summary>
+        private void ApplyNormalAttackDisplacement(string targetTag, float facingSign)
+        {
+            CharacterData data = entity.characterData;
+
+            // Only apply Fixed type displacement here; LockOn is handled by OnAttackLockTarget event
+            if (data.attackDisplacementType != SkillDisplacementType.Fixed)
+                return;
+            if (data.attackDisplacementDirection == SkillDisplacementDirection.None || data.attackDisplacementDistance <= 0f)
+                return;
+
+            // Skip displacement when it would cause the character to pass through the target.
+            // This prevents jitter from the character overshooting and then AI chasing back.
+            if (_cachedTarget != null && _cachedTarget.RuntimeStats.IsAlive)
+            {
+                float dirMul = (data.attackDisplacementDirection == SkillDisplacementDirection.Forward) ? 1f : -1f;
+                float moveDir = facingSign * dirMul;
+                float currentX = transform.position.x;
+                float targetX = _cachedTarget.transform.position.x;
+                float afterDisplacementX = currentX + moveDir * data.attackDisplacementDistance;
+
+                // Check if displacement would overshoot the target:
+                // Before displacement, target is in front (or we're overlapping).
+                // After displacement, target would be behind us.
+                bool targetInFront = (moveDir > 0f) ? (targetX >= currentX) : (targetX <= currentX);
+                bool targetBehindAfter = (moveDir > 0f) ? (targetX < afterDisplacementX) : (targetX > afterDisplacementX);
+
+                if (targetInFront && targetBehindAfter)
+                    return;
+
+                // Also skip if we're already overlapping or very close (within displacement distance)
+                float distToTarget = Mathf.Abs(targetX - currentX);
+                if (distToTarget < data.attackDisplacementDistance)
+                    return;
+            }
+
+            // Get or add the displacement controller
+            SkillDisplacementController controller = GetComponent<SkillDisplacementController>();
+            if (controller == null)
+            {
+                controller = gameObject.AddComponent<SkillDisplacementController>();
+            }
+
+            // Calculate displacement direction based on facing
+            float directionMultiplier = (data.attackDisplacementDirection == SkillDisplacementDirection.Forward) ? 1f : -1f;
+            float finalDirection = facingSign * directionMultiplier;
+
+            if (data.attackDamagesDuringDisplacement)
+            {
+                // Compute effective facing sign for attack range shapes
+                float effectiveFacingSign = data.defaultFacesRight ? facingSign : -facingSign;
+
+                controller.StartDisplacementWithDamage(finalDirection, data.attackDisplacementDistance,
+                    data.attackDisplacementDuration, data.attackRangeShapes, effectiveFacingSign,
+                    targetTag, entity.RuntimeStats.attackPower, entity);
+            }
+            else
+            {
+                controller.StartDisplacement(finalDirection, data.attackDisplacementDistance, data.attackDisplacementDuration);
+            }
         }
 
         /// <summary>
@@ -226,14 +410,16 @@ namespace PetGame
         /// Only clears CombatSystem's internal state (_isAttacking, cached target, etc.).
         /// Does NOT trigger animation state transitions — that is handled by the
         /// OnStateEnd animation event at the last frame of the attack/skill clip.
+        /// Does NOT unlock facing — facing remains locked until the animation fully ends
+        /// (OnStateEnd → ClearCurrentState → UnlockFacing).
         /// </summary>
         public void ClearAttackState()
         {
-            Debug.Log($"[CombatSystem] {gameObject.name}: ClearAttackState() called. Was: skillIndex={_cachedSkillIndex}, isAttacking={_isAttacking}\n{UnityEngine.StackTraceUtility.ExtractStackTrace()}");
             _cachedTarget = null;
             _cachedFacingSign = 0f;
             _cachedSkillIndex = -1;
             _isAttacking = false;
+            _cachedAttackPosition = Vector2.zero;
         }
 
         // ==================== Utility ====================

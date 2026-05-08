@@ -30,8 +30,9 @@ namespace PetGame.AI
         /// <summary>Minimum allowed engageDistance to prevent complete overlap.</summary>
         private const float MinEngageDistance = 0.1f;
 
-        /// <summary>Horizontal dead-zone for FaceTowards in Strike state to prevent per-frame flip-flopping.</summary>
-        private const float StrikeFacingDeadzone = 0.05f;
+        /// <summary>Horizontal dead-zone for facing direction changes to prevent per-frame flip-flopping
+        /// when characters overlap. Works together with CharacterAnimator's FacingChangeCooldown.</summary>
+        private const float StrikeFacingDeadzone = 0.15f;
 
         private readonly BTContext context;
         private CombatSystem combatSystem;
@@ -126,10 +127,32 @@ namespace PetGame.AI
             // Use the actual attack range shape check to decide Strike eligibility.
             // This avoids the mismatch between X-axis engageDistance and 2D shape checks.
             // Always use target direction for range check consistency with TickEngage.
+            // When overlapping (|dx| < 0.3), check BOTH directions to avoid false negatives.
             float dx = target.transform.position.x - owner.transform.position.x;
-            float facingSign = dx >= 0f ? 1f : -1f;
-            bool inAttackRange = owner.RuntimeStats.IsTargetInAttackRange(
-                owner.transform.position, facingSign, target.transform.position);
+            float facingSign;
+            if (Mathf.Abs(dx) < StrikeFacingDeadzone && owner.CharAnimator != null)
+            {
+                facingSign = owner.CharAnimator.FacingDirection;
+            }
+            else
+            {
+                facingSign = dx >= 0f ? 1f : -1f;
+            }
+
+            bool inAttackRange;
+            if (Mathf.Abs(dx) < 0.3f)
+            {
+                // Overlapping: check both directions
+                inAttackRange = owner.RuntimeStats.IsTargetInAttackRange(
+                                    owner.transform.position, 1f, target.transform.position) ||
+                                owner.RuntimeStats.IsTargetInAttackRange(
+                                    owner.transform.position, -1f, target.transform.position);
+            }
+            else
+            {
+                inAttackRange = owner.RuntimeStats.IsTargetInAttackRange(
+                    owner.transform.position, facingSign, target.transform.position);
+            }
 
             // Also check if target is within any ready skill's range.
             // This allows the character to enter Strike early to use a ranged skill
@@ -185,8 +208,18 @@ namespace PetGame.AI
             float targetX = target.transform.position.x;
             float dx = targetX - ownerX;
             float absDx = Mathf.Abs(dx);
-            float dir = dx >= 0f ? 1f : -1f;
             float engageDist = Mathf.Max(owner.RuntimeStats.engageDistance, MinEngageDistance);
+
+            // When overlapping (|dx| < deadzone), use current facing to avoid jitter.
+            float dir;
+            if (absDx < StrikeFacingDeadzone && owner.CharAnimator != null)
+            {
+                dir = owner.CharAnimator.FacingDirection;
+            }
+            else
+            {
+                dir = dx >= 0f ? 1f : -1f;
+            }
 
             // Use the larger minAttackDistance of both combatants to prevent overlap.
             float ownerMinDist = owner.RuntimeStats.minAttackDistance;
@@ -194,9 +227,20 @@ namespace PetGame.AI
             float minDist = Mathf.Max(ownerMinDist, targetMinDist);
 
             // If already in attack range, snap to Strike immediately — no movement.
-            // Always use target direction (dir) for consistency with Execute()'s range check.
-            bool inRange = owner.RuntimeStats.IsTargetInAttackRange(
-                owner.transform.position, dir, target.transform.position);
+            // When overlapping, check both directions to avoid false negatives.
+            bool inRange;
+            if (absDx < 0.3f)
+            {
+                inRange = owner.RuntimeStats.IsTargetInAttackRange(
+                              owner.transform.position, 1f, target.transform.position) ||
+                          owner.RuntimeStats.IsTargetInAttackRange(
+                              owner.transform.position, -1f, target.transform.position);
+            }
+            else
+            {
+                inRange = owner.RuntimeStats.IsTargetInAttackRange(
+                    owner.transform.position, dir, target.transform.position);
+            }
 
             // Also check skill range — if a skill is ready and target is in skill range,
             // enter Strike immediately so the character can use the skill.
@@ -301,11 +345,20 @@ namespace PetGame.AI
 
         private void TickStrike(CharacterEntity owner, CharacterEntity target)
         {
-            // Face the target while in Strike. Use SetFacingDirection with the target direction
-            // to ensure facing is always correct, even when characters are very close.
-            // Only skip if dx is exactly 0 (complete overlap) to avoid division issues.
+            // Face the target while in Strike.
+            // During attack animation, facing is locked by CombatSystem (SetFacingDirection is a no-op).
+            // During attack cooldown (idle waiting), only update facing if the target is clearly
+            // on one side (large deadzone to prevent jitter when overlapping).
             float facingDx = target.transform.position.x - owner.transform.position.x;
-            if (owner.CharAnimator != null && !Mathf.Approximately(facingDx, 0f))
+            bool isInAttackAnim = (combatSystem != null && combatSystem.IsAttacking) ||
+                (owner.CharAnimator != null && owner.CharAnimator.StateMachine != null 
+                 && owner.CharAnimator.StateMachine.isAttacking);
+
+            // Use a larger deadzone (0.3) to prevent jitter when overlapping with the target.
+            // Only update facing when NOT in attack animation AND target is clearly to one side.
+            if (!isInAttackAnim && owner.CharAnimator != null 
+                && !owner.CharAnimator.IsFacingLocked 
+                && Mathf.Abs(facingDx) > 0.3f)
             {
                 owner.CharAnimator.SetFacingDirection(facingDx);
             }
