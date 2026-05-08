@@ -82,7 +82,9 @@ namespace PetGame.AI
         /// </summary>
         private CharacterEntity FindNearest(CharacterEntity owner)
         {
-            string targetTag = (owner.RuntimeStats.characterType == CharacterType.Player)
+            // Use GameObject tag instead of characterType so Boss characters
+            // controlled by the player correctly target enemies.
+            string targetTag = owner.gameObject.CompareTag("Player")
                 ? "Enemy"
                 : "Player";
 

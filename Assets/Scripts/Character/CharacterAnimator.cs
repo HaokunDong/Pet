@@ -246,8 +246,10 @@ namespace PetGame
             // from the Prefab but SetAnimatorController() was not called beforehand.
             CacheParameterFlags();
 
-            // Create the appropriate state machine based on character type
-            if (characterType == CharacterType.Player)
+            // Create the appropriate state machine based on GameObject tag.
+            // A Boss character used by the player (tag "Player") should use PlayerStateMachine.
+            bool isPlayerControlled = gameObject.CompareTag("Player");
+            if (isPlayerControlled)
             {
                 var playerMachine = new PlayerStateMachine();
                 playerMachine.Initialize(animator, this);

@@ -38,8 +38,9 @@ namespace PetGame
             CharacterEntity casterEntity = caster.GetComponent<CharacterEntity>();
             if (casterEntity == null) return;
 
-            // Determine the enemy tag based on caster's character type
-            string targetTag = (casterEntity.RuntimeStats.characterType == CharacterType.Player)
+            // Determine the enemy tag based on caster's GameObject tag (not characterType),
+            // because a Boss character used by the player still has tag "Player".
+            string targetTag = casterEntity.gameObject.CompareTag("Player")
                 ? "Enemy"
                 : "Player";
 

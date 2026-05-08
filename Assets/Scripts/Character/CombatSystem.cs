@@ -197,8 +197,9 @@ namespace PetGame
         /// </summary>
         public void ApplyNormalAttackDamage()
         {
-            // Determine the enemy tag based on owner's character type
-            string targetTag = (entity.RuntimeStats.characterType == CharacterType.Player)
+            // Determine the enemy tag based on owner's GameObject tag (not characterType),
+            // because a Boss character used by the player still has tag "Player".
+            string targetTag = entity.gameObject.CompareTag("Player")
                 ? "Enemy"
                 : "Player";
 
@@ -248,8 +249,8 @@ namespace PetGame
 
             Vector2 lockedPos = _cachedTarget.transform.position;
 
-            // Determine the enemy tag
-            string targetTag = (entity.RuntimeStats.characterType == CharacterType.Player)
+            // Determine the enemy tag based on GameObject tag
+            string targetTag = entity.gameObject.CompareTag("Player")
                 ? "Enemy"
                 : "Player";
 
@@ -471,7 +472,7 @@ namespace PetGame
                 if (meleeEffect != null && meleeEffect.skillRangeShapes != null && meleeEffect.skillRangeShapes.Length > 0)
                 {
                     CharacterEntity casterEntity = GetComponent<CharacterEntity>();
-                    string targetTag = (casterEntity.RuntimeStats.characterType == CharacterType.Player)
+                    string targetTag = casterEntity.gameObject.CompareTag("Player")
                         ? "Enemy"
                         : "Player";
 
