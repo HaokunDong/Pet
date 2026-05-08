@@ -435,6 +435,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxPlayers: 3
+  networkPlayerPrefabPath: Prefabs/Network/NetworkPlayerPrefab
 --- !u!114 &161625220
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 3340b330c3b87c8418a78d48086dd261
+guid: ee992c2e5224f2443811c734d1feca13
 TextureImporter:
   internalIDToNameTable: []
   externalObjects: {}
@@ -110,11 +110,11 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: TankTest_0
+      name: Lihuo_0
       rect:
         serializedVersion: 2
-        x: 345
-        y: 176
+        x: 317
+        y: 213
         width: 800
         height: 800
       alignment: 0
@@ -124,8 +124,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: 0
       bones: []
-      spriteID: 0490001ec3fc0c3498372922f8fb3c12
-      internalID: 1039488526
+      spriteID: afb6b565312ad4a4ebc55206e064c122
+      internalID: -2092357511
       vertices: []
       indices: 
       edges: []
@@ -133,15 +133,15 @@ TextureImporter:
     outline: []
     physicsShape: []
     bones: []
-    spriteID: 5e97eb03825dee720800000000000000
-    internalID: 1537655665
+    spriteID: bc00c050ccba1e14e8550654e51bfd8f
+    internalID: 0
     vertices: []
     indices: 
     edges: []
     weights: []
     secondaryTextures: []
     nameFileIdTable:
-      TankTest_0: 1039488526
+      Lihuo_0: -2092357511
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

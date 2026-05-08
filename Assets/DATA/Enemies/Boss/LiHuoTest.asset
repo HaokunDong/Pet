@@ -42,5 +42,5 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 89f04f18836862a4585dbe1372cc4e76, type: 2}
   characterDescription: 
   sprite: {fileID: -303992534, guid: 84a25ba6e798a7b4ea8d4051db05c35a, type: 3}
-  portraitSprite: {fileID: 0}
+  portraitSprite: {fileID: -2092357511, guid: ee992c2e5224f2443811c734d1feca13, type: 3}
   animatorController: {fileID: 9100000, guid: ff9687d3be02dce4981c06f517315ebb, type: 2}

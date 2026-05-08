@@ -16,6 +16,6 @@ MonoBehaviour:
   skillName: TankSkill
   cooldown: 10
   damage: 100
-  skillRange: 2
+  skillRange: 1
   icon: {fileID: 0}
   skillEffect: {fileID: 11400000, guid: 2acc389b520cff642a1fa1008e6520e6, type: 2}

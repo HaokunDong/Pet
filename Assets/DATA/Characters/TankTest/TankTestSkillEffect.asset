@@ -12,10 +12,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a6a0b0d820e370e4ba3c9378a58acab8, type: 3}
   m_Name: TankTestSkillEffect
   m_EditorClassIdentifier: 
+  displacementType: 0
+  displacementDirection: 1
+  displacementDistance: 1
+  displacementDuration: 0.2
+  damagesDuringDisplacement: 1
   skillRangeShapes:
   - shapeType: 0
     offset: {x: 0.1, y: 0}
-    radius: 0.3
+    radius: 0.42
     size: {x: 0, y: 0}
-  previewSprite: {fileID: -378961474, guid: 9b32d817525e95c42871cc0039493f98, type: 3}
   defaultFacesRight: 1
