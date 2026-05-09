@@ -45,6 +45,22 @@ namespace PetGame.DesktopWindow
                 return;
             }
 
+            // Auto-configure gameAreaLayer if not set (e.g., when added via code at runtime)
+            if (gameAreaLayer.value == 0 && useGameAreaCollider)
+            {
+                int layer = LayerMask.NameToLayer("GameArea");
+                if (layer >= 0)
+                {
+                    gameAreaLayer = 1 << layer;
+                    Debug.Log($"[ClickThroughManager] Auto-configured gameAreaLayer to 'GameArea' (Layer {layer}).");
+                }
+                else
+                {
+                    Debug.LogWarning("[ClickThroughManager] 'GameArea' layer not found. Game area collider detection disabled.");
+                    useGameAreaCollider = false;
+                }
+            }
+
             // Create a 1x1 texture for reading single pixel
             _pixelTexture = new Texture2D(1, 1, TextureFormat.ARGB32, false);
 

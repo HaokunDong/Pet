@@ -103,6 +103,11 @@ namespace PetGame
         [Min(0)]
         public int expReward = 10;
 
+        [Header("Respawn Settings")]
+        [Tooltip("Per-character respawn cooldown in seconds. 0 means use global default from CharacterDeathManager.")]
+        [Min(0f)]
+        public float respawnCooldown = 0f;
+
         [Header("Skills")]
         [Tooltip("Skill list. Count must not exceed quality level limit.")]
         public SkillData[] skills;

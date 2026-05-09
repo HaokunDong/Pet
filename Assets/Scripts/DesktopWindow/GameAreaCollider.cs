@@ -19,7 +19,7 @@ namespace PetGame.DesktopWindow
     {
         [Header("Auto-Size Settings")]
         [Tooltip("If true, automatically sizes the collider to match the camera's visible area on Start.")]
-        [SerializeField] private bool autoSizeToCamera = true;
+        [SerializeField] private bool autoSizeToCamera = false;
 
         [Tooltip("Padding to add/subtract from the auto-sized area (in world units).")]
         [SerializeField] private Vector2 padding = Vector2.zero;

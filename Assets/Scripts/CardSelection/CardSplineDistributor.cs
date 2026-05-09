@@ -496,6 +496,14 @@ namespace PetGame
         {
             if (data == null) return;
 
+            // Check if the card is in cooldown state — block switching if so
+            CharacterCard focusCard = (FocusIndex >= 0 && FocusIndex < cards.Count) ? cards[FocusIndex] : null;
+            if (focusCard != null && focusCard.IsCooldown)
+            {
+                Debug.Log($"[CardSplineDistributor] Card '{data.characterName}' is in cooldown. Switch blocked.");
+                return;
+            }
+
             // Fire the event for external subscribers
             OnFocusCardClicked?.Invoke(data);
 

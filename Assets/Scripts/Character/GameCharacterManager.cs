@@ -137,6 +137,7 @@ namespace PetGame
         /// <summary>
         /// Switches the current player character to a new one based on the given CharacterData.
         /// Returns true if the switch was successful, false otherwise.
+        /// New character spawns at the configured PlayerSpawn position.
         /// </summary>
         public bool SwitchPlayerCharacter(CharacterData newData)
         {
@@ -166,22 +167,40 @@ namespace PetGame
                 return false;
             }
 
-            // Record current position before destroying
-            Vector3 spawnPos = Vector3.zero;
+            // Destroy or recycle the old character
             if (currentEntity != null)
             {
-                spawnPos = currentEntity.transform.position;
-
-                // Destroy or recycle the old character
                 PlayerCharacters.Remove(currentEntity);
                 Destroy(currentEntity.gameObject);
             }
 
-            // Create the new character at the same position
+            // Spawn at PlayerSpawn position
+            Vector3 spawnPos = GetPlayerSpawnPosition();
+
+            // Create the new character at the spawn position
             CharacterEntity newEntity = CreatePlayerCharacter(newData, spawnPos);
             PlayerCharacters.Add(newEntity);
 
+            // Apply cultivation bonuses and restore full health
+            if (CultivationManager.Instance != null)
+            {
+                CultivationManager.Instance.ApplyCultivationBonuses(newEntity);
+            }
+            newEntity.RuntimeStats.currentHealth = newEntity.RuntimeStats.maxHealth;
+
             return true;
+        }
+
+        /// <summary>
+        /// Get the PlayerSpawn position. Uses the first spawn point if available, otherwise Vector3.zero.
+        /// </summary>
+        public Vector3 GetPlayerSpawnPosition()
+        {
+            if (playerSpawnPoints != null && playerSpawnPoints.Length > 0 && playerSpawnPoints[0] != null)
+            {
+                return playerSpawnPoints[0].position;
+            }
+            return Vector3.zero;
         }
 
         /// <summary>
@@ -266,6 +285,9 @@ namespace PetGame
             if (playerObj.GetComponent<ControlModeManager>() == null)
                 playerObj.AddComponent<ControlModeManager>();
 
+            // Subscribe to death event for cooldown management
+            entity.OnDeath += OnPlayerCharacterDeath;
+
             return entity;
         }
 
@@ -325,6 +347,28 @@ namespace PetGame
             {
                 SaveGame();
             }
+        }
+
+        /// <summary>
+        /// Called when a player character dies.
+        /// Notifies CharacterDeathManager to start card cooldown and removes the character from the active list.
+        /// Does NOT auto-open the card selection UI — the player must do so manually.
+        /// </summary>
+        private void OnPlayerCharacterDeath(CharacterEntity deadEntity)
+        {
+            if (deadEntity == null) return;
+
+            // Notify CharacterDeathManager to handle cooldown
+            if (CharacterDeathManager.Instance != null)
+            {
+                CharacterDeathManager.Instance.OnPlayerCharacterDeath(deadEntity);
+            }
+
+            // Remove from active player characters list
+            PlayerCharacters.Remove(deadEntity);
+
+            Debug.Log($"[GameCharacterManager] Player character '{deadEntity.characterData?.characterName}' died. " +
+                $"Remaining active characters: {PlayerCharacters.Count}");
         }
     }
 }
