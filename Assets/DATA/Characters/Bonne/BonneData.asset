@@ -19,7 +19,7 @@ MonoBehaviour:
   defense: 5
   moveSpeed: 2
   attackSpeed: 1
-  engageDistance: 0.89
+  engageDistance: 0.85
   minAttackDistance: 0.4
   attackRangeShapes:
   - shapeType: 0
@@ -37,6 +37,8 @@ MonoBehaviour:
   knockbackGravity: 8
   qualityLevel: 0
   characterType: 0
+  expReward: 10
+  respawnCooldown: 0
   skills:
   - {fileID: 11400000, guid: 1d3b349038d514f4e8eea5de44833f3e, type: 2}
   characterDescription: Cute!!!

@@ -19,8 +19,8 @@ MonoBehaviour:
   defense: 10
   moveSpeed: 2
   attackSpeed: 0.6
-  engageDistance: 0.96
-  minAttackDistance: 0.35
+  engageDistance: 0.75
+  minAttackDistance: 0.41
   attackRangeShapes:
   - shapeType: 0
     offset: {x: 0.41, y: 0.03}
@@ -37,6 +37,8 @@ MonoBehaviour:
   knockbackGravity: 8
   qualityLevel: 0
   characterType: 0
+  expReward: 10
+  respawnCooldown: 0
   skills:
   - {fileID: 11400000, guid: 14dada5195316f54298b52c029c4749f, type: 2}
   characterDescription: This is Tank

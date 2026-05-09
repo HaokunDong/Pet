@@ -299,7 +299,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4525a5be6585a30438cfd80dd08d4c3f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  autoSizeToCamera: 1
+  autoSizeToCamera: 0
   padding: {x: 0, y: 0}
 --- !u!61 &84231449
 BoxCollider2D:

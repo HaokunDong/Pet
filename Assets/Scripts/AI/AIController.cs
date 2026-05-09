@@ -23,7 +23,7 @@ namespace PetGame.AI
         [Header("Combat Hysteresis")]
         [Tooltip("Extra distance beyond engageDistance before Strike falls back to Engage (anti-jitter).")]
         [Min(0f)]
-        public float engageExitHysteresis = 0.25f;
+        public float engageExitHysteresis = 0.1f;
 
         [Tooltip("Extra distance beyond detectionRange before AI disengages from the current target.")]
         [Min(0f)]

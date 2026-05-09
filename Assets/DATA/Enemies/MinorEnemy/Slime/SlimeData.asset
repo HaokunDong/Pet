@@ -19,8 +19,8 @@ MonoBehaviour:
   defense: 5
   moveSpeed: 1
   attackSpeed: 1
-  engageDistance: 0.55
-  minAttackDistance: 0.36
+  engageDistance: 0.5
+  minAttackDistance: 0.18
   attackRangeShapes:
   - shapeType: 0
     offset: {x: 0.25, y: 0}

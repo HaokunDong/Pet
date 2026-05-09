@@ -63,7 +63,7 @@ namespace PetGame.AI
 
         // ---------- Tunables (copied from AIController each tick) ----------
         /// <summary>Extra distance beyond engageDistance before Strike falls back to Engage (anti-jitter hysteresis).</summary>
-        public float EngageExitHysteresis { get; set; } = 0.25f;
+public float EngageExitHysteresis { get; set; } = 0.1f;
         /// <summary>Extra distance beyond detectionRange before AI disengages completely.</summary>
         public float DisengageHysteresis { get; set; } = 1.0f;
         /// <summary>Duration (seconds) of the PostCombat idle cooldown.</summary>
