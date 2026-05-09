@@ -132,12 +132,15 @@ namespace PetGame
 
         /// <summary>
         /// Start cooldown for a skill.
+        /// Applies cultivation skill CD reduction if available.
         /// </summary>
         public void StartSkillCooldown(int skillIndex, float cooldownTime)
         {
             if (skillCooldowns != null && skillCooldowns.ContainsKey(skillIndex))
             {
-                skillCooldowns[skillIndex] = cooldownTime;
+                // Apply skill CD reduction from cultivation system
+                float cdMultiplier = CultivationManager.Instance.GetSkillCDMultiplier(characterId);
+                skillCooldowns[skillIndex] = cooldownTime * cdMultiplier;
             }
         }
 

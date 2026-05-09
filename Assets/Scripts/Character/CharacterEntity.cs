@@ -63,6 +63,12 @@ namespace PetGame
         /// </summary>
         public Vector2 Velocity { get; private set; }
 
+        /// <summary>
+        /// The last entity that dealt damage to this character.
+        /// Used to award experience on death.
+        /// </summary>
+        private CharacterEntity lastAttacker;
+
         private Vector3 lastFramePosition;
 
         private void Awake()
@@ -202,6 +208,12 @@ namespace PetGame
             float actualDamage = Mathf.Max(1f, attackPower - RuntimeStats.defense);
             RuntimeStats.currentHealth -= actualDamage;
 
+            // Track the last attacker for experience reward on death
+            if (attacker != null)
+            {
+                lastAttacker = attacker;
+            }
+
             OnDamageTaken?.Invoke(this, actualDamage);
 
             // Update health bar
@@ -242,6 +254,9 @@ namespace PetGame
         /// </summary>
         private void Die()
         {
+            // Award experience to the killer if this is an enemy killed by a player
+            AwardExperienceToKiller();
+
             OnDeath?.Invoke(this);
 
             // Hide health bar on death
@@ -278,6 +293,29 @@ namespace PetGame
         }
 
         /// <summary>
+        /// Award experience points to the killer when this enemy dies.
+        /// Only awards exp if this character is an enemy and the killer is a player.
+        /// </summary>
+        private void AwardExperienceToKiller()
+        {
+            if (lastAttacker == null) return;
+            if (RuntimeStats == null || lastAttacker.RuntimeStats == null) return;
+
+            // Only enemies give experience
+            if (RuntimeStats.characterType == CharacterType.Player) return;
+
+            // Only player characters receive experience
+            if (lastAttacker.RuntimeStats.characterType != CharacterType.Player) return;
+
+            // Get exp reward from CharacterData
+            int expReward = (characterData != null) ? characterData.expReward : 10;
+            if (expReward <= 0) expReward = 10; // Default fallback
+
+            CultivationManager.Instance.AddExperience(lastAttacker, expReward);
+            Debug.Log($"[CharacterEntity] '{lastAttacker.RuntimeStats.characterId}' gained {expReward} exp from defeating '{RuntimeStats.characterId}'");
+        }
+
+        /// <summary>
         /// Recycle this character back to the object pool.
         /// In multiplayer mode, NetworkObjects are despawned instead of pooled.
         /// </summary>
@@ -309,6 +347,7 @@ namespace PetGame
             OnDeath = null;
             OnDamageTaken = null;
             IsInitialized = false;
+            lastAttacker = null;
 
             // Reset state machine when recycled
             if (CharAnimator != null)

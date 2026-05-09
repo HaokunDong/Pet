@@ -37,6 +37,7 @@ MonoBehaviour:
   knockbackGravity: 8
   qualityLevel: 1
   characterType: 2
+  expReward: 100
   skills:
   - {fileID: 11400000, guid: ba5bd530bafd48643b70b5586697ad5d, type: 2}
   - {fileID: 11400000, guid: 89f04f18836862a4585dbe1372cc4e76, type: 2}

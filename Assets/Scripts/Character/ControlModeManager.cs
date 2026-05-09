@@ -55,6 +55,9 @@ namespace PetGame
         // Cached reference to the card selection system
         private CardSplineDistributor cardDistributor;
 
+        // Cached reference to the cultivation panel
+        private CultivationPanelUI cultivationPanel;
+
         private void Awake()
         {
             entity = GetComponent<CharacterEntity>();
@@ -183,10 +186,45 @@ namespace PetGame
 
         /// <summary>
         /// Handle the Train button being clicked.
+        /// Opens the cultivation panel for this character.
         /// </summary>
         private void OnTrainClicked()
         {
-            DismissButton();
+            HideButton();
+
+            // Restore previous mode immediately so the character keeps moving
+            SetMode(previousMode);
+
+            // Find or create the cultivation panel
+            if (cultivationPanel == null)
+            {
+                cultivationPanel = FindObjectOfType<CultivationPanelUI>(true);
+
+                // If not found in scene, try to instantiate from prefab
+                if (cultivationPanel == null)
+                {
+                    GameObject prefab = Resources.Load<GameObject>("Prefabs/UI/CultivationPanel");
+                    if (prefab != null && sceneCanvas != null)
+                    {
+                        GameObject panelObj = Instantiate(prefab, sceneCanvas.transform);
+                        cultivationPanel = panelObj.GetComponent<CultivationPanelUI>();
+                    }
+                }
+            }
+
+            if (cultivationPanel != null)
+            {
+                cultivationPanel.Open(entity, this);
+            }
+        }
+
+        /// <summary>
+        /// Called by CultivationPanelUI when the panel is closed.
+        /// Currently no-op since mode is restored when panel opens.
+        /// </summary>
+        public void OnCultivationPanelClosed()
+        {
+            // Mode already restored in OnTrainClicked, nothing to do here
         }
 
         /// <summary>

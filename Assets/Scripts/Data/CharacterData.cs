@@ -98,6 +98,11 @@ namespace PetGame
         [Tooltip("Character type: Player, MinorEnemy, or Boss")]
         public CharacterType characterType = CharacterType.Player;
 
+        [Header("Cultivation / Rewards")]
+        [Tooltip("Experience points awarded to the player when this enemy is defeated. Only relevant for enemies.")]
+        [Min(0)]
+        public int expReward = 10;
+
         [Header("Skills")]
         [Tooltip("Skill list. Count must not exceed quality level limit.")]
         public SkillData[] skills;

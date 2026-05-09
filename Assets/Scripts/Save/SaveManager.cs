@@ -51,6 +51,24 @@ namespace PetGame
                     }
                 }
 
+                // Save cultivation data
+                CultivationData cultData = CultivationManager.Instance.GetCultivationData(entity.RuntimeStats.characterId);
+                if (cultData != null)
+                {
+                    charSave.cultivation = new CultivationSaveData
+                    {
+                        level = cultData.level,
+                        currentExp = cultData.currentExp,
+                        talentPoints = cultData.talentPoints,
+                        attackLevel = cultData.attackLevel,
+                        defenseLevel = cultData.defenseLevel,
+                        healthLevel = cultData.healthLevel,
+                        attackSpeedLevel = cultData.attackSpeedLevel,
+                        moveSpeedLevel = cultData.moveSpeedLevel,
+                        skillCDLevel = cultData.skillCDLevel
+                    };
+                }
+
                 saveData.characters.Add(charSave);
             }
 
@@ -128,6 +146,25 @@ namespace PetGame
                         entity.RuntimeStats.skillCooldowns[cd.skillIndex] = cd.remainingCooldown;
                     }
                 }
+            }
+
+            // Restore cultivation data
+            if (charSave.cultivation != null)
+            {
+                CultivationData cultData = new CultivationData
+                {
+                    level = charSave.cultivation.level,
+                    currentExp = charSave.cultivation.currentExp,
+                    talentPoints = charSave.cultivation.talentPoints,
+                    attackLevel = charSave.cultivation.attackLevel,
+                    defenseLevel = charSave.cultivation.defenseLevel,
+                    healthLevel = charSave.cultivation.healthLevel,
+                    attackSpeedLevel = charSave.cultivation.attackSpeedLevel,
+                    moveSpeedLevel = charSave.cultivation.moveSpeedLevel,
+                    skillCDLevel = charSave.cultivation.skillCDLevel
+                };
+                CultivationManager.Instance.SetCultivationData(entity.RuntimeStats.characterId, cultData);
+                CultivationManager.Instance.ApplyCultivationBonuses(entity);
             }
         }
 

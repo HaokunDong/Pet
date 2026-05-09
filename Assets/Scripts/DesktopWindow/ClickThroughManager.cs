@@ -6,6 +6,8 @@ namespace PetGame.DesktopWindow
     /// Manages intelligent click-through behavior based on pixel alpha at mouse position.
     /// Transparent areas allow clicks to pass through to the desktop/other apps,
     /// while opaque areas receive normal mouse input.
+    /// Additionally supports a game area collider: if the mouse is over a collider
+    /// on the designated GameArea layer, clicks are always captured by the game.
     /// </summary>
     public class ClickThroughManager : MonoBehaviour
     {
@@ -17,6 +19,13 @@ namespace PetGame.DesktopWindow
         [Tooltip("How often to check pixel alpha (in frames). Higher = better performance, lower = more responsive.")]
         [Range(1, 5)]
         [SerializeField] private int checkInterval = 2;
+
+        [Header("Game Area Settings")]
+        [Tooltip("Enable game area collider-based click capture. When the mouse is over a collider on this layer, clicks are never passed through.")]
+        [SerializeField] private bool useGameAreaCollider = true;
+
+        [Tooltip("Layer mask for the game area colliders. Assign the 'GameArea' layer here.")]
+        [SerializeField] private LayerMask gameAreaLayer;
 
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
 
@@ -42,9 +51,6 @@ namespace PetGame.DesktopWindow
             // Create a small render texture that mirrors the camera output
             _renderTexture = new RenderTexture(Screen.width, Screen.height, 0, RenderTextureFormat.ARGB32);
             _renderTexture.Create();
-
-            // Set camera to render to our render texture as well
-            // We use OnPostRender to read pixels instead of changing targetTexture
         }
 
         private void Update()
@@ -62,8 +68,18 @@ namespace PetGame.DesktopWindow
             int x = Mathf.Clamp((int)mousePos.x, 0, Screen.width - 1);
             int y = Mathf.Clamp((int)mousePos.y, 0, Screen.height - 1);
 
-            // Read the pixel at mouse position from the screen
-            bool shouldClickThrough = CheckPixelAlpha(x, y);
+            // Check if mouse is over a game area collider first
+            bool shouldClickThrough;
+            if (useGameAreaCollider && IsMouseOverGameArea(mousePos))
+            {
+                // Mouse is over game area collider — never click through
+                shouldClickThrough = false;
+            }
+            else
+            {
+                // Fall back to pixel alpha check
+                shouldClickThrough = CheckPixelAlpha(x, y);
+            }
 
             // Only update window style if state changed (avoid unnecessary API calls)
             if (shouldClickThrough != _lastClickThroughState)
@@ -71,6 +87,19 @@ namespace PetGame.DesktopWindow
                 _lastClickThroughState = shouldClickThrough;
                 TransparentWindowManager.Instance.SetClickThrough(shouldClickThrough);
             }
+        }
+
+        /// <summary>
+        /// Checks whether the mouse position (in screen space) is over a 2D collider
+        /// on the GameArea layer using Physics2D.OverlapPoint.
+        /// </summary>
+        private bool IsMouseOverGameArea(Vector3 screenPos)
+        {
+            if (_mainCamera == null) return false;
+
+            Vector2 worldPos = _mainCamera.ScreenToWorldPoint(screenPos);
+            Collider2D hit = Physics2D.OverlapPoint(worldPos, gameAreaLayer);
+            return hit != null;
         }
 
         /// <summary>
