@@ -14,8 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   characterId: Character_Bonne_01
   characterName: Bonne
-  attackPower: 70
-  maxHealth: 100
+  attackPower: 30
+  maxHealth: 150
   defense: 5
   moveSpeed: 2
   attackSpeed: 1

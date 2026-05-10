@@ -12,12 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a27257bb87edf424cb15e4cee4e65224, type: 3}
   m_Name: CultivationConfig
   m_EditorClassIdentifier: 
-  baseExp: 100
+  baseExp: 30
   growthExponent: 1.5
   maxLevel: 50
-  attackBonusPerLevel: 1
-  defenseBonusPerLevel: 1
-  healthBonusPerLevel: 1
-  attackSpeedBonusPerLevel: 1
-  moveSpeedBonusPerLevel: 1
+  attackBonusPerLevel: 3
+  defenseBonusPerLevel: 3
+  healthBonusPerLevel: 3
+  attackSpeedBonusPerLevel: 3
+  moveSpeedBonusPerLevel: 3
   skillCDBonusPerLevel: 0

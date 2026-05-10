@@ -31,15 +31,14 @@ namespace PetGame
 
         /// <summary>
         /// Whether this card is currently in cooldown state (character is dead and waiting to respawn).
+        /// Driven by CharacterDeathManager (which owns the actual timer).
         /// </summary>
         public bool IsCooldown { get; private set; }
 
         /// <summary>
-        /// Remaining cooldown time in seconds.
+        /// Remaining cooldown time in seconds (last value pushed by CharacterDeathManager).
         /// </summary>
         public float CooldownRemaining { get; private set; }
-
-        private float cooldownDuration;
 
         private const string DefaultDescription = "\u5b83\u8fd8\u5f88\u795e\u79d8\u54e6~";
 
@@ -111,15 +110,16 @@ namespace PetGame
         }
 
         /// <summary>
-        /// Start the cooldown state for this card.
-        /// Sets the card to grey, shows countdown text, and begins timer.
+        /// Apply the cooldown visual state for this card.
+        /// Called every frame by CharacterDeathManager while the character is in cooldown,
+        /// regardless of whether the card panel is currently visible.
+        /// Setting text/colors on inactive UI is fine — the values will be shown next time the panel opens.
         /// </summary>
-        /// <param name="duration">Cooldown duration in seconds.</param>
-        public void StartCooldown(float duration)
+        /// <param name="remainingSeconds">Remaining cooldown time in seconds.</param>
+        public void ApplyCooldownVisual(float remainingSeconds)
         {
             IsCooldown = true;
-            cooldownDuration = duration;
-            CooldownRemaining = duration;
+            CooldownRemaining = remainingSeconds;
 
             // Set card portrait to grey
             if (portraitImage != null)
@@ -130,18 +130,20 @@ namespace PetGame
             // Ensure cooldown text exists
             EnsureCooldownText();
 
-            // Show cooldown text
+            // Show cooldown text with current remaining seconds
             if (cooldownText != null)
             {
-                cooldownText.gameObject.SetActive(true);
-                cooldownText.text = Mathf.CeilToInt(CooldownRemaining).ToString();
+                if (!cooldownText.gameObject.activeSelf)
+                    cooldownText.gameObject.SetActive(true);
+                cooldownText.text = Mathf.CeilToInt(remainingSeconds).ToString();
             }
         }
 
         /// <summary>
-        /// End the cooldown state, restoring normal card visuals.
+        /// Clear the cooldown visual state, restoring normal card visuals.
+        /// Called by CharacterDeathManager when the cooldown finishes.
         /// </summary>
-        private void EndCooldown()
+        public void ClearCooldownVisual()
         {
             IsCooldown = false;
             CooldownRemaining = 0f;
@@ -159,23 +161,14 @@ namespace PetGame
             }
         }
 
-        private void Update()
+        /// <summary>
+        /// Legacy entry point retained for backwards compatibility.
+        /// New cooldown logic is driven by CharacterDeathManager — this just forwards the visual call.
+        /// </summary>
+        /// <param name="duration">Cooldown duration in seconds.</param>
+        public void StartCooldown(float duration)
         {
-            if (!IsCooldown) return;
-
-            CooldownRemaining -= Time.deltaTime;
-
-            if (CooldownRemaining <= 0f)
-            {
-                EndCooldown();
-                return;
-            }
-
-            // Update cooldown text display
-            if (cooldownText != null)
-            {
-                cooldownText.text = Mathf.CeilToInt(CooldownRemaining).ToString();
-            }
+            ApplyCooldownVisual(duration);
         }
 
         /// <summary>

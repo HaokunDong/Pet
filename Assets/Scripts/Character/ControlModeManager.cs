@@ -64,6 +64,23 @@ namespace PetGame
             flashEffect = GetComponent<FlashEffect>();
             aiController = GetComponent<AIController>();
             manualController = GetComponent<ManualController>();
+
+            // Hide the manual skill bar when this character dies (only if it was bound to us).
+            if (entity != null)
+            {
+                entity.OnDeath += HandleCharacterDeath;
+            }
+        }
+
+        /// <summary>
+        /// Hide the manual skill bar when the owning character dies, but only if
+        /// the bar is currently bound to this character.
+        /// </summary>
+        private void HandleCharacterDeath(CharacterEntity dead)
+        {
+            if (ManualSkillBarUI.Instance == null) return;
+            if (dead != entity) return;
+            ManualSkillBarUI.Instance.Unbind();
         }
 
         private void Start()
@@ -155,6 +172,10 @@ namespace PetGame
             panelInstance.SetActive(true);
             isButtonShowing = true;
             CurrentMode = ControlMode.Paused_ShowingButton;
+
+            // While the action menu is up, hide the manual skill bar so the player
+            // doesn't see/use stale skill input. It will be re-shown if Manual mode resumes.
+            HideManualSkillBarIfBoundToMe();
         }
 
         /// <summary>
@@ -254,17 +275,77 @@ namespace PetGame
                 case ControlMode.AI_Auto:
                     if (aiController != null) aiController.ResumeAI();
                     if (manualController != null) manualController.SetActive(false);
+                    HideManualSkillBarIfBoundToMe();
                     break;
 
                 case ControlMode.Manual:
                     if (aiController != null) aiController.PauseAI();
                     if (manualController != null) manualController.SetActive(true);
+                    ShowManualSkillBar();
                     break;
 
                 case ControlMode.Paused_ShowingButton:
                     // Both paused, handled by PauseCurrentBehavior
+                    HideManualSkillBarIfBoundToMe();
                     break;
             }
+        }
+
+        /// <summary>
+        /// Ensure the manual skill bar exists and bind it to this character.
+        /// </summary>
+        private void ShowManualSkillBar()
+        {
+            ManualSkillBarUI bar = EnsureManualSkillBar();
+            if (bar != null)
+            {
+                bar.BindCharacter(entity);
+            }
+        }
+
+        /// <summary>
+        /// If the manual skill bar is currently bound to this character, unbind it (hide).
+        /// Leaves it alone if another character has taken it over (race during fast switching).
+        /// </summary>
+        private void HideManualSkillBarIfBoundToMe()
+        {
+            if (ManualSkillBarUI.Instance == null) return;
+            // Calling Unbind unconditionally is safe because at most one character can be Manual at a time.
+            ManualSkillBarUI.Instance.Unbind();
+        }
+
+        /// <summary>
+        /// Find or instantiate the global ManualSkillBarUI singleton in the scene Canvas.
+        /// </summary>
+        private ManualSkillBarUI EnsureManualSkillBar()
+        {
+            if (ManualSkillBarUI.Instance != null)
+                return ManualSkillBarUI.Instance;
+
+            // Try to find a pre-existing instance in the scene (in case it was placed manually).
+            ManualSkillBarUI existing = FindObjectOfType<ManualSkillBarUI>(true);
+            if (existing != null)
+                return existing;
+
+            // Otherwise instantiate from Resources.
+            GameObject prefab = Resources.Load<GameObject>("Prefabs/UI/ManualSkillBar");
+            if (prefab == null)
+            {
+                Debug.LogWarning("ControlModeManager: Failed to load ManualSkillBar prefab from Resources/Prefabs/UI/ManualSkillBar");
+                return null;
+            }
+
+            if (sceneCanvas == null)
+                sceneCanvas = FindObjectOfType<Canvas>();
+
+            if (sceneCanvas == null)
+            {
+                Debug.LogWarning("ControlModeManager: No Canvas found in scene; cannot host ManualSkillBar");
+                return null;
+            }
+
+            GameObject go = Instantiate(prefab, sceneCanvas.transform);
+            return go.GetComponent<ManualSkillBarUI>();
         }
 
         /// <summary>
@@ -396,6 +477,11 @@ namespace PetGame
                 trainBtn.onClick.RemoveAllListeners();
             if (controlBtn != null)
                 controlBtn.onClick.RemoveAllListeners();
+
+            if (entity != null)
+            {
+                entity.OnDeath -= HandleCharacterDeath;
+            }
         }
     }
 }

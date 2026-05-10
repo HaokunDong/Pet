@@ -148,15 +148,26 @@ namespace PetGame
             SpriteRenderer sr = GetComponent<SpriteRenderer>();
             if (sr != null && (sr.sharedMaterial == null || sr.sharedMaterial.shader.name != "Game/SpriteOutline"))
             {
-                Shader outlineShader = Shader.Find("Game/SpriteOutline");
-                if (outlineShader != null)
+                // Try to load the pre-made material from Resources first (works in builds)
+                Material outlineMat = Resources.Load<Material>("SpriteOutline_Reference");
+                if (outlineMat != null)
                 {
-                    // Create a runtime material instance with the outline+flash shader
-                    Material outlineMat = new Material(outlineShader);
-                    outlineMat.name = "SpriteOutline_Runtime";
-                    sr.material = outlineMat;
+                    // Use the pre-made material instance
+                    sr.material = new Material(outlineMat);
+                    sr.material.name = "SpriteOutline_Runtime";
                 }
-
+                else
+                {
+                    // Fallback to Shader.Find for editor mode
+                    Shader outlineShader = Shader.Find("Game/SpriteOutline");
+                    if (outlineShader != null)
+                    {
+                        // Create a runtime material instance with the outline+flash shader
+                        Material runtimeMat = new Material(outlineShader);
+                        runtimeMat.name = "SpriteOutline_Runtime";
+                        sr.material = runtimeMat;
+                    }
+                }
             }
         }
         /// <summary>

@@ -15,7 +15,7 @@ MonoBehaviour:
   skillId: Bonne_Skill_01
   skillName: Throw
   cooldown: 10
-  damage: 100
+  damage: 70
   skillRange: 6
-  icon: {fileID: -653641005, guid: 325996c4e6f1740778132667857c1356, type: 3}
+  icon: {fileID: -2012909140, guid: 07c9fffbf73d4bb4883f1302665b6e66, type: 3}
   skillEffect: {fileID: 11400000, guid: ae6269cd1cb14e841996ca03b3a82c77, type: 2}

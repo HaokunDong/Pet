@@ -79,10 +79,116 @@ namespace PetGame
             if (entity.CharAnimator != null && entity.CharAnimator.IsInSkillState) return;
 
             HandleMouseHover();
+            HandleSkillInput();
             HandleRightClickInput();
             HandleMovement();
             HandleChaseAndAttack();
             HandleSustainedAttack();
+        }
+
+        /// <summary>
+        /// Handle Q/W/E/R key presses to actively cast skills 1/2/3/4.
+        /// Validates ownership of the skill, cooldown, and animation state
+        /// before delegating to CombatSystem.TryUseSkill.
+        /// </summary>
+        private void HandleSkillInput()
+        {
+            // Map keys -> skill indices.
+            int skillIndex = -1;
+            if (Input.GetKeyDown(KeyCode.Q)) skillIndex = 0;
+            else if (Input.GetKeyDown(KeyCode.W)) skillIndex = 1;
+            else if (Input.GetKeyDown(KeyCode.E)) skillIndex = 2;
+            else if (Input.GetKeyDown(KeyCode.R)) skillIndex = 3;
+
+            if (skillIndex < 0) return;
+
+            // Validate the skill index is within this character's quality limit.
+            if (entity.characterData == null || entity.characterData.skills == null) return;
+            int maxSkills = entity.characterData.GetMaxSkillCount();
+            int skillArrayLen = entity.characterData.skills.Length;
+            if (skillIndex >= maxSkills || skillIndex >= skillArrayLen) return;
+
+            SkillData skillData = entity.characterData.skills[skillIndex];
+            if (skillData == null) return;
+
+            // Check cooldown.
+            if (entity.RuntimeStats == null || !entity.RuntimeStats.IsSkillReady(skillIndex)) return;
+
+            // Skip if currently in a skill animation (Update already returns early in that case,
+            // but keep this guard explicit for clarity in case the early-return is later relaxed).
+            if (entity.CharAnimator != null && entity.CharAnimator.IsInSkillState) return;
+
+            // Pick a target: prefer the currently engaged attackTarget if alive and within skill range,
+            // otherwise fall back to the nearest living enemy within the skill's range.
+            CharacterEntity target = ResolveSkillTarget(skillData);
+            if (target == null) return;
+
+            // Face the target before casting (CombatSystem will lock facing during the animation).
+            if (entity.CharAnimator != null)
+            {
+                float dx = target.transform.position.x - transform.position.x;
+                if (Mathf.Abs(dx) > 0.01f)
+                {
+                    entity.CharAnimator.SetFacingDirection(dx);
+                }
+            }
+
+            // Delegate to CombatSystem; it performs its own range/cooldown validation and starts the cooldown.
+            bool ok = combatSystem.TryUseSkill(skillIndex, target);
+            if (ok)
+            {
+                // Cancel ongoing manual movement / sustained attack so the skill animation can play cleanly.
+                isMoving = false;
+                isChasing = false;
+                isAttacking = false;
+                hasTargetX = false;
+                DestroyCurrentArrow();
+            }
+        }
+
+        /// <summary>
+        /// Choose an enemy target for an active skill cast.
+        /// Prefers the currently engaged attackTarget if it is alive and within skill range.
+        /// Otherwise, scans all enemies and returns the nearest one within skillRange.
+        /// Returns null if nothing is in range.
+        /// </summary>
+        private CharacterEntity ResolveSkillTarget(SkillData skillData)
+        {
+            float skillRange = Mathf.Max(0.01f, skillData.skillRange);
+
+            // 1) Prefer current attackTarget if valid and in range.
+            if (attackTarget != null && attackTarget.RuntimeStats != null && attackTarget.RuntimeStats.IsAlive)
+            {
+                float d = Vector2.Distance(transform.position, attackTarget.transform.position);
+                if (d <= skillRange)
+                {
+                    return attackTarget;
+                }
+            }
+
+            // 2) Otherwise scan for the nearest living enemy within range.
+            GameObject[] candidates = GameObject.FindGameObjectsWithTag("Enemy");
+            float closestDist = float.MaxValue;
+            CharacterEntity closest = null;
+            Vector2 myPos = transform.position;
+
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                GameObject go = candidates[i];
+                if (go == null) continue;
+                CharacterEntity ce = go.GetComponent<CharacterEntity>();
+                if (ce == null || ce == entity) continue;
+                if (ce.RuntimeStats == null || !ce.RuntimeStats.IsAlive) continue;
+
+                float dist = Vector2.Distance(myPos, go.transform.position);
+                if (dist <= skillRange && dist < closestDist)
+                {
+                    closestDist = dist;
+                    closest = ce;
+                }
+            }
+
+            return closest;
         }
 
         /// <summary>

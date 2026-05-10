@@ -15,7 +15,7 @@ MonoBehaviour:
   skillId: LihuoTestSkill_Two
   skillName: LihuoTestSkill_Two
   cooldown: 10
-  damage: 10
-  skillRange: 3
-  icon: {fileID: 0}
+  damage: 130
+  skillRange: 5
+  icon: {fileID: -2070828060, guid: 07c9fffbf73d4bb4883f1302665b6e66, type: 3}
   skillEffect: {fileID: 11400000, guid: 807ea9e3bd1f9f14a96ac3879639ab5b, type: 2}

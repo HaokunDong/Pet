@@ -17,5 +17,5 @@ MonoBehaviour:
   cooldown: 10
   damage: 100
   skillRange: 1
-  icon: {fileID: 0}
+  icon: {fileID: -1729749714, guid: 07c9fffbf73d4bb4883f1302665b6e66, type: 3}
   skillEffect: {fileID: 11400000, guid: 2acc389b520cff642a1fa1008e6520e6, type: 2}

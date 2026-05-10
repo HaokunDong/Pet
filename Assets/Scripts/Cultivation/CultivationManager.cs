@@ -30,12 +30,17 @@ namespace PetGame
             {
                 if (config == null)
                 {
-                    config = Resources.Load<CultivationConfig>("Data/CultivationConfig");
+                    // Try the primary location first (Resources/CultivationConfig.asset),
+                    // then fall back to Resources/Data/CultivationConfig.asset for older project layouts.
+                    config = Resources.Load<CultivationConfig>("CultivationConfig");
+                    if (config == null)
+                        config = Resources.Load<CultivationConfig>("Data/CultivationConfig");
+
                     if (config == null)
                     {
-                        // Create a runtime default config if none exists in Resources
+                        // Last-resort: create a runtime default so the game still runs (with default values).
                         config = ScriptableObject.CreateInstance<CultivationConfig>();
-                        Debug.LogWarning("[CultivationManager] No CultivationConfig found in Resources/Data/. Using default values.");
+                        Debug.LogWarning("[CultivationManager] No CultivationConfig asset found in Resources/ or Resources/Data/. Using runtime defaults.");
                     }
                 }
                 return config;

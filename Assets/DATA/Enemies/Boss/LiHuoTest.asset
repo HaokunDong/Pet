@@ -14,8 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   characterId: LihuoTest_01
   characterName: LihuoTest
-  attackPower: 20
-  maxHealth: 100
+  attackPower: 70
+  maxHealth: 200
   defense: 5
   moveSpeed: 1.52
   attackSpeed: 1
@@ -38,6 +38,7 @@ MonoBehaviour:
   qualityLevel: 1
   characterType: 2
   expReward: 100
+  respawnCooldown: 0
   skills:
   - {fileID: 11400000, guid: ba5bd530bafd48643b70b5586697ad5d, type: 2}
   - {fileID: 11400000, guid: 89f04f18836862a4585dbe1372cc4e76, type: 2}
