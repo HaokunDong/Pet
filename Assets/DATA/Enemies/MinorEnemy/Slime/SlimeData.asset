@@ -37,7 +37,7 @@ MonoBehaviour:
   knockbackGravity: 8
   qualityLevel: 0
   characterType: 1
-  expReward: 10
+  expReward: 200
   respawnCooldown: 0
   skills: []
   characterDescription: 

@@ -15,7 +15,7 @@ MonoBehaviour:
   characterId: Character_Bonne_01
   characterName: Bonne
   attackPower: 30
-  maxHealth: 150
+  maxHealth: 1000
   defense: 5
   moveSpeed: 2
   attackSpeed: 1

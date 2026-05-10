@@ -15,9 +15,9 @@ MonoBehaviour:
   baseExp: 30
   growthExponent: 1.5
   maxLevel: 50
-  attackBonusPerLevel: 3
-  defenseBonusPerLevel: 3
-  healthBonusPerLevel: 3
-  attackSpeedBonusPerLevel: 3
-  moveSpeedBonusPerLevel: 3
+  attackBonusPerLevel: 10
+  defenseBonusPerLevel: 10
+  healthBonusPerLevel: 10
+  attackSpeedBonusPerLevel: 10
+  moveSpeedBonusPerLevel: 10
   skillCDBonusPerLevel: 0
