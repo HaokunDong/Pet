@@ -14,7 +14,8 @@ namespace PetGame
     }
 
     /// <summary>
-    /// Controls a projectile's full lifecycle: parabolic flight → explosion → AOE damage → recycle.
+    /// Controls a projectile's full lifecycle: parabolic flight → explosion → recycle.
+    /// Damage is now handled by the ProjectileDamageArea component on the same GameObject.
     /// Attach to a projectile prefab with SpriteRenderer and Animator components.
     /// Call Launch() to begin; the onFinish callback fires after the explosion animation completes.
     /// </summary>
@@ -26,23 +27,18 @@ namespace PetGame
         private float flightDuration;
         private float arcHeight;
 
-        // --- Explosion parameters ---
-        private float explosionRadius;
-        private float damage;
-        private CharacterType casterType;
-
         // --- Callbacks ---
         private Action onFinish;
 
         // --- Internal state ---
         private float elapsed;
         private ProjectileState state = ProjectileState.Idle;
-        private bool hasDamaged;
         private bool explosionAnimStarted;
 
         // --- Cached components ---
         private Animator animator;
         private SpriteRenderer spriteRenderer;
+        private ProjectileDamageArea damageArea;
 
         // --- Original sprite saved at Awake for restoration after explosion ---
         private Sprite originalSprite;
@@ -56,6 +52,7 @@ namespace PetGame
         {
             animator = GetComponent<Animator>();
             spriteRenderer = GetComponent<SpriteRenderer>();
+            damageArea = GetComponent<ProjectileDamageArea>();
             if (spriteRenderer != null)
             {
                 originalSprite = spriteRenderer.sprite;
@@ -69,29 +66,35 @@ namespace PetGame
         /// <param name="predictedEnd">Predicted landing position (accounts for target movement).</param>
         /// <param name="duration">Total flight time in seconds.</param>
         /// <param name="arc">Peak height of the parabolic arc above the start-end line.</param>
-        /// <param name="expRadius">Radius of the AOE damage circle at the landing point.</param>
         /// <param name="dmg">Damage to deal to each enemy in range.</param>
         /// <param name="casterCharType">The caster's character type, used to determine enemy targets.</param>
         /// <param name="onFinishCallback">Invoked after the explosion animation finishes (for pool recycle).</param>
         public void Launch(Vector3 start, Vector3 predictedEnd, float duration, float arc,
-            float expRadius, float dmg, CharacterType casterCharType, Action onFinishCallback)
+            float dmg, CharacterType casterCharType, Action onFinishCallback)
         {
             startPos = start;
             endPos = predictedEnd;
             flightDuration = Mathf.Max(duration, 0.01f);
             arcHeight = arc;
-            explosionRadius = expRadius;
-            damage = dmg;
-            casterType = casterCharType;
             onFinish = onFinishCallback;
 
             elapsed = 0f;
-            hasDamaged = false;
             explosionAnimStarted = false;
             state = ProjectileState.Flying;
 
             transform.position = start;
             transform.rotation = Quaternion.identity;
+
+            // Initialize damage area component with damage parameters
+            if (damageArea == null) damageArea = GetComponent<ProjectileDamageArea>();
+            if (damageArea != null)
+            {
+                damageArea.Initialize(dmg, casterCharType);
+            }
+            else
+            {
+                Debug.LogWarning("[ProjectileController] No ProjectileDamageArea component found! Damage will not be dealt.");
+            }
 
             // Ensure sprite is visible during flight
             if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>();
@@ -162,7 +165,7 @@ namespace PetGame
         // ==================== Explosion State ====================
 
         /// <summary>
-        /// Transition from flying to exploding: deal AOE damage and play explosion animation.
+        /// Transition from flying to exploding: notify damage area and play explosion animation.
         /// The Animator is configured with Entry → Explosion state, so simply enabling
         /// the Animator will start the explosion animation automatically.
         /// </summary>
@@ -171,8 +174,11 @@ namespace PetGame
             state = ProjectileState.Exploding;
             explosionAnimStarted = false;
 
-            // Deal AOE damage immediately upon arrival
-            DealAOEDamage();
+            // Notify damage area that projectile has reached end point (fallback damage for OnCollision mode)
+            if (damageArea != null)
+            {
+                damageArea.OnReachedEndPoint();
+            }
 
             // Enable Animator — it goes from Entry directly to the explosion animation
             if (animator != null)
@@ -184,6 +190,34 @@ namespace PetGame
             else
             {
                 // No animator — finish immediately
+                Debug.LogWarning("[ProjectileController] No Animator found, skipping explosion animation.");
+                FinishAndRecycle();
+            }
+        }
+
+        /// <summary>
+        /// Called externally by ProjectileDamageArea when a collision triggers explosion.
+        /// Stops flight immediately and enters explosion state.
+        /// </summary>
+        public void EnterExplosionFromCollision()
+        {
+            if (state != ProjectileState.Flying) return;
+
+            // Stop at current position
+            transform.rotation = Quaternion.identity;
+
+            state = ProjectileState.Exploding;
+            explosionAnimStarted = false;
+
+            // Enable Animator for explosion animation
+            if (animator != null)
+            {
+                animator.enabled = true;
+                animator.Play(0, 0, 0f);
+                explosionAnimStarted = true;
+            }
+            else
+            {
                 Debug.LogWarning("[ProjectileController] No Animator found, skipping explosion animation.");
                 FinishAndRecycle();
             }
@@ -205,45 +239,6 @@ namespace PetGame
             if (stateInfo.length > 0f && stateInfo.normalizedTime >= 1f)
             {
                 FinishAndRecycle();
-            }
-        }
-
-        // ==================== AOE Damage ====================
-
-        /// <summary>
-        /// Deal damage to all enemy characters within the explosion radius.
-        /// </summary>
-        private void DealAOEDamage()
-        {
-            if (hasDamaged) return;
-            hasDamaged = true;
-
-            // Determine which tag to search for based on caster type
-            string targetTag = (casterType == CharacterType.Player) ? "Enemy" : "Player";
-
-            GameObject[] candidates = GameObject.FindGameObjectsWithTag(targetTag);
-            int hitCount = 0;
-
-            for (int i = 0; i < candidates.Length; i++)
-            {
-                CharacterEntity target = candidates[i].GetComponent<CharacterEntity>();
-                if (target == null || !target.RuntimeStats.IsAlive) continue;
-
-                float dist = Vector2.Distance(transform.position, target.transform.position);
-                if (dist <= explosionRadius)
-                {
-                    target.TakeDamage(damage, null);
-                    hitCount++;
-                }
-            }
-
-            if (hitCount > 0)
-            {
-                Debug.Log($"[ProjectileController] Explosion at {transform.position} hit {hitCount} target(s) for {damage} damage.");
-            }
-            else
-            {
-                Debug.Log($"[ProjectileController] Explosion at {transform.position} hit no targets. (radius={explosionRadius}, targetTag={targetTag})");
             }
         }
 
@@ -269,7 +264,6 @@ namespace PetGame
 
             state = ProjectileState.Idle;
             elapsed = 0f;
-            hasDamaged = false;
             explosionAnimStarted = false;
             onFinish = null;
 
@@ -278,6 +272,13 @@ namespace PetGame
             // Re-acquire components in case Awake was not called (pooled objects)
             if (animator == null) animator = GetComponent<Animator>();
             if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>();
+            if (damageArea == null) damageArea = GetComponent<ProjectileDamageArea>();
+
+            // Reset damage area state
+            if (damageArea != null)
+            {
+                damageArea.ResetDamageState();
+            }
 
             // Disable animator FIRST so it stops rendering explosion frames
             if (animator != null)

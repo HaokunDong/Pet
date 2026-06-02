@@ -6,7 +6,7 @@ namespace PetGame
     /// <summary>
     /// Custom editor for ProjectileSkillEffectData.
     /// Displays a warning if projectilePrefab is not assigned,
-    /// and draws a wire disc gizmo in the Scene view to visualize the explosion radius.
+    /// and validates that the prefab has required components.
     /// </summary>
     [CustomEditor(typeof(ProjectileSkillEffectData))]
     public class ProjectileSkillEffectDataEditor : Editor
@@ -14,14 +14,12 @@ namespace PetGame
         private SerializedProperty projectilePrefab;
         private SerializedProperty projectileFlightDuration;
         private SerializedProperty projectileArcHeight;
-        private SerializedProperty explosionRadius;
 
         private void OnEnable()
         {
             projectilePrefab = serializedObject.FindProperty("projectilePrefab");
             projectileFlightDuration = serializedObject.FindProperty("projectileFlightDuration");
             projectileArcHeight = serializedObject.FindProperty("projectileArcHeight");
-            explosionRadius = serializedObject.FindProperty("explosionRadius");
         }
 
         public override void OnInspectorGUI()
@@ -32,7 +30,7 @@ namespace PetGame
             EditorGUILayout.LabelField("Projectile Settings", EditorStyles.boldLabel);
 
             EditorGUILayout.PropertyField(projectilePrefab, new GUIContent("Projectile Prefab",
-                "Prefab for the projectile. Must have SpriteRenderer, Animator, and ProjectileController components."));
+                "Prefab for the projectile. Must have SpriteRenderer, Animator, ProjectileController, and ProjectileDamageArea components."));
 
             // Show warning if prefab is not assigned
             if (projectilePrefab.objectReferenceValue == null)
@@ -51,11 +49,13 @@ namespace PetGame
                     bool hasController = prefab.GetComponent<ProjectileController>() != null;
                     bool hasSpriteRenderer = prefab.GetComponent<SpriteRenderer>() != null;
                     bool hasAnimator = prefab.GetComponent<Animator>() != null;
+                    bool hasDamageArea = prefab.GetComponent<ProjectileDamageArea>() != null;
 
-                    if (!hasController || !hasSpriteRenderer || !hasAnimator)
+                    if (!hasController || !hasSpriteRenderer || !hasAnimator || !hasDamageArea)
                     {
                         string missing = "";
                         if (!hasController) missing += "ProjectileController, ";
+                        if (!hasDamageArea) missing += "ProjectileDamageArea, ";
                         if (!hasSpriteRenderer) missing += "SpriteRenderer, ";
                         if (!hasAnimator) missing += "Animator, ";
                         missing = missing.TrimEnd(',', ' ');
@@ -75,20 +75,11 @@ namespace PetGame
 
             EditorGUILayout.Space(10);
 
-            // --- Explosion Settings ---
-            EditorGUILayout.LabelField("Explosion Settings", EditorStyles.boldLabel);
-
-            EditorGUILayout.PropertyField(explosionRadius, new GUIContent("Explosion Radius",
-                "Radius of the AOE damage circle at the landing point."));
-
-            // Visual indicator of the radius value
-            if (explosionRadius.floatValue > 0f)
-            {
-                EditorGUILayout.HelpBox(
-                    $"Explosion radius: {explosionRadius.floatValue:F2} units (diameter: {explosionRadius.floatValue * 2f:F2} units)\n" +
-                    "A circle gizmo will be drawn in the Scene view when a ProjectileController is selected.",
-                    MessageType.Info);
-            }
+            // --- Info about damage configuration ---
+            EditorGUILayout.HelpBox(
+                "Damage area and trigger mode are now configured on the projectile prefab's ProjectileDamageArea component.\n" +
+                "Select the prefab to configure damage shapes and trigger mode (AnimationEvent or OnCollision).",
+                MessageType.Info);
 
             serializedObject.ApplyModifiedProperties();
         }

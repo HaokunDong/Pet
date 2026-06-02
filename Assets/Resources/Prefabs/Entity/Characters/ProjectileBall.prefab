@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 8755548070268753526}
   - component: {fileID: 434328527831653120}
   - component: {fileID: 5145992490139043866}
+  - component: {fileID: 1634716495134987687}
   m_Layer: 0
   m_Name: ProjectileBall
   m_TagString: Untagged
@@ -119,3 +120,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f8e2d3947c32d88429713b2032932156, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &1634716495134987687
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5234936525060002432}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7aed28fa2817657409dcfe80b9dd508f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  triggerMode: 0
+  damageShapes:
+  - shapeType: 0
+    offset: {x: 0, y: 0}
+    radius: 0.66
+    size: {x: 0, y: 0}
+  defaultFacesRight: 1

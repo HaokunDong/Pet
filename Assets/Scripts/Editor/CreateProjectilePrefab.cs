@@ -53,6 +53,9 @@ namespace PetGame
             // Add ProjectileController — handles flight + explosion logic
             template.AddComponent<ProjectileController>();
 
+            // Add ProjectileDamageArea — handles damage range and trigger mode
+            template.AddComponent<ProjectileDamageArea>();
+
             // Save as prefab
             GameObject prefab = PrefabUtility.SaveAsPrefabAsset(template, prefabPath);
 
@@ -72,10 +75,13 @@ namespace PetGame
                     "1. Assign a sprite to the SpriteRenderer\n" +
                     "2. Create an AnimatorController with:\n" +
                     "   - A default state for the flight appearance\n" +
-                    "   - An 'Explode' trigger parameter\n" +
-                    "   - A transition to an explosion animation state\n" +
+                    "   - An explosion animation state (Entry → Explosion)\n" +
                     "3. Assign the AnimatorController to the Animator component\n" +
-                    "4. Drag this prefab into your ProjectileSkillEffectData asset",
+                    "4. Configure ProjectileDamageArea:\n" +
+                    "   - Set Trigger Mode (AnimationEvent or OnCollision)\n" +
+                    "   - Add Damage Shapes to define the damage area\n" +
+                    "   - For AnimationEvent mode: add OnDamageEvent() as animation event\n" +
+                    "5. Drag this prefab into your ProjectileSkillEffectData asset",
                     "OK");
 
                 Debug.Log($"[CreateProjectilePrefab] Prefab created at: {prefabPath}");

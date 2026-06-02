@@ -23,11 +23,6 @@ namespace PetGame
         [Min(0f)]
         public float projectileArcHeight = 1.5f;
 
-        [Header("Explosion Settings")]
-        [Tooltip("Radius of the AOE damage circle at the landing point.")]
-        [Min(0f)]
-        public float explosionRadius = 1.0f;
-
         // --- Pool registration tracking (static to survive ScriptableObject persistence) ---
         private static HashSet<string> registeredPoolKeys = new HashSet<string>();
         private string poolKey;
@@ -122,7 +117,6 @@ namespace PetGame
                 predictedPos,
                 projectileFlightDuration,
                 projectileArcHeight,
-                explosionRadius,
                 dmg,
                 casterCharType,
                 () =>

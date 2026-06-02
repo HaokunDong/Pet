@@ -15,4 +15,3 @@ MonoBehaviour:
   projectilePrefab: {fileID: 5234936525060002432, guid: 540551d775356b94cb16a2e1d6bf74bd, type: 3}
   projectileFlightDuration: 0.6
   projectileArcHeight: 1.5
-  explosionRadius: 4
