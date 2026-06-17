@@ -4,17 +4,23 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using System.Linq;
+using PetGame;
 using PetGame.UI;
 
 public class MainView : BaseView
 {
-    private GameObject menus;
+    private GameObject ringRadialMenu;
 
     private GameObject blackHole;
-    private GameObject button1;
-    private GameObject button2;
-    private GameObject button3;
-    private GameObject button4;
+
+    // CharacterButton on the RingRadialMenu replaces the legacy Menus/Button1.
+    private RingRadialMenuButton characterButton;
+    // ControlButton on the RingRadialMenu replaces the legacy Menus/Button2.
+    private RingRadialMenuButton controlButton;
+    // FriendsButton on the RingRadialMenu replaces the legacy Menus/Button3.
+    private RingRadialMenuButton friendsButton;
+    // SettingButton on the RingRadialMenu replaces the legacy Menus/Button4.
+    private RingRadialMenuButton settingButton;
 
     [Header("Lobby")]
     [SerializeField] private LobbyPanel lobbyPanel;
@@ -29,19 +35,20 @@ public class MainView : BaseView
 
     protected override void OnAwake()
     {
-        //transform.Find("Button1").GetComponent<Button>().onClick.AddListener(OnButton1Click);
-        menus = transform.Find("Menus").gameObject;
+        ringRadialMenu = transform.Find("RingRadialMenu").gameObject;
 
         blackHole = transform.Find("BlackHole").gameObject;
-        button1 = transform.Find("Menus/Button1").gameObject;
-        button2 = transform.Find("Menus/Button2").gameObject;
-        button3 = transform.Find("Menus/Button3").gameObject;
-        button4 = transform.Find("Menus/Button4").gameObject;
         EventTriggerListener.Get(blackHole).onClick = OnButtonClick;
-        EventTriggerListener.Get(button1).onClick = OnButtonClick;
-        EventTriggerListener.Get(button2).onClick = OnButtonClick;
-        EventTriggerListener.Get(button3).onClick = OnButtonClick;
-        EventTriggerListener.Get(button4).onClick = OnButtonClick;
+
+        // Bind RingRadialMenu buttons (replaces legacy Menus/Button1..4):
+        //   CharacterButton -> Button1 (toggle card-spline distributor)
+        //   ControlButton   -> Button2
+        //   FriendsButton   -> Button3 (toggle LobbyPanel)
+        //   SettingButton   -> Button4
+        characterButton = BindRingButton("CharacterButton", OnCharacterButtonClick);
+        controlButton   = BindRingButton("ControlButton",   OnControlButtonClick);
+        friendsButton   = BindRingButton("FriendsButton",   OnFriendsButtonClick);
+        settingButton   = BindRingButton("SettingButton",   OnSettingButtonClick);
 
         // Load sprite sheets from Resources
         Sprite[] idleSprites = Resources.LoadAll<Sprite>("UI/MainMenu/idle")
@@ -60,12 +67,8 @@ public class MainView : BaseView
 
         // Initialize sprite animation for each button
         InitButtonSpriteAnim(blackHole, idleSprites, onClickSprites);
-        // InitButtonSpriteAnim(button1, idleSprites, onClickSprites);
-        // InitButtonSpriteAnim(button2, idleSprites, onClickSprites);
-        // InitButtonSpriteAnim(button3, idleSprites, onClickSprites);
-        // InitButtonSpriteAnim(button4, idleSprites, onClickSprites);
 
-        menus.SetActive(false);
+        ringRadialMenu.SetActive(false);
     }
 
     /// <summary>
@@ -94,39 +97,82 @@ public class MainView : BaseView
             {
                 _btnAnimMap[go].PlayOnClick();
             }
-            menus.SetActive(!menus.activeSelf);
+            ringRadialMenu.SetActive(!ringRadialMenu.activeSelf);
         }
-        else if (go == button1)
+    }
+
+    /// <summary>
+    /// Find a RingRadialMenuButton by child name under "RingRadialMenu" and bind its click callback.
+    /// Returns null (and logs a warning) if the node or component is missing.
+    /// </summary>
+    private RingRadialMenuButton BindRingButton(string childName, UnityEngine.Events.UnityAction onClick)
+    {
+        Transform tr = transform.Find("RingRadialMenu/" + childName);
+        if (tr == null)
         {
-            if (cardDistributor == null)
-                cardDistributor = FindObjectOfType<PetGame.CardSplineDistributor>();
-            if (cardDistributor != null)
-                cardDistributor.ToggleVisibility();
-        }
-        else if (go == button2)
-        {
-            Debug.Log("button2");
-        }
-        else if (go == button3)
-        {
-            if (lobbyPanel != null)
-            {
-                // Toggle: if already active, hide; otherwise show
-                if (lobbyPanel.gameObject.activeSelf)
-                    lobbyPanel.Hide();
-                else
-                    lobbyPanel.Show();
-            }
-            else
-            {
-                Debug.LogWarning("[MainView] LobbyPanel reference not set!");
-            }
-        }
-        else if (go == button4)
-        {
-            Debug.Log("button4");
+            Debug.LogWarning($"[MainView] RingRadialMenu/{childName} not found under MainView.");
+            return null;
         }
 
+        RingRadialMenuButton btn = tr.GetComponent<RingRadialMenuButton>();
+        if (btn == null)
+        {
+            Debug.LogWarning($"[MainView] RingRadialMenu/{childName} has no RingRadialMenuButton component.");
+            return null;
+        }
+
+        btn.SetCallback(onClick);
+        return btn;
+    }
+
+    /// <summary>
+    /// Click handler for the RingRadialMenu's CharacterButton.
+    /// Migrated from the legacy Menus/Button1: toggles the card-spline distributor visibility.
+    /// </summary>
+    private void OnCharacterButtonClick()
+    {
+        if (cardDistributor == null)
+            cardDistributor = FindObjectOfType<PetGame.CardSplineDistributor>();
+        if (cardDistributor != null)
+            cardDistributor.ToggleVisibility();
+    }
+
+    /// <summary>
+    /// Click handler for the RingRadialMenu's ControlButton.
+    /// Migrated from the legacy Menus/Button2.
+    /// </summary>
+    private void OnControlButtonClick()
+    {
+        Debug.Log("ControlButton");
+    }
+
+    /// <summary>
+    /// Click handler for the RingRadialMenu's FriendsButton.
+    /// Migrated from the legacy Menus/Button3: toggles the LobbyPanel visibility.
+    /// </summary>
+    private void OnFriendsButtonClick()
+    {
+        if (lobbyPanel != null)
+        {
+            // Toggle: if already active, hide; otherwise show
+            if (lobbyPanel.gameObject.activeSelf)
+                lobbyPanel.Hide();
+            else
+                lobbyPanel.Show();
+        }
+        else
+        {
+            Debug.LogWarning("[MainView] LobbyPanel reference not set!");
+        }
+    }
+
+    /// <summary>
+    /// Click handler for the RingRadialMenu's SettingButton.
+    /// Migrated from the legacy Menus/Button4.
+    /// </summary>
+    private void OnSettingButtonClick()
+    {
+        Debug.Log("SettingButton");
     }
 
     // protected override void AddEvent() {
