@@ -12,6 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5e95b7bc24987a34e9d1852c57ff2a1d, type: 3}
   m_Name: BonneSkillEffect
   m_EditorClassIdentifier: 
+  displacementType: 0
+  displacementDirection: 0
+  displacementDistance: 0
+  displacementDuration: 0.2
+  damagesDuringDisplacement: 0
   projectilePrefab: {fileID: 5234936525060002432, guid: 540551d775356b94cb16a2e1d6bf74bd, type: 3}
   projectileFlightDuration: 0.6
   projectileArcHeight: 1.5

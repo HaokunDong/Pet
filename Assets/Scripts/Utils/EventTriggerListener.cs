@@ -13,7 +13,9 @@ public class EventTriggerListener : EventTrigger
 	public VoidDelegate onUpdateSelect;
 	public VoidDelegate onBeginDrag;
 
-
+	// Flag to track whether a drag operation is in progress.
+	// When true, OnPointerClick will be suppressed.
+	private bool _isDragging = false;
 
 	static public EventTriggerListener Get(GameObject go)
 	{
@@ -23,6 +25,12 @@ public class EventTriggerListener : EventTrigger
 	}
 	public override void OnPointerClick(PointerEventData eventData)
 	{
+		// Suppress click if a drag just occurred
+		if (_isDragging)
+		{
+			_isDragging = false;
+			return;
+		}
 		if (onClick != null) onClick(gameObject);
 	}
 	public override void OnPointerDown(PointerEventData eventData)
@@ -51,15 +59,19 @@ public class EventTriggerListener : EventTrigger
 	}
 	public override void OnBeginDrag(PointerEventData eventData)
 	{
+		_isDragging = true;
 		if (onBeginDrag != null) onBeginDrag(gameObject);
 	}
 
 	public override void OnEndDrag(PointerEventData eventData)
 	{
+		// Note: _isDragging is reset in OnPointerClick (which fires after OnEndDrag).
 	}
 
-	public override void OnDrag(PointerEventData data)
+	public override void OnDrag(PointerEventData eventData)
 	{
+		// Intentionally empty – drag movement is handled by BlackHoleDragHandler.
+		// Unity EventSystem calls all IDragHandler components on the same GameObject,
+		// so BlackHoleDragHandler.OnDrag will be invoked automatically.
 	}
-
 }
