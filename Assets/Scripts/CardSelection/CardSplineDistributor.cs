@@ -272,9 +272,16 @@ namespace PetGame
                 cards[i].gameObject.SetActive(isVisible);
             }
 
-            // Notify focus system to update sorting
+            // Notify focus system to update sorting and card interaction state
             if (focusChanged)
             {
+                // Update focus state on all cards (only the focus card is interactable)
+                for (int i = 0; i < cards.Count; i++)
+                {
+                    if (cards[i] != null)
+                        cards[i].SetFocused(i == newFocusIndex);
+                }
+
                 OnFocusChanged?.Invoke(FocusIndex);
             }
         }

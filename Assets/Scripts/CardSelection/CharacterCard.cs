@@ -24,6 +24,26 @@ namespace PetGame
         [Tooltip("Text overlay to display cooldown remaining seconds. Will be created dynamically if not assigned.")]
         [SerializeField] private TMP_Text cooldownText;
 
+        [Header("Train Button")]
+        [Tooltip("Reference to the Train button. Will be found dynamically if not assigned.")]
+        [SerializeField] private Button trainButton;
+
+        // Path to the TrainView prefab in Resources
+        private const string TrainViewPrefabPath = "Prefabs/UI/View/TrainView";
+
+        // X offset for TrainView position relative to this card
+        private const float TrainViewXOffset = 364f;
+
+        // Current TrainView instance managed by this card
+        private GameObject trainViewInstance;
+
+        /// <summary>
+        /// Whether this card is currently the focus (center) card.
+        /// Only the focus card allows button clicks and card-face interactions.
+        /// Updated by CardSplineDistributor when focus changes.
+        /// </summary>
+        public bool IsFocused { get; private set; }
+
         /// <summary>
         /// The CharacterData currently bound to this card. Null if no data is set.
         /// </summary>
@@ -41,6 +61,86 @@ namespace PetGame
         public float CooldownRemaining { get; private set; }
 
         private const string DefaultDescription = "\u5b83\u8fd8\u5f88\u795e\u79d8\u54e6~";
+
+        private void Awake()
+        {
+            // Find Train button if not assigned in Inspector
+            if (trainButton == null)
+            {
+                Transform trainTrans = transform.Find("Train");
+                if (trainTrans != null)
+                    trainButton = trainTrans.GetComponent<Button>();
+            }
+
+            // Bind click event
+            if (trainButton != null)
+                trainButton.onClick.AddListener(OnTrainButtonClicked);
+        }
+
+        /// <summary>
+        /// Sets the focus state of this card. Called by CardSplineDistributor
+        /// when the focus card index changes.
+        /// </summary>
+        /// <param name="focused">True if this card is the center/focus card.</param>
+        public void SetFocused(bool focused)
+        {
+            IsFocused = focused;
+
+            // Update Train button interactable state
+            if (trainButton != null)
+                trainButton.interactable = focused;
+        }
+
+        /// <summary>
+        /// Handles Train button click. Toggles the TrainView on/off.
+        /// </summary>
+        private void OnTrainButtonClicked()
+        {
+            // Only the focus (center) card can respond to button clicks
+            if (!IsFocused) return;
+
+            // If TrainView already exists, destroy it (toggle off)
+            if (trainViewInstance != null)
+            {
+                Destroy(trainViewInstance);
+                trainViewInstance = null;
+                return;
+            }
+
+            // Load TrainView prefab
+            GameObject prefab = Resources.Load<GameObject>(TrainViewPrefabPath);
+            if (prefab == null)
+            {
+                Debug.LogWarning("CharacterCard: Failed to load TrainView prefab from " + TrainViewPrefabPath);
+                return;
+            }
+
+            // Instantiate under the same parent (Canvas level)
+            Transform parentTransform = transform.parent != null ? transform.parent : transform;
+            trainViewInstance = Instantiate(prefab, parentTransform);
+
+            // Position the TrainView at card position + X offset
+            RectTransform cardRect = (RectTransform)transform;
+            RectTransform viewRect = trainViewInstance.GetComponent<RectTransform>();
+            if (viewRect != null)
+            {
+                viewRect.anchoredPosition = cardRect.anchoredPosition + new Vector2(TrainViewXOffset, 0f);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            // Remove button listener
+            if (trainButton != null)
+                trainButton.onClick.RemoveListener(OnTrainButtonClicked);
+
+            // Destroy TrainView instance if still exists
+            if (trainViewInstance != null)
+            {
+                Destroy(trainViewInstance);
+                trainViewInstance = null;
+            }
+        }
 
         /// <summary>
         /// Populates the card UI with data from the given CharacterData.
