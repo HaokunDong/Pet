@@ -152,9 +152,11 @@ namespace PetGame
             float focusT = Settings.focusT;
             int count = characterDataList.Length;
 
-            // Calculate base t-values so that the middle card sits at focusT
-            float totalSpan = (count - 1) * spacing;
-            float startT = focusT - totalSpan * 0.5f;
+            // Calculate base t-values so that the target focus card sits exactly at focusT.
+            // For odd count: middle card (count/2) aligns to focusT.
+            // For even count: upper-median card (count/2 - 1) aligns to focusT.
+            int focusCardIndex = (count % 2 == 0) ? (count / 2 - 1) : (count / 2);
+            float startT = focusT - focusCardIndex * spacing;
 
             for (int i = 0; i < count; i++)
             {

@@ -32,7 +32,7 @@ namespace PetGame
         private const string TrainViewPrefabPath = "Prefabs/UI/View/TrainView";
 
         // X offset for TrainView position relative to this card
-        private const float TrainViewXOffset = 364f;
+        private const float TrainViewXOffset = 546f;
 
         // Current TrainView instance managed by this card
         private GameObject trainViewInstance;
@@ -89,6 +89,13 @@ namespace PetGame
             // Update Train button interactable state
             if (trainButton != null)
                 trainButton.interactable = focused;
+
+            // Auto-dismiss TrainView when this card loses focus (e.g. drag switch)
+            if (!focused && trainViewInstance != null)
+            {
+                Destroy(trainViewInstance);
+                trainViewInstance = null;
+            }
         }
 
         /// <summary>
