@@ -185,5 +185,44 @@ namespace PetGame
         /// Check if any talent points are available for spending.
         /// </summary>
         public bool HasTalentPoints => talentPoints > 0;
+
+        /// <summary>
+        /// Calculate available talent points based on level and total spent points.
+        /// Formula: (level - 1) - sum of all attribute levels.
+        /// This is a validation method; normally talentPoints field is authoritative.
+        /// </summary>
+        public int GetAvailableTalentPoints()
+        {
+            int totalSpent = attackLevel + defenseLevel + healthLevel + attackSpeedLevel + moveSpeedLevel + skillCDLevel;
+            return Mathf.Max(0, (level - 1) - totalSpent);
+        }
+
+        /// <summary>
+        /// Directly set the attribute level for a specific type.
+        /// Used by the talent confirmation system to batch-apply changes.
+        /// Also adjusts talentPoints accordingly.
+        /// </summary>
+        public void SetAttributeLevel(AttributeType type, int newLevel)
+        {
+            int oldLevel = GetAttributeLevel(type);
+            int diff = newLevel - oldLevel;
+            if (diff == 0) return;
+
+            // Adjust talent points
+            talentPoints -= diff;
+
+            switch (type)
+            {
+                case AttributeType.Attack: attackLevel = newLevel; break;
+                case AttributeType.Defense: defenseLevel = newLevel; break;
+                case AttributeType.Health: healthLevel = newLevel; break;
+                case AttributeType.AttackSpeed: attackSpeedLevel = newLevel; break;
+                case AttributeType.MoveSpeed: moveSpeedLevel = newLevel; break;
+                case AttributeType.SkillCD: skillCDLevel = newLevel; break;
+            }
+
+            OnTalentPointChanged?.Invoke(talentPoints);
+            OnAttributeUpgraded?.Invoke(type, newLevel);
+        }
     }
 }

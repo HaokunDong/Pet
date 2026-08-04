@@ -161,6 +161,7 @@ namespace PetGame
 
         /// <summary>
         /// Get the skill cooldown reduction multiplier for a character.
+        /// Combines growth CDR (1% per level above 1) and talent CDR (1% per talent level).
         /// Returns a value like 0.85 meaning 15% CDR (skills cooldown 85% of original).
         /// </summary>
         public float GetSkillCDMultiplier(string characterId)
@@ -168,8 +169,14 @@ namespace PetGame
             CultivationData data = GetCultivationData(characterId);
             if (data == null) return 1f;
 
-            float reductionPercent = data.skillCDLevel * Config.skillCDBonusPerLevel;
-            return Mathf.Max(0.1f, 1f - reductionPercent / 100f); // Cap at 90% CDR
+            // Growth CDR: (level - 1) * 1%
+            float growthReduction = (data.level - 1) * 1f;
+            // Talent CDR: skillCDLevel * 1%
+            float talentReduction = data.skillCDLevel * 1f;
+            // Total CDR percentage
+            float totalReduction = growthReduction + talentReduction;
+
+            return Mathf.Max(0.1f, 1f - totalReduction / 100f); // Cap at 90% CDR
         }
 
         /// <summary>

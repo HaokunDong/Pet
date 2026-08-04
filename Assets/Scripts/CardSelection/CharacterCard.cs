@@ -127,10 +127,13 @@ namespace PetGame
             trainViewInstance = Instantiate(prefab, parentTransform);
 
             // Add TrainViewController to manage TalentSystem panel toggling
-            if (trainViewInstance.GetComponent<TrainViewController>() == null)
+            TrainViewController trainController = trainViewInstance.GetComponent<TrainViewController>();
+            if (trainController == null)
             {
-                trainViewInstance.AddComponent<TrainViewController>();
+                trainController = trainViewInstance.AddComponent<TrainViewController>();
             }
+            // Pass character data to the TrainViewController
+            trainController.SetCharacterData(Data);
 
             // Position the TrainView at card position + X offset
             RectTransform cardRect = (RectTransform)transform;
