@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a6a0b0d820e370e4ba3c9378a58acab8, type: 3}
+  m_Name: JiZhenStageTwo_SkillOneEffect
+  m_EditorClassIdentifier: 
+  displacementType: 0
+  displacementDirection: 0
+  displacementDistance: 0
+  displacementDuration: 0.2
+  damagesDuringDisplacement: 0
+  skillRangeShapes:
+  - shapeType: 0
+    offset: {x: 1.15, y: 0}
+    radius: 1.29
+    size: {x: 0, y: 0}
+  defaultFacesRight: 0
