@@ -53,6 +53,15 @@ namespace PetGame
         [Tooltip("Composable attack range shapes. Union of all shapes defines the final attack area. At least one shape must be defined.")]
         public AttackRangeShape[] attackRangeShapes;
 
+        [Header("Combo Attack")]
+        [Tooltip("Number of combo attack steps. 1 = single attack (default, backward compatible). >1 = multi-step combo.")]
+        [Min(1)]
+        public int comboCount = 1;
+
+        [Tooltip("Damage multiplier for each combo step. Index 0 = first attack, 1 = second, etc. " +
+                 "If not set or length is insufficient, defaults to 1.0 for that step.")]
+        public float[] comboDamageMultipliers;
+
         [Header("Normal Attack Displacement")]
         [Tooltip("Type of displacement for normal attack: Fixed (set direction + distance) or LockOn (lock target position, move toward it).")]
         public SkillDisplacementType attackDisplacementType = SkillDisplacementType.Fixed;
@@ -140,6 +149,20 @@ namespace PetGame
                 case QualityLevel.SSS: return 4;
                 default:               return 1;
             }
+        }
+
+        /// <summary>
+        /// Returns the damage multiplier for the given combo step.
+        /// If comboDamageMultipliers is not configured or the index is out of range, returns 1.0.
+        /// </summary>
+        /// <param name="step">Zero-based combo step index.</param>
+        public float GetComboDamageMultiplier(int step)
+        {
+            if (comboDamageMultipliers == null || step < 0 || step >= comboDamageMultipliers.Length)
+            {
+                return 1.0f;
+            }
+            return comboDamageMultipliers[step];
         }
 
 #if UNITY_EDITOR

@@ -118,6 +118,23 @@ namespace PetGame
             // but keep this guard explicit for clarity in case the early-return is later relaxed).
             if (entity.CharAnimator != null && entity.CharAnimator.IsInSkillState) return;
 
+            // If currently in an attack animation that is cancellable, cancel it immediately
+            // so the skill can be cast without waiting for the attack to finish.
+            bool isInAttackAnimation = entity.CharAnimator != null && entity.CharAnimator.IsFacingLocked;
+            if (isInAttackAnimation)
+            {
+                if (combatSystem.CanBeCancelled)
+                {
+                    // Cancel the attack animation immediately
+                    combatSystem.TryCancelAnimation();
+                }
+                else
+                {
+                    // Not cancellable yet — ignore skill input during protected attack frames
+                    return;
+                }
+            }
+
             // Pick a target: prefer the currently engaged attackTarget if alive and within skill range,
             // otherwise fall back to the nearest living enemy within the skill's range.
             CharacterEntity target = ResolveSkillTarget(skillData);
@@ -193,6 +210,8 @@ namespace PetGame
 
         /// <summary>
         /// Handle right-click input for movement and targeting.
+        /// During attack animation, clicking on an enemy does NOT interrupt the current attack
+        /// (similar to League of Legends behavior). Only clicking on empty ground cancels attack mode.
         /// </summary>
         private void HandleRightClickInput()
         {
@@ -200,14 +219,40 @@ namespace PetGame
 
             Vector2 mouseWorldPos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
 
-            // New right-click input always interrupts sustained attack
-            isAttacking = false;
+            // Determine if we are currently in an attack animation (protected state)
+            bool isInAttackAnimation = entity.CharAnimator != null && entity.CharAnimator.IsFacingLocked;
 
             // Check if clicked on an enemy
             CharacterEntity clickedEnemy = GetEnemyAtPoint(mouseWorldPos);
             if (clickedEnemy != null)
             {
-                // Clicked on an enemy — cancel any point-to-move
+                if (isInAttackAnimation)
+                {
+                    // During attack animation: do NOT interrupt current attack.
+                    // Update attack target (allows target switching after current attack ends),
+                    // and if combo window is open, buffer the input as a combo continuation.
+                    attackTarget = clickedEnemy;
+
+                    // Trigger bold pulse outline feedback on the clicked enemy
+                    if (clickedEnemy.OutlineFx != null)
+                    {
+                        clickedEnemy.OutlineFx.ShouldRemainAfterPulse = (hoveredEnemy == clickedEnemy);
+                        clickedEnemy.OutlineFx.TriggerBoldPulse();
+                    }
+
+                    if (combatSystem.IsComboWindowOpen)
+                    {
+                        // Combo window is open: treat this click as combo buffer input
+                        combatSystem.BufferComboInput();
+                    }
+                    // If combo window is not open: ignore the click (don't interrupt, don't reset)
+                    // Ensure we stay in attacking mode
+                    isAttacking = true;
+                    return;
+                }
+
+                // Not in attack animation: normal attack initiation
+                // Cancel any point-to-move
                 hasTargetX = false;
                 DestroyCurrentArrow();
 
@@ -244,11 +289,15 @@ namespace PetGame
                     // Out of range: chase
                     isChasing = true;
                     isMoving = false;
+                    isAttacking = false;
                 }
                 return;
             }
 
-            // Clicked on empty area: point-to-move to the click X position
+            // Clicked on empty area: cancel attack mode.
+            // If the animation is in a cancellable state, immediately cancel it (skip remaining frames).
+            // Otherwise, just record the move intent — the attack will finish naturally.
+            isAttacking = false;
             attackTarget = null;
             isChasing = false;
 
@@ -266,6 +315,12 @@ namespace PetGame
             targetX = clickX;
             hasTargetX = true;
             isMoving = true;
+
+            // If in a cancellable attack animation, cancel it immediately and start moving
+            if (isInAttackAnimation && combatSystem.CanBeCancelled)
+            {
+                combatSystem.TryCancelAnimation();
+            }
 
             // Spawn arrow indicator at click position (destroy old one first)
             DestroyCurrentArrow();
@@ -363,6 +418,7 @@ namespace PetGame
         /// <summary>
         /// Handle sustained attack: keep attacking target at attack speed interval.
         /// Character stays still until player issues a new right-click command.
+        /// Supports combo system: when combo window is open, buffers next attack input.
         /// </summary>
         private void HandleSustainedAttack()
         {
@@ -373,23 +429,41 @@ namespace PetGame
             {
                 attackTarget = null;
                 isAttacking = false;
+                // Do NOT reset combo state here — let the current attack animation finish naturally.
+                // Combo state will be reset when the character actually changes state (ClearCurrentState).
                 StopMoving();
                 return;
             }
 
-            // Check if target moved out of attack range.
-            float dx = attackTarget.transform.position.x - transform.position.x;
-            float facingSign3 = entity.CharAnimator != null
-                ? entity.CharAnimator.FacingDirection
-                : (dx >= 0f ? 1f : -1f);
-            bool inRange = entity.RuntimeStats.IsTargetInAttackRange(
-                transform.position, facingSign3, attackTarget.transform.position);
+            // If attack animation is currently playing (facing locked), skip range check.
+            // During the attack animation, the character should not abort just because
+            // the target moved slightly out of range — the combo window needs to remain active.
+            bool isInAttackAnimation = entity.CharAnimator != null && entity.CharAnimator.IsFacingLocked;
 
-            if (!inRange)
+            if (!isInAttackAnimation)
             {
-                // Target left range — stop attacking, stay idle
-                isAttacking = false;
-                StopMoving();
+                // Only check range when NOT in an attack animation
+                float dx = attackTarget.transform.position.x - transform.position.x;
+                float facingSign3 = entity.CharAnimator != null
+                    ? entity.CharAnimator.FacingDirection
+                    : (dx >= 0f ? 1f : -1f);
+                bool inRange = entity.RuntimeStats.IsTargetInAttackRange(
+                    transform.position, facingSign3, attackTarget.transform.position);
+
+                if (!inRange)
+                {
+                    // Target left range — stop attacking, stay idle.
+                    // Do NOT reset combo state here — it will be reset when state actually changes.
+                    isAttacking = false;
+                    StopMoving();
+                    return;
+                }
+            }
+
+            // If combo window is open, buffer the next combo input
+            if (combatSystem.IsComboWindowOpen)
+            {
+                combatSystem.BufferComboInput();
                 return;
             }
 

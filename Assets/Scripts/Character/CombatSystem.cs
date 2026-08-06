@@ -21,6 +21,14 @@ namespace PetGame
         private bool _isAttacking;
         private Vector2 _cachedAttackPosition;
 
+        // --- Combo attack state ---
+        private int _comboStep;
+        private bool _comboWindowOpen;
+        private bool _comboInputBuffered;
+
+        // --- Animation cancel state ---
+        private bool _canBeCancelled;
+
         /// <summary>
         /// The current cached attack target (primary target for skills / facing reference).
         /// </summary>
@@ -41,6 +49,29 @@ namespace PetGame
         /// Whether the character is currently in an attack/skill animation waiting for hit frame.
         /// </summary>
         public bool IsAttacking => _isAttacking;
+
+        /// <summary>
+        /// Current combo step (0-based). 0 = first attack.
+        /// </summary>
+        public int ComboStep => _comboStep;
+
+        /// <summary>
+        /// Whether the combo input window is currently open (accepting next-step input).
+        /// </summary>
+        public bool IsComboWindowOpen => _comboWindowOpen;
+
+        /// <summary>
+        /// Whether the current animation is in a "cancellable" state.
+        /// Set to true when OnCancellablePoint fires; reset on new attack/combo step/state clear.
+        /// </summary>
+        public bool CanBeCancelled => _canBeCancelled;
+
+        /// <summary>
+        /// Maximum combo count for this character (from CharacterData).
+        /// </summary>
+        public int MaxComboCount => entity != null && entity.RuntimeStats != null
+            ? entity.RuntimeStats.comboCount
+            : 1;
 
         private void Awake()
         {
@@ -115,9 +146,15 @@ namespace PetGame
             // can decide to skip facing updates when the target is too close.
             if (entity.CharAnimator != null)
             {
+                // Reset combo state for a fresh attack sequence
+                _comboStep = 0;
+                _comboWindowOpen = false;
+                _comboInputBuffered = false;
+                _canBeCancelled = false;
+
                 // Lock facing direction for the duration of the attack to prevent jitter
                 entity.CharAnimator.LockFacing();
-                entity.CharAnimator.PlayAttack();
+                entity.CharAnimator.PlayAttack(_comboStep);
             }
 
             return true;
@@ -171,6 +208,7 @@ namespace PetGame
             _cachedSkillIndex = skillIndex;
             _isAttacking = true;
             _cachedAttackPosition = transform.position;
+            _canBeCancelled = false;
 
             // Lock facing and play skill animation.
             // NOTE: We do NOT call FaceTowards here. The caller is responsible for
@@ -213,6 +251,10 @@ namespace PetGame
             GameObject[] candidates = GameObject.FindGameObjectsWithTag(targetTag);
             int hitCount = 0;
 
+            // Calculate damage with combo multiplier
+            float comboDamageMultiplier = entity.RuntimeStats.GetComboDamageMultiplier(_comboStep);
+            float damage = entity.RuntimeStats.attackPower * comboDamageMultiplier;
+
             for (int i = 0; i < candidates.Length; i++)
             {
                 CharacterEntity target = candidates[i].GetComponent<CharacterEntity>();
@@ -221,7 +263,7 @@ namespace PetGame
                 if (entity.RuntimeStats.IsTargetInAttackRange(
                         attackOrigin, facingSign, target.transform.position))
                 {
-                    target.TakeDamage(entity.RuntimeStats.attackPower, entity);
+                    target.TakeDamage(damage, entity);
                     hitCount++;
                 }
             }
@@ -229,7 +271,8 @@ namespace PetGame
             // Apply normal attack displacement if configured (Fixed type only)
             ApplyNormalAttackDisplacement(targetTag, facingSign);
 
-            ClearAttackState();
+            // Clear attack state but preserve combo state (combo continues until OnStateEnd)
+            ClearAttackStateKeepCombo();
         }
 
         /// <summary>
@@ -421,6 +464,165 @@ namespace PetGame
             _cachedSkillIndex = -1;
             _isAttacking = false;
             _cachedAttackPosition = Vector2.zero;
+            ResetComboState();
+        }
+
+        /// <summary>
+        /// Clear cached attack state but preserve combo state.
+        /// Used after the hit frame fires damage — the combo window hasn't opened yet,
+        /// and we need to keep combo state intact for the upcoming OnComboWindowOpen and OnStateEnd events.
+        /// </summary>
+        private void ClearAttackStateKeepCombo()
+        {
+            _cachedTarget = null;
+            _cachedFacingSign = 0f;
+            _cachedSkillIndex = -1;
+            _isAttacking = false;
+            _cachedAttackPosition = Vector2.zero;
+        }
+
+        // ==================== Combo Attack System ====================
+
+        /// <summary>
+        /// Called by AnimEventReceiver when the OnComboWindowOpen animation event fires.
+        /// Opens the combo input window, allowing the next attack step to be buffered.
+        /// </summary>
+        public void OpenComboWindow()
+        {
+            _comboWindowOpen = true;
+        }
+
+        /// <summary>
+        /// Buffer the next combo input. Called by ManualController or AI when the combo window is open.
+        /// If the window is open and the current step has not reached max combo count, marks input as buffered.
+        /// </summary>
+        public void BufferComboInput()
+        {
+            if (_comboWindowOpen && _comboStep + 1 < MaxComboCount)
+            {
+                _comboInputBuffered = true;
+            }
+        }
+
+        /// <summary>
+        /// Reset all combo state to initial values.
+        /// Called when combo ends, is interrupted, or attack state is cleared.
+        /// </summary>
+        public void ResetComboState()
+        {
+            _comboStep = 0;
+            _comboWindowOpen = false;
+            _comboInputBuffered = false;
+            _canBeCancelled = false;
+        }
+
+        /// <summary>
+        /// Called by CharacterAnimator.ClearCurrentState() when OnStateEnd fires.
+        /// Determines whether to continue the combo or return to Idle.
+        /// </summary>
+        /// <returns>True if combo continues (next step initiated), false if should return to Idle.</returns>
+        public bool HandleComboOnStateEnd()
+        {
+            if (_comboInputBuffered && _comboStep + 1 < MaxComboCount)
+            {
+                TryComboNextStep();
+                return true;
+            }
+
+            // No buffered input or reached max combo — reset and let caller return to Idle
+            ResetComboState();
+            return false;
+        }
+
+        /// <summary>
+        /// Advance to the next combo step. Increments combo step, resets window/buffer,
+        /// and plays the next attack animation without returning to Idle.
+        /// </summary>
+        private void TryComboNextStep()
+        {
+            _comboStep++;
+            _comboWindowOpen = false;
+            _comboInputBuffered = false;
+            _canBeCancelled = false;
+
+            // Re-cache attack position for the new step
+            _cachedAttackPosition = transform.position;
+            _isAttacking = true;
+
+            if (entity.CharAnimator != null)
+            {
+                // Keep facing locked, play next combo attack
+                entity.CharAnimator.LockFacing();
+                entity.CharAnimator.PlayComboNextAttack(_comboStep);
+            }
+        }
+
+        // ==================== Animation Cancel ====================
+
+        /// <summary>
+        /// Called by AnimEventReceiver when OnCancellablePoint animation event fires.
+        /// Implements the full cancellable-point logic with priority:
+        ///   1. If combo input is buffered and next step exists → immediate combo skip (accelerate)
+        ///   2. Otherwise → just mark as cancellable, wait for non-attack input or OnStateEnd
+        /// For skill states, combo check is skipped; only marks as cancellable.
+        /// </summary>
+        public void HandleCancellablePoint()
+        {
+            // If in skill state (not normal attack), skip combo logic — just mark cancellable
+            if (entity.CharAnimator != null && entity.CharAnimator.IsInSkillState)
+            {
+                _canBeCancelled = true;
+                return;
+            }
+
+            // Priority 1: Combo skip acceleration
+            // If combo input has been buffered and there is a next step available,
+            // immediately skip remaining frames and chain to the next attack.
+            if (_comboInputBuffered && _comboStep + 1 < MaxComboCount)
+            {
+                // Do NOT mark as cancellable — we're skipping directly to next attack
+                _canBeCancelled = false;
+                TryComboNextStep();
+                return;
+            }
+
+            // Priority 2: No combo buffered — just mark as cancellable
+            // The animation will continue playing normally until either:
+            //   - A non-attack input triggers TryCancelAnimation()
+            //   - OnStateEnd fires naturally
+            _canBeCancelled = true;
+        }
+
+        /// <summary>
+        /// Attempt to cancel the current animation (skip remaining frames).
+        /// Used when the player inputs a non-attack action (move, skill) while
+        /// the animation is in a cancellable state.
+        /// Returns true if cancellation was successful.
+        /// </summary>
+        public bool TryCancelAnimation()
+        {
+            if (!_canBeCancelled) return false;
+
+            // Prevent double-trigger within the same animation
+            _canBeCancelled = false;
+
+            // Reset combo state (combo chain is broken by non-attack action)
+            ResetComboState();
+
+            // Clear attack state
+            _cachedTarget = null;
+            _cachedFacingSign = 0f;
+            _cachedSkillIndex = -1;
+            _isAttacking = false;
+            _cachedAttackPosition = Vector2.zero;
+
+            // Delegate animation cleanup to CharacterAnimator
+            if (entity.CharAnimator != null)
+            {
+                entity.CharAnimator.CancelCurrentAnimation();
+            }
+
+            return true;
         }
 
         // ==================== Utility ====================

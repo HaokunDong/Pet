@@ -24,6 +24,10 @@ namespace PetGame
         public QualityLevel qualityLevel;
         public CharacterType characterType;
 
+        // Combo attack parameters
+        public int comboCount;
+        public float[] comboDamageMultipliers;
+
         // Knockback parameters
         public float knockbackHorizontalSpeed;
         public float knockbackVerticalSpeed;
@@ -38,6 +42,20 @@ namespace PetGame
         /// Whether the character is alive.
         /// </summary>
         public bool IsAlive => currentHealth > 0f;
+
+        /// <summary>
+        /// Returns the damage multiplier for the given combo step.
+        /// If comboDamageMultipliers is not configured or the index is out of range, returns 1.0.
+        /// </summary>
+        /// <param name="step">Zero-based combo step index.</param>
+        public float GetComboDamageMultiplier(int step)
+        {
+            if (comboDamageMultipliers == null || step < 0 || step >= comboDamageMultipliers.Length)
+            {
+                return 1.0f;
+            }
+            return comboDamageMultipliers[step];
+        }
 
         /// <summary>
         /// Initialize runtime stats from a CharacterData template.
@@ -76,6 +94,10 @@ namespace PetGame
             defaultFacesRight = data.defaultFacesRight;
             qualityLevel = data.qualityLevel;
             characterType = data.characterType;
+
+            // Combo attack parameters
+            comboCount = Mathf.Max(1, data.comboCount);
+            comboDamageMultipliers = data.comboDamageMultipliers;
 
             // Knockback parameters
             knockbackHorizontalSpeed = data.knockbackHorizontalSpeed;

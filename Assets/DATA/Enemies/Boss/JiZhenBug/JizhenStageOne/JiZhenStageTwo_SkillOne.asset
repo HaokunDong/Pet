@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   skillId: JiZhen_02_Skill_01
   skillName: FireRoit
-  cooldown: 1
+  cooldown: 7
   damage: 50
   skillRange: 1.96
   icon: {fileID: 0}

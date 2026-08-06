@@ -20,8 +20,11 @@ namespace PetGame
     /// 
     /// === ANIMATOR CONTROLLER CONFIGURATION GUIDE ===
     /// 
-    /// Parameters (all Bool type):
+    /// Parameters (Bool type):
     ///   Idle, Walk, Attack, Hit, Death, SkillOne, SkillTwo, SkillThree, SkillFour
+    /// 
+    /// Parameters (Int type):
+    ///   AttackIndex — used for multi-step combo attacks (0 = Attack1, 1 = Attack2, etc.)
     /// 
     /// Entry → State transitions (left side):
     ///   - Entry → Idle:      (default, no condition — lowest priority / fallback)
@@ -49,6 +52,53 @@ namespace PetGame
     ///   - Has Exit Time = false (unchecked)
     ///   - Transition Duration = 0 (instant)
     ///   - Can Transition To Self = false (for non-Hit states)
+    /// 
+    /// === MULTI-STEP COMBO ATTACK CONFIGURATION ===
+    /// 
+    /// For characters with comboCount > 1 in CharacterData:
+    /// 
+    /// Option A: BlendTree (recommended for simple cases)
+    ///   - Create a BlendTree in the Attack state.
+    ///   - Set Blend Parameter to "AttackIndex" (Int).
+    ///   - Add motion fields: Attack1 clip at 0, Attack2 clip at 1, etc.
+    ///   - Each clip must have Animation Events: OnAttackHit → OnComboWindowOpen → OnCancellablePoint → OnStateEnd.
+    /// 
+    /// Option B: Sub-State Machine with multiple Attack states
+    ///   - Create Attack1, Attack2, etc. states inside a Sub-State Machine.
+    ///   - Entry → Attack1: condition AttackIndex == 0
+    ///   - Entry → Attack2: condition AttackIndex == 1
+    ///   - Each state → Exit: condition Attack == false
+    ///   - Each clip must have Animation Events: OnAttackHit → OnComboWindowOpen → OnCancellablePoint → OnStateEnd.
+    /// 
+    /// Animation Events order for each attack clip:
+    ///   1. OnAttackHit — damage frame (required)
+    ///   2. OnComboWindowOpen — opens combo input window (required for combo, optional for last step)
+    ///   3. OnCancellablePoint — marks animation as cancellable / triggers combo skip (optional)
+    ///   4. OnStateEnd — ends the animation state (required)
+    /// 
+    /// === ANIMATION CANCEL / FRAME SKIP ===
+    /// 
+    /// OnCancellablePoint is an optional Animation Event that enables two features:
+    ///   1. Combo Skip Acceleration: if combo input was buffered (player pressed attack during
+    ///      combo window), the animation immediately skips to the next attack step at this point.
+    ///   2. Non-Attack Cancel: after this point, non-attack inputs (move, skill) can immediately
+    ///      cancel the remaining animation frames and transition to the new state.
+    /// 
+    /// Configuration:
+    ///   - Place OnCancellablePoint AFTER OnComboWindowOpen and BEFORE OnStateEnd.
+    ///   - OnCancellablePoint and OnComboWindowOpen are independent events:
+    ///     * OnComboWindowOpen controls "when can the next attack input be buffered"
+    ///     * OnCancellablePoint controls "when can the animation be skipped/cancelled"
+    ///   - If OnCancellablePoint is not configured, the animation cannot be cancelled early
+    ///     (backward compatible — it will play to OnStateEnd as before).
+    ///   - Can also be used in Skill animation clips to allow skill post-cast cancellation.
+    /// 
+    /// 
+    /// For single-attack characters (comboCount = 1):
+    ///   - No changes needed. AttackIndex defaults to 0.
+    ///   - Existing Attack state with single clip works as before.
+    ///   - OnComboWindowOpen event is optional (if absent, no combo chaining occurs).
+    ///   - OnCancellablePoint event is optional (if absent, no frame skip/cancel occurs).
     /// 
     /// IMPORTANT Animator Controller setup:
     /// - All transitions MUST have Has Exit Time = false.
@@ -320,12 +370,76 @@ namespace PetGame
         /// Play normal attack animation. Delegates to state machine.
         /// In Entry/Exit mode, OnExit() of the current state clears its Bool,
         /// then OnEnter() of AttackState sets Attack Bool = true.
+        /// Supports combo system via attackIndex parameter.
         /// </summary>
-        public void PlayAttack()
+        /// <param name="attackIndex">Zero-based combo step index (0 = first attack).</param>
+        public void PlayAttack(int attackIndex = 0)
         {
             if (stateMachine == null) return;
 
+            // Configure the attack state with the correct index before transitioning
+            var attackState = stateMachine.GetState<AttackState>();
+            if (attackState != null)
+            {
+                attackState.SetAttackIndex(attackIndex);
+            }
+
             stateMachine.ChangeState<AttackState>();
+
+            // After entering AttackState, force Animator to play from EmptyState
+            // to ensure the correct attack animation is selected based on AttackIndex.
+            // This is necessary because if the previous attack just ended and we're
+            // starting a new combo from step 0, the Animator might still be in the
+            // previous attack state (e.g., Attack2) due to loop timing.
+            // Also explicitly set AttackIndex on the Animator in case ChangeState
+            // was a no-op (already in AttackState) and OnEnter didn't fire.
+            if (animator != null)
+            {
+                animator.SetInteger(Animator.StringToHash("AttackIndex"), attackIndex);
+                animator.Play("Base Layer.Attack.EmptyState", 0, 0f);
+                animator.Update(0f);
+            }
+        }
+
+        /// <summary>
+        /// Play the next combo attack step without returning to Idle.
+        /// Instead of exiting and re-entering AttackState (which causes same-frame
+        /// Attack=false→true issues with Animator), this method keeps the state machine
+        /// in AttackState and directly updates the AttackIndex parameter, then uses
+        /// Animator.Play() to force the Animator into the target attack animation state.
+        /// </summary>
+        /// <param name="attackIndex">Zero-based combo step index for the next attack.</param>
+        public void PlayComboNextAttack(int attackIndex)
+        {
+            if (stateMachine == null) return;
+
+            // Update the attack index in the state (for consistency)
+            var attackState = stateMachine.GetState<AttackState>();
+            if (attackState != null)
+            {
+                attackState.SetAttackIndex(attackIndex);
+            }
+
+            // Clear protection so the state can be exited later by OnStateEnd
+            stateMachine.ClearProtection();
+            // Re-enable protection for the new attack step
+            stateMachine.isAttacking = true;
+            stateMachine.canBeInterrupted = false;
+
+            // Directly update the Animator parameter and force-play the target state.
+            // This avoids the Exit→Entry→SubStateMachine re-entry issue.
+            if (animator != null)
+            {
+                animator.SetInteger(Animator.StringToHash("AttackIndex"), attackIndex);
+                // Force the Animator to re-enter the Attack Sub-State Machine's EmptyState.
+                // EmptyState has transitions to Attack1/Attack2 based on AttackIndex value.
+                // Using the full path "Base Layer.Attack.EmptyState" for Sub-State Machine states.
+                animator.Play("Base Layer.Attack.EmptyState", 0, 0f);
+                // Force Animator to evaluate transitions immediately in the same frame,
+                // so it transitions from EmptyState to the correct attack state without
+                // showing a blank frame.
+                animator.Update(0f);
+            }
         }
 
         /// <summary>
@@ -355,15 +469,33 @@ namespace PetGame
 
         /// <summary>
         /// Called when the current state animation finishes (via animation event or CombatSystem).
-        /// Clears the protection so the character can transition to other states,
-        /// then automatically transitions back to Idle state.
-        /// In Entry/Exit mode, this triggers: current state OnExit() (Bool=false → Exit)
-        /// then IdleState OnEnter() (Idle Bool=true → Entry → Idle).
+        /// Clears the protection so the character can transition to other states.
+        /// For attack states, checks with CombatSystem if a combo continuation is buffered.
+        /// If combo continues, plays the next attack step without returning to Idle.
+        /// Otherwise, transitions back to Idle state.
         /// Applicable to Attack, Skill, and Hit states.
         /// </summary>
         public void ClearCurrentState()
         {
             if (stateMachine == null) return;
+
+            // Only process if we're actually in a protected state (Attack, Skill, Hit).
+            // If already in Idle/Walk, this is a stale event from a looping animation — ignore it.
+            if (stateMachine.isIdle || stateMachine.isWalking)
+            {
+                return;
+            }
+
+            // Check if this is an attack state ending and combo should continue
+            if (stateMachine.isAttacking && combatSystem != null)
+            {
+                if (combatSystem.HandleComboOnStateEnd())
+                {
+                    // Combo continues — CombatSystem has already initiated the next step
+                    // via PlayComboNextAttack(). Do NOT unlock facing or return to Idle.
+                    return;
+                }
+            }
 
             // Unlock facing direction now that the animation has fully finished.
             facingLocked = false;
@@ -380,19 +512,58 @@ namespace PetGame
         }
 
         /// <summary>
+        /// Cancel the current animation immediately (skip remaining frames).
+        /// Unlike ClearCurrentState(), this does NOT check combo continuation —
+        /// it unconditionally ends the current animation, unlocks facing, clears protection,
+        /// and transitions to Idle. The caller is responsible for initiating the next state
+        /// (e.g., move or skill) after this method returns.
+        /// Called by CombatSystem.TryCancelAnimation() when a non-attack input is received
+        /// during the cancellable window.
+        /// </summary>
+        public void CancelCurrentAnimation()
+        {
+            if (stateMachine == null) return;
+
+            // Only process if we're actually in a protected state (Attack, Skill, Hit).
+            if (stateMachine.isIdle || stateMachine.isWalking)
+            {
+                return;
+            }
+
+            // Unlock facing direction
+            facingLocked = false;
+
+            // Clear protection so state can be changed
+            stateMachine.ClearProtection();
+
+            // Transition to Idle (caller will immediately transition to the desired state)
+            if (!stateMachine.isDead && !stateMachine.isIdle && !stateMachine.isWalking)
+            {
+                stateMachine.ChangeState<IdleState>();
+            }
+        }
+
+        /// <summary>
         /// Play hit/hurt animation. Delegates to state machine.
         /// Does NOT clear pending attack state — an ongoing attack should still
         /// deal damage even if the attacker is hit mid-swing (animation event fires normally).
         /// If already in Hit state, replays the animation from the beginning
         /// (in Entry/Exit mode: exits to Exit then re-enters from Entry).
         /// Sets a protection period so behavior tree ticks don't interrupt the animation.
+        /// Resets combo state so the combo chain is broken on hit.
         /// </summary>
         public void PlayHit()
         {
             if (stateMachine == null) return;
 
+            // Reset combo state on hit — combo chain is broken.
             // NOTE: intentionally NOT calling ClearAttackStateIfNeeded() here.
             // The attack's damage frame event should still fire even if we get hit.
+            if (combatSystem != null)
+            {
+                combatSystem.ResetComboState();
+            }
+
             stateMachine.ChangeState<HitState>();
         }
 

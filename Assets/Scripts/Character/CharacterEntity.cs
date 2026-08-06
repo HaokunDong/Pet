@@ -414,10 +414,7 @@ namespace PetGame
         /// </summary>
         private void OnDrawGizmosSelected()
         {
-            if (RuntimeStats != null)
-            {
-                DrawAttackRangeGizmos(selected: true);
-            }
+            DrawAttackRangeGizmos(selected: true);
             DrawSkillRangeGizmos(selected: true);
         }
 
@@ -426,10 +423,7 @@ namespace PetGame
         /// </summary>
         private void OnDrawGizmos()
         {
-            if (RuntimeStats != null)
-            {
-                DrawAttackRangeGizmos(selected: false);
-            }
+            DrawAttackRangeGizmos(selected: false);
             DrawSkillRangeGizmos(selected: false);
         }
 
@@ -439,12 +433,33 @@ namespace PetGame
         /// </summary>
         private void DrawAttackRangeGizmos(bool selected)
         {
+            // Resolve data source: prefer RuntimeStats at runtime, fallback to characterData in edit mode
+            AttackRangeShape[] shapes;
+            float minAtkDist;
+            float engDist;
+
+            if (RuntimeStats != null)
+            {
+                shapes = RuntimeStats.attackRangeShapes;
+                minAtkDist = RuntimeStats.minAttackDistance;
+                engDist = RuntimeStats.engageDistance;
+            }
+            else if (characterData != null)
+            {
+                shapes = characterData.attackRangeShapes;
+                minAtkDist = characterData.minAttackDistance;
+                engDist = characterData.engageDistance;
+            }
+            else
+            {
+                return;
+            }
+
             float fillAlpha = selected ? 0.15f : 0.05f;
             float wireAlpha = selected ? 0.5f : 0.15f;
             Color fillColor = new Color(1f, 0f, 0f, fillAlpha);
             Color wireColor = new Color(1f, 0f, 0f, wireAlpha);
 
-            AttackRangeShape[] shapes = RuntimeStats.attackRangeShapes;
             float facingSign = GetFacingSign();
             Vector3 pos = transform.position;
 
@@ -485,7 +500,6 @@ namespace PetGame
             }
 
             // Draw minAttackDistance as a green circle
-            float minAtkDist = RuntimeStats.minAttackDistance;
             if (minAtkDist > 0f)
             {
                 Color minDistWire = new Color(0f, 1f, 0f, selected ? 0.6f : 0.2f);
@@ -499,7 +513,6 @@ namespace PetGame
             }
 
             // Draw engageDistance as a yellow circle
-            float engDist = RuntimeStats.engageDistance;
             if (engDist > 0f)
             {
                 Color engDistWire = new Color(1f, 1f, 0f, selected ? 0.5f : 0.15f);

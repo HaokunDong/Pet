@@ -380,11 +380,31 @@ namespace PetGame.AI
             // (post-hit-frame but animation still playing until OnStateEnd).
             if (combatSystem != null && combatSystem.IsAttacking)
             {
+                // During combo: if combo window is open, check if target is still in attack range
+                // and buffer next combo input automatically.
+                HandleAIComboBuffer(owner, target);
+
+                // If animation is cancellable and a skill is ready, cancel attack to use skill.
+                if (combatSystem.CanBeCancelled)
+                {
+                    if (TryAICancelForSkill(owner, target))
+                        return;
+                }
                 return;
             }
             if (owner.CharAnimator != null && owner.CharAnimator.StateMachine != null 
                 && owner.CharAnimator.StateMachine.isAttacking)
             {
+                // During combo: if combo window is open, check if target is still in attack range
+                // and buffer next combo input automatically.
+                HandleAIComboBuffer(owner, target);
+
+                // If animation is cancellable and a skill is ready, cancel attack to use skill.
+                if (combatSystem != null && combatSystem.CanBeCancelled)
+                {
+                    if (TryAICancelForSkill(owner, target))
+                        return;
+                }
                 return;
             }
 
@@ -439,6 +459,107 @@ namespace PetGame.AI
                 // Execute() will re-evaluate next frame and switch to Engage if needed.
                 owner.CharAnimator.PlayIdle();
             }
+        }
+
+        // ---------------- AI Animation Cancel ----------------
+
+        /// <summary>
+        /// Attempt to cancel the current attack animation to use a ready skill.
+        /// Only triggers if the animation is in a cancellable state AND a skill is ready
+        /// AND the target is within skill range. This allows AI to interrupt combo chains
+        /// for high-priority skill usage.
+        /// Returns true if cancellation was performed and skill was fired.
+        /// </summary>
+        private bool TryAICancelForSkill(CharacterEntity owner, CharacterEntity target)
+        {
+            if (combatSystem == null) return false;
+
+            CharacterType type = owner.RuntimeStats.characterType;
+            if (type != CharacterType.Player && type != CharacterType.Boss) return false;
+
+            int readySkill = combatSystem.GetFirstReadySkillIndex();
+            if (readySkill < 0) return false;
+
+            // Check if target is within skill range
+            if (target == null || !target.RuntimeStats.IsAlive) return false;
+            SkillData skillData = owner.characterData.skills[readySkill];
+            if (skillData == null) return false;
+            float dist = Vector2.Distance(owner.transform.position, target.transform.position);
+            if (dist > skillData.skillRange) return false;
+
+            // Cancel the attack animation
+            combatSystem.TryCancelAnimation();
+
+            // Face the target before casting
+            float dx = target.transform.position.x - owner.transform.position.x;
+            if (owner.CharAnimator != null && Mathf.Abs(dx) > 0.01f)
+            {
+                owner.CharAnimator.SetFacingDirection(dx);
+            }
+
+            // Use the skill
+            bool fired = combatSystem.TryUseSkill(readySkill, target);
+            if (fired)
+            {
+                context.LastAttackTime = Time.time;
+            }
+            return fired;
+        }
+
+        // ---------------- AI Combo Buffer ----------------
+
+        /// <summary>
+        /// During an ongoing attack animation, check if the combo window is open.
+        /// If so, determine whether the target is still in attack range:
+        /// - If yes: buffer the next combo input so the attack chains automatically.
+        /// - If no: do nothing (combo will end naturally at OnStateEnd).
+        /// This implements the AI behavior: "打完全套连击 if enemy stays in range,
+        /// 当前段结束后回Idle if enemy leaves range."
+        /// </summary>
+        private void HandleAIComboBuffer(CharacterEntity owner, CharacterEntity target)
+        {
+            if (combatSystem == null) return;
+            if (!combatSystem.IsComboWindowOpen) return;
+
+            // Check if target is still alive and in attack range
+            if (target == null || !target.RuntimeStats.IsAlive)
+            {
+                // No valid target — don't buffer, combo will end at OnStateEnd
+                return;
+            }
+
+            float dx = target.transform.position.x - owner.transform.position.x;
+            float facingSign;
+            if (Mathf.Abs(dx) < StrikeFacingDeadzone && owner.CharAnimator != null)
+            {
+                facingSign = owner.CharAnimator.FacingDirection;
+            }
+            else
+            {
+                facingSign = dx >= 0f ? 1f : -1f;
+            }
+
+            bool inRange;
+            if (Mathf.Abs(dx) < 0.3f)
+            {
+                // Overlapping: check both directions
+                inRange = owner.RuntimeStats.IsTargetInAttackRange(
+                              owner.transform.position, 1f, target.transform.position) ||
+                          owner.RuntimeStats.IsTargetInAttackRange(
+                              owner.transform.position, -1f, target.transform.position);
+            }
+            else
+            {
+                inRange = owner.RuntimeStats.IsTargetInAttackRange(
+                    owner.transform.position, facingSign, target.transform.position);
+            }
+
+            if (inRange)
+            {
+                // Target is in range — buffer next combo step
+                combatSystem.BufferComboInput();
+            }
+            // If not in range, don't buffer — combo will end naturally at OnStateEnd
         }
     }
 }
