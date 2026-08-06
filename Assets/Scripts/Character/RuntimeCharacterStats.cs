@@ -17,7 +17,6 @@ namespace PetGame
         public float defense;
         public float moveSpeed;
         public float attackSpeed;
-        public float engageDistance;
         public float minAttackDistance;
         public AttackRangeShape[] attackRangeShapes;
         public bool defaultFacesRight;
@@ -70,21 +69,16 @@ namespace PetGame
             moveSpeed = data.moveSpeed;
             attackSpeed = data.attackSpeed;
 
-            // Clamp engageDistance to be strictly smaller than the max attack distance.
-            // If the designer set a value >= max attack distance (or left it at a larger default),
-            // fall back to 90% of max attack distance so the AI stops inside its attack range.
-            // Note: BTCombat.Execute() also uses IsTargetInAttackRange() for Strike entry,
-            // so even if engageDistance is slightly off, the character will still attack correctly.
+            // Compute engage distance directly from attack range (90% of max attack distance).
             float maxAttackDist = AttackRangeHelper.GetMaxAttackDistance(data.attackRangeShapes);
-            engageDistance = Mathf.Min(data.engageDistance, maxAttackDist * 0.9f);
-            if (engageDistance <= 0f)
+            float engageDist = maxAttackDist * 0.9f;
+            if (engageDist <= 0f)
             {
-                // Safety: never let engageDistance be non-positive, otherwise AI can never enter Strike.
-                engageDistance = maxAttackDist * 0.9f;
+                engageDist = 0.5f; // Safety fallback
             }
 
-            // Clamp minAttackDistance to be no larger than engageDistance.
-            minAttackDistance = Mathf.Min(data.minAttackDistance, engageDistance);
+            // Clamp minAttackDistance to be no larger than the computed engage distance.
+            minAttackDistance = Mathf.Min(data.minAttackDistance, engageDist);
             if (minAttackDistance <= 0f)
             {
                 minAttackDistance = 0.05f;
@@ -131,6 +125,63 @@ namespace PetGame
             // If sprite faces left by default:  facingSign -1 (left) means no mirror, 1 (right) means mirror.
             float effectiveFacingSign = defaultFacesRight ? facingSign : -facingSign;
             return AttackRangeHelper.IsTargetInRange(ownerPos, effectiveFacingSign, attackRangeShapes, targetPos);
+        }
+
+        /// <summary>
+        /// Check if a target is within this character's attack range, ignoring Y-axis difference
+        /// and considering the target's collider X extent.
+        /// For side-scrolling games: as long as the attack range overlaps with the target's
+        /// collider X interval, the target is considered in range.
+        /// </summary>
+        /// <param name="ownerPos">Owner character collider center position.</param>
+        /// <param name="facingSign">1 for facing right, -1 for facing left.</param>
+        /// <param name="targetPos">Target collider center position.</param>
+        /// <param name="targetHalfExtentX">Half width of the target's collider bounds on X axis.</param>
+        /// <returns>True if target is in attack range.</returns>
+        public bool IsTargetInAttackRange(Vector2 ownerPos, float facingSign, Vector2 targetPos, float targetHalfExtentX)
+        {
+            float effectiveFacingSign = defaultFacesRight ? facingSign : -facingSign;
+
+            // Ignore Y-axis difference: project target onto owner's Y level
+            Vector2 flatTargetPos = new Vector2(targetPos.x, ownerPos.y);
+
+            // First check: target collider center (X-aligned) is in attack range
+            if (AttackRangeHelper.IsTargetInRange(ownerPos, effectiveFacingSign, attackRangeShapes, flatTargetPos))
+            {
+                return true;
+            }
+
+            // Second check: if the attack range overlaps with the target's collider X interval,
+            // test the left and right edges of the target's collider.
+            // This ensures that even if the center is slightly out of range,
+            // the attack still connects as long as it touches the collider's X bounds.
+            if (targetHalfExtentX > 0f)
+            {
+                Vector2 leftEdge = new Vector2(targetPos.x - targetHalfExtentX, ownerPos.y);
+                if (AttackRangeHelper.IsTargetInRange(ownerPos, effectiveFacingSign, attackRangeShapes, leftEdge))
+                {
+                    return true;
+                }
+
+                Vector2 rightEdge = new Vector2(targetPos.x + targetHalfExtentX, ownerPos.y);
+                if (AttackRangeHelper.IsTargetInRange(ownerPos, effectiveFacingSign, attackRangeShapes, rightEdge))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Get the engage distance derived from attack range (90% of max attack distance).
+        /// AI uses this to decide when to switch from Engage to Strike state.
+        /// </summary>
+        public float GetEngageDistance()
+        {
+            float maxDist = GetMaxAttackDistance();
+            float engage = maxDist * 0.9f;
+            return engage > 0f ? engage : 0.5f;
         }
 
         /// <summary>

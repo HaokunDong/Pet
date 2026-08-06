@@ -143,7 +143,7 @@ namespace PetGame
             // Face the target before casting (CombatSystem will lock facing during the animation).
             if (entity.CharAnimator != null)
             {
-                float dx = target.transform.position.x - transform.position.x;
+                float dx = target.ColliderCenter.x - entity.ColliderCenter.x;
                 if (Mathf.Abs(dx) > 0.01f)
                 {
                     entity.CharAnimator.SetFacingDirection(dx);
@@ -176,7 +176,7 @@ namespace PetGame
             // 1) Prefer current attackTarget if valid and in range.
             if (attackTarget != null && attackTarget.RuntimeStats != null && attackTarget.RuntimeStats.IsAlive)
             {
-                float d = Vector2.Distance(transform.position, attackTarget.transform.position);
+                float d = Vector2.Distance(entity.ColliderCenter, attackTarget.ColliderCenter);
                 if (d <= skillRange)
                 {
                     return attackTarget;
@@ -266,10 +266,10 @@ namespace PetGame
                 }
 
                 // Check if already in attack range using multi-shape system
-                float atkDx = attackTarget.transform.position.x - transform.position.x;
+                float atkDx = attackTarget.ColliderCenter.x - entity.ColliderCenter.x;
                 float facingSign1 = atkDx >= 0f ? 1f : -1f;
                 bool inRangeForAttack = entity.RuntimeStats.IsTargetInAttackRange(
-                    transform.position, facingSign1, attackTarget.transform.position);
+                    entity.ColliderCenter, facingSign1, attackTarget.ColliderCenter, attackTarget.ColliderHalfExtentX);
 
                 if (inRangeForAttack)
                 {
@@ -336,6 +336,16 @@ namespace PetGame
         {
             if (!isMoving || isChasing || !hasTargetX) return;
 
+            // Block movement while attack animation has not reached the cancellable point (frame skip event).
+            bool isInAttackAnimation = entity.CharAnimator != null && entity.CharAnimator.IsFacingLocked;
+            if (isInAttackAnimation && !combatSystem.CanBeCancelled) return;
+
+            // If attack animation reached cancellable point and we want to move, cancel it now.
+            if (isInAttackAnimation && combatSystem.CanBeCancelled)
+            {
+                combatSystem.TryCancelAnimation();
+            }
+
             float charX = transform.position.x;
             float distance = Mathf.Abs(targetX - charX);
 
@@ -370,6 +380,16 @@ namespace PetGame
         {
             if (!isChasing || attackTarget == null) return;
 
+            // Block chase movement while attack animation has not reached the cancellable point.
+            bool isInAttackAnimation = entity.CharAnimator != null && entity.CharAnimator.IsFacingLocked;
+            if (isInAttackAnimation && !combatSystem.CanBeCancelled) return;
+
+            // If attack animation reached cancellable point and we want to chase, cancel it now.
+            if (isInAttackAnimation && combatSystem.CanBeCancelled)
+            {
+                combatSystem.TryCancelAnimation();
+            }
+
             // Check if target is still alive
             if (!attackTarget.RuntimeStats.IsAlive)
             {
@@ -380,11 +400,11 @@ namespace PetGame
                 return;
             }
 
-            float dx = attackTarget.transform.position.x - transform.position.x;
+            float dx = attackTarget.ColliderCenter.x - entity.ColliderCenter.x;
             float facingSign2 = dx >= 0f ? 1f : -1f;
 
             if (entity.RuntimeStats.IsTargetInAttackRange(
-                    transform.position, facingSign2, attackTarget.transform.position))
+                    entity.ColliderCenter, facingSign2, attackTarget.ColliderCenter, attackTarget.ColliderHalfExtentX))
             {
                 // In range: stop moving and enter sustained attack mode
                 isChasing = false;
@@ -443,12 +463,12 @@ namespace PetGame
             if (!isInAttackAnimation)
             {
                 // Only check range when NOT in an attack animation
-                float dx = attackTarget.transform.position.x - transform.position.x;
+                float dx = attackTarget.ColliderCenter.x - entity.ColliderCenter.x;
                 float facingSign3 = entity.CharAnimator != null
                     ? entity.CharAnimator.FacingDirection
                     : (dx >= 0f ? 1f : -1f);
                 bool inRange = entity.RuntimeStats.IsTargetInAttackRange(
-                    transform.position, facingSign3, attackTarget.transform.position);
+                    entity.ColliderCenter, facingSign3, attackTarget.ColliderCenter, attackTarget.ColliderHalfExtentX);
 
                 if (!inRange)
                 {

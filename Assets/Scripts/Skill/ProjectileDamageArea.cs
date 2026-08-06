@@ -171,7 +171,7 @@ namespace PetGame
                 CharacterEntity target = candidates[i].GetComponent<CharacterEntity>();
                 if (target == null || !target.RuntimeStats.IsAlive) continue;
 
-                Vector2 targetPos = target.transform.position;
+                Vector2 targetPos = target.ColliderCenter;
 
                 if (AttackRangeHelper.IsTargetInRange(center, facingSign, damageShapes, targetPos))
                 {

@@ -21,7 +21,7 @@ namespace PetGame.AI
         public float wallDetectDistance = 0.5f;
 
         [Header("Combat Hysteresis")]
-        [Tooltip("Extra distance beyond engageDistance before Strike falls back to Engage (anti-jitter).")]
+        [Tooltip("Extra distance beyond engage distance before Strike falls back to Engage (anti-jitter).")]
         [Min(0f)]
         public float engageExitHysteresis = 0.1f;
 

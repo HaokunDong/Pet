@@ -77,7 +77,7 @@ namespace PetGame
             EnsurePrefabRegistered();
 
             // Calculate predicted landing position based on target's current velocity
-            Vector3 targetPos = target != null ? target.transform.position : caster.transform.position + Vector3.right;
+            Vector3 targetPos = target != null ? (Vector3)target.ColliderCenter : caster.transform.position + Vector3.right;
             Vector2 targetVelocity = target != null ? target.Velocity : Vector2.zero;
             Vector3 predictedPos = targetPos + (Vector3)(targetVelocity * projectileFlightDuration);
 

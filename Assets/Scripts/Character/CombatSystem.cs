@@ -99,7 +99,7 @@ namespace PetGame
             // Check attack range using multi-shape system.
             // When overlapping (|dx| very small), check BOTH directions to ensure
             // the attack doesn't fail just because the target is slightly "behind" the facing.
-            float dx = target.transform.position.x - transform.position.x;
+            float dx = target.ColliderCenter.x - entity.ColliderCenter.x;
             float facingSign;
             const float FacingDeadzone = 0.15f;
             if (Mathf.Abs(dx) < FacingDeadzone && entity.CharAnimator != null)
@@ -116,14 +116,14 @@ namespace PetGame
             {
                 // Overlapping: check both facing directions for range
                 inRange = entity.RuntimeStats.IsTargetInAttackRange(
-                              transform.position, 1f, target.transform.position) ||
+                              entity.ColliderCenter, 1f, target.ColliderCenter, target.ColliderHalfExtentX) ||
                           entity.RuntimeStats.IsTargetInAttackRange(
-                              transform.position, -1f, target.transform.position);
+                              entity.ColliderCenter, -1f, target.ColliderCenter, target.ColliderHalfExtentX);
             }
             else
             {
                 inRange = entity.RuntimeStats.IsTargetInAttackRange(
-                    transform.position, facingSign, target.transform.position);
+                    entity.ColliderCenter, facingSign, target.ColliderCenter, target.ColliderHalfExtentX);
             }
 
             if (!inRange)
@@ -186,12 +186,12 @@ namespace PetGame
             if (skillData == null) return false;
 
             // Check skill range
-            float dist = Vector2.Distance(transform.position, target.transform.position);
+            float dist = Vector2.Distance(entity.ColliderCenter, target.ColliderCenter);
             if (dist > skillData.skillRange) return false;
 
             // Compute facing sign toward target.
             // When overlapping, use current facing to avoid jitter.
-            float dx = target.transform.position.x - transform.position.x;
+            float dx = target.ColliderCenter.x - entity.ColliderCenter.x;
             float facingSign;
             if (Mathf.Abs(dx) < 0.15f && entity.CharAnimator != null)
             {
@@ -261,7 +261,7 @@ namespace PetGame
                 if (target == null || !target.RuntimeStats.IsAlive) continue;
 
                 if (entity.RuntimeStats.IsTargetInAttackRange(
-                        attackOrigin, facingSign, target.transform.position))
+                        attackOrigin, facingSign, target.ColliderCenter, target.ColliderHalfExtentX))
                 {
                     target.TakeDamage(damage, entity);
                     hitCount++;
@@ -290,7 +290,7 @@ namespace PetGame
             if (_cachedTarget == null || !_cachedTarget.RuntimeStats.IsAlive)
                 return;
 
-            Vector2 lockedPos = _cachedTarget.transform.position;
+            Vector2 lockedPos = _cachedTarget.ColliderCenter;
 
             // Determine the enemy tag based on GameObject tag
             string targetTag = entity.gameObject.CompareTag("Player")
@@ -358,7 +358,7 @@ namespace PetGame
                 float dirMul = (data.attackDisplacementDirection == SkillDisplacementDirection.Forward) ? 1f : -1f;
                 float moveDir = facingSign * dirMul;
                 float currentX = transform.position.x;
-                float targetX = _cachedTarget.transform.position.x;
+                float targetX = _cachedTarget.ColliderCenter.x;
                 float afterDisplacementX = currentX + moveDir * data.attackDisplacementDistance;
 
                 // Check if displacement would overshoot the target:
@@ -662,7 +662,7 @@ namespace PetGame
                 Debug.LogWarning($"[CombatSystem] {gameObject.name}: ApplySkillLockOnDisplacement - target is null or dead");
                 return;
             }
-            Vector2 lockedPos = _cachedTarget.transform.position;
+            Vector2 lockedPos = _cachedTarget.ColliderCenter;
             Debug.Log($"[CombatSystem] {gameObject.name}: LockOn target position locked at {lockedPos}");
 
 

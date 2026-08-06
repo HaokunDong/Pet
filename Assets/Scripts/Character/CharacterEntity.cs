@@ -64,6 +64,42 @@ namespace PetGame
         public Vector2 Velocity { get; private set; }
 
         /// <summary>
+        /// Cached reference to the character's Collider2D component.
+        /// Used for attack range detection against collider center instead of transform position.
+        /// </summary>
+        public Collider2D CharCollider { get; private set; }
+
+        /// <summary>
+        /// Returns the center of the character's collider bounds in world space.
+        /// Falls back to transform.position if no collider is present.
+        /// Used as the target point for attack range checks.
+        /// </summary>
+        public Vector2 ColliderCenter
+        {
+            get
+            {
+                if (CharCollider != null)
+                    return CharCollider.bounds.center;
+                return transform.position;
+            }
+        }
+
+        /// <summary>
+        /// Returns half the width of the character's collider bounds on the X axis.
+        /// Used for attack range overlap checks against the target's collider X interval.
+        /// Returns 0 if no collider is present.
+        /// </summary>
+        public float ColliderHalfExtentX
+        {
+            get
+            {
+                if (CharCollider != null)
+                    return CharCollider.bounds.extents.x;
+                return 0f;
+            }
+        }
+
+        /// <summary>
         /// The last entity that dealt damage to this character.
         /// Used to award experience on death.
         /// </summary>
@@ -90,6 +126,7 @@ namespace PetGame
             RuntimeStats.InitFromData(data);
 
             CharAnimator = GetComponent<CharacterAnimator>();
+            CharCollider = GetComponent<Collider2D>();
 
             // Sync sprite orientation from CharacterData to CharacterAnimator
             if (CharAnimator != null)
@@ -429,26 +466,23 @@ namespace PetGame
 
         /// <summary>
         /// Draw all attack range shapes as Gizmos.
-        /// Also draws minAttackDistance as a green circle and engageDistance as a yellow circle.
+        /// Also draws minAttackDistance as a green circle.
         /// </summary>
         private void DrawAttackRangeGizmos(bool selected)
         {
             // Resolve data source: prefer RuntimeStats at runtime, fallback to characterData in edit mode
             AttackRangeShape[] shapes;
             float minAtkDist;
-            float engDist;
 
             if (RuntimeStats != null)
             {
                 shapes = RuntimeStats.attackRangeShapes;
                 minAtkDist = RuntimeStats.minAttackDistance;
-                engDist = RuntimeStats.engageDistance;
             }
             else if (characterData != null)
             {
                 shapes = characterData.attackRangeShapes;
                 minAtkDist = characterData.minAttackDistance;
-                engDist = characterData.engageDistance;
             }
             else
             {
@@ -510,14 +544,6 @@ namespace PetGame
                     UnityEditor.Handles.color = new Color(0f, 1f, 0f, 0.08f);
                     UnityEditor.Handles.DrawSolidDisc(pos, Vector3.forward, minAtkDist);
                 }
-            }
-
-            // Draw engageDistance as a yellow circle
-            if (engDist > 0f)
-            {
-                Color engDistWire = new Color(1f, 1f, 0f, selected ? 0.5f : 0.15f);
-                Gizmos.color = engDistWire;
-                Gizmos.DrawWireSphere(pos, engDist);
             }
 
         }

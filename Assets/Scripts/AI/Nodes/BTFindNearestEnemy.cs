@@ -116,7 +116,7 @@ namespace PetGame.AI
         {
             if (owner.CharAnimator == null) return false;
 
-            float dx = target.transform.position.x - owner.transform.position.x;
+            float dx = target.ColliderCenter.x - owner.ColliderCenter.x;
             if (Mathf.Approximately(dx, 0f)) return false;
 
             int targetDir = dx > 0f ? 1 : -1;

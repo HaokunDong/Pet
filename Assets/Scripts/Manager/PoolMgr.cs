@@ -167,6 +167,14 @@ public class PoolMgr : Singleton<PoolMgr>
         }
     }
 
+    /// <summary>
+    /// Check if a prefab with the given name is registered in the pool.
+    /// </summary>
+    public bool HasPrefab(string name)
+    {
+        return dictPrefab.ContainsKey(name) && dictPrefab[name] != null;
+    }
+
     public void SetPrefab(string name, GameObject prefab)
     {
         this.dictPrefab[name] = prefab;

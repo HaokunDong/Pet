@@ -37,15 +37,8 @@ namespace PetGame
         [Min(0.1f)]
         public float attackSpeed = 1f;
 
-        [Tooltip("Engage distance: AI actively approaches until the target is within this distance, then switches to Strike. " +
-                 "MUST be strictly smaller than GetMaxAttackDistance() so the AI always stops inside its attack range. " +
-                 "At runtime it is clamped to min(engageDistance, GetMaxAttackDistance() * 0.9).")]
-        [Min(0f)]
-        public float engageDistance = 1.0f;
-
-
         [Tooltip("Minimum attack distance: characters stop moving when closer than this distance to prevent overlap. " +
-                 "Should be smaller than engageDistance. Visualized as a green circle in Scene view and Editor preview.")]
+                 "Should be smaller than the attack range. Visualized as a green circle in Scene view and Editor preview.")]
         [Min(0.05f)]
         public float minAttackDistance = 0.3f;
 
@@ -126,6 +119,10 @@ namespace PetGame
         [TextArea(2, 5)]
         public string characterDescription = "";
 
+        [Header("Prefab")]
+        [Tooltip("Character-specific Prefab Variant. If null, the default PlayerPrefab will be used.")]
+        public GameObject prefab;
+
         [Header("Visuals")]
         [Tooltip("Character sprite")]
         public Sprite sprite;
@@ -149,6 +146,15 @@ namespace PetGame
                 case QualityLevel.SSS: return 4;
                 default:               return 1;
             }
+        }
+
+        /// <summary>
+        /// Returns the prefab name to use for object pool lookup.
+        /// If a character-specific prefab is assigned, returns its name; otherwise returns null (use default).
+        /// </summary>
+        public string GetPrefabName()
+        {
+            return prefab != null ? prefab.name : null;
         }
 
         /// <summary>
@@ -182,22 +188,12 @@ namespace PetGame
             }
 
             float maxAttackDist = AttackRangeHelper.GetMaxAttackDistance(attackRangeShapes);
-            if (engageDistance > maxAttackDist)
-            {
-                Debug.LogWarning(
-                    $"[CharacterData] \"{characterName}\" engageDistance ({engageDistance}) is greater than " +
-                    $"max attack distance ({maxAttackDist}). It will be clamped at runtime to keep the AI " +
-                    $"inside its attack range. Consider setting engageDistance below {maxAttackDist * 0.9f:F2}.",
-                    this
-                );
-            }
-
-            if (minAttackDistance > engageDistance)
+            if (minAttackDistance > maxAttackDist * 0.9f)
             {
                 Debug.LogWarning(
                     $"[CharacterData] \"{characterName}\" minAttackDistance ({minAttackDistance}) is greater than " +
-                    $"engageDistance ({engageDistance}). Characters may never enter Strike state. " +
-                    $"Consider setting minAttackDistance below engageDistance.",
+                    $"90% of max attack distance ({maxAttackDist * 0.9f:F2}). Characters may never enter Strike state. " +
+                    $"Consider reducing minAttackDistance.",
                     this
                 );
             }

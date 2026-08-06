@@ -61,28 +61,27 @@ namespace PetGame
         }
 
         /// <summary>
-        /// Get the maximum reach distance from the owner center to the farthest point of this shape.
-        /// Used for AI chase distance calculation.
+        /// Get the maximum reach distance on the X axis from the owner center to the farthest point of this shape.
+        /// Used for AI chase/engage distance calculation.
+        /// Since this is a side-scrolling game and Y-axis differences are ignored in attack range checks,
+        /// only the X-axis extent matters.
         /// </summary>
-        /// <returns>Maximum distance from owner center to the edge of this shape.</returns>
+        /// <returns>Maximum X-axis distance from owner center to the edge of this shape.</returns>
         public float GetMaxReach()
         {
-            float offsetMag = offset.magnitude;
+            float offsetX = Mathf.Abs(offset.x);
 
             switch (shapeType)
             {
                 case AttackShapeType.Circle:
-                    return offsetMag + radius;
+                    return offsetX + radius;
 
                 case AttackShapeType.Box:
-                    // Farthest corner of the box from the owner center
                     float halfW = size.x * 0.5f;
-                    float halfH = size.y * 0.5f;
-                    float cornerDist = Mathf.Sqrt(halfW * halfW + halfH * halfH);
-                    return offsetMag + cornerDist;
+                    return offsetX + halfW;
 
                 default:
-                    return offsetMag;
+                    return offsetX;
             }
         }
     }

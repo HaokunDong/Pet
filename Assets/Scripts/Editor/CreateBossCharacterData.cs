@@ -55,7 +55,6 @@ namespace PetGame
             bossData.defense = 15f;
             bossData.moveSpeed = 2f;
             bossData.attackSpeed = 0.8f;
-            bossData.engageDistance = 1.5f;
             bossData.minAttackDistance = 0.4f;
 
             // Knockback settings — Boss is heavier, less knockback

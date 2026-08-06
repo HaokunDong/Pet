@@ -75,15 +75,6 @@ namespace PetGame
             // Draw attack range shapes
             DrawAttackRangeShapes(data, center);
 
-            // Draw engageDistance as a yellow dashed circle
-            if (data.engageDistance > 0f)
-            {
-                DrawCircleOutline(center, data.engageDistance * effectivePixelsPerUnit, new Color(1f, 1f, 0f, 0.4f));
-                Vector2 engLabelPos = new Vector2(center.x + data.engageDistance * effectivePixelsPerUnit + 4, center.y - 8);
-                Rect engLabelRect = new Rect(engLabelPos.x, engLabelPos.y, 100, 16);
-                GUI.Label(engLabelRect, $"Engage: {data.engageDistance:F2}", EditorStyles.centeredGreyMiniLabel);
-            }
-
             // Draw minAttackDistance as a green circle
             if (data.minAttackDistance > 0f)
             {
@@ -126,10 +117,6 @@ namespace PetGame
                 float worldHeight = spriteRect.height / ppu;
                 maxWorldExtent = Mathf.Max(maxWorldExtent, worldWidth * 0.5f, worldHeight * 0.5f);
             }
-
-            // Consider engage distance
-            if (data.engageDistance > 0f)
-                maxWorldExtent = Mathf.Max(maxWorldExtent, data.engageDistance);
 
             // Consider min attack distance
             if (data.minAttackDistance > 0f)

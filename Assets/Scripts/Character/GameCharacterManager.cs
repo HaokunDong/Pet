@@ -171,7 +171,12 @@ namespace PetGame
             if (currentEntity != null)
             {
                 PlayerCharacters.Remove(currentEntity);
-                Destroy(currentEntity.gameObject);
+
+                // Unsubscribe death event before recycling
+                currentEntity.OnDeath -= OnPlayerCharacterDeath;
+
+                // Recycle to pool using the object's name (which matches its prefab key)
+                PoolMgr.Instance.PutNode(currentEntity.gameObject);
             }
 
             // Spawn at PlayerSpawn position
@@ -208,7 +213,24 @@ namespace PetGame
         /// </summary>
         public CharacterEntity CreatePlayerCharacter(CharacterData data, Vector3 position)
         {
-            GameObject playerObj = PoolMgr.Instance.GetNode(playerPrefabName);
+            GameObject playerObj = null;
+            string prefabKey = data.GetPrefabName();
+
+            if (!string.IsNullOrEmpty(prefabKey))
+            {
+                // Use character-specific Variant Prefab (lazy registration)
+                if (!PoolMgr.Instance.HasPrefab(prefabKey))
+                {
+                    PoolMgr.Instance.SetPrefab(prefabKey, data.prefab);
+                }
+                playerObj = PoolMgr.Instance.GetNode(prefabKey);
+            }
+            else
+            {
+                // Fallback: use default PlayerPrefab
+                playerObj = PoolMgr.Instance.GetNode(playerPrefabName);
+            }
+
             if (playerObj == null)
             {
                 // Fallback: create a new GameObject if pool doesn't have one
