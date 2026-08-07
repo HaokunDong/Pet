@@ -19,18 +19,14 @@ MonoBehaviour:
   defense: 5
   moveSpeed: 3
   attackSpeed: 1
-  minAttackDistance: 0.4
-  attackRangeShapes:
-  - shapeType: 0
-    offset: {x: -0.32, y: 0}
-    radius: 0.5
-    size: {x: 0, y: 0}
+  minAttackDistance: 0.21
+  attackDistance: 0.91
   comboCount: 2
   comboDamageMultipliers: []
   attackDisplacementType: 0
   attackDisplacementDirection: 1
-  attackDisplacementDistance: 0.22
-  attackDisplacementDuration: 0.2
+  attackDisplacementDistance: 0
+  attackDisplacementDuration: 0.01
   attackDamagesDuringDisplacement: 0
   defaultFacesRight: 0
   knockbackHorizontalSpeed: 2

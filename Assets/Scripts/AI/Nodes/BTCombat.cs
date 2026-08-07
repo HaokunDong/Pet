@@ -108,9 +108,16 @@ namespace PetGame.AI
                 return BTState.Success;
             }
 
-            // If the owner is in attack animation (waiting for OnStateEnd), skip all logic.
+            // If the owner is in attack animation (waiting for OnStateEnd), still need to
+            // call TickStrike() so that HandleAIComboBuffer() can buffer combo input when
+            // the combo window opens. Without this, combo chains never trigger in AI mode.
             if (owner.CharAnimator != null && owner.CharAnimator.IsAttacking)
             {
+                // Only handle combo buffer and skill cancel — skip movement/state transitions.
+                if (context.CurrentState == AIState.Strike)
+                {
+                    TickStrike(owner, target);
+                }
                 return BTState.Success;
             }
 
@@ -120,15 +127,14 @@ namespace PetGame.AI
                 return BTState.Success;
             }
 
-            float dist = Mathf.Abs(owner.ColliderCenter.x - target.ColliderCenter.x);
+            float ownerX = owner.transform.position.x;
+            float targetColliderDist = RuntimeCharacterStats.GetDistanceToColliderEdge(ownerX, target.CharCollider);
             float engageDist = Mathf.Max(owner.RuntimeStats.GetEngageDistance(), MinEngageDistance);
             float engageExitDist = engageDist + context.EngageExitHysteresis;
 
-            // Use the actual attack range shape check to decide Strike eligibility.
-            // This avoids the mismatch between X-axis engage distance and 2D shape checks.
-            // Always use target direction for range check consistency with TickEngage.
-            // When overlapping (|dx| < 0.3), check BOTH directions to avoid false negatives.
-            float dx = target.ColliderCenter.x - owner.ColliderCenter.x;
+            // Use collider-edge-based distance to decide Strike eligibility.
+            // Check facing direction to ensure target is in front.
+            float dx = target.transform.position.x - ownerX;
             float facingSign;
             if (Mathf.Abs(dx) < StrikeFacingDeadzone && owner.CharAnimator != null)
             {
@@ -139,19 +145,23 @@ namespace PetGame.AI
                 facingSign = dx >= 0f ? 1f : -1f;
             }
 
+            // Target is in attack range if:
+            // 1. Distance to collider edge + minAttackDistance (buffer) <= attackDistance
+            //    This ensures the attack distance extends BEYOND the collider edge by at least minAttackDistance
+            //    before the AI triggers an attack, preventing edge-touch-then-stop behavior.
+            // 2. Target is in the facing direction (or overlapping)
+            float atkDist = owner.RuntimeStats.attackDistance;
+            float buffer = owner.RuntimeStats.minAttackDistance;
             bool inAttackRange;
             if (Mathf.Abs(dx) < 0.3f)
             {
-                // Overlapping: check both directions
-                inAttackRange = owner.RuntimeStats.IsTargetInAttackRange(
-                                    owner.ColliderCenter, 1f, target.ColliderCenter, target.ColliderHalfExtentX) ||
-                                owner.RuntimeStats.IsTargetInAttackRange(
-                                    owner.ColliderCenter, -1f, target.ColliderCenter, target.ColliderHalfExtentX);
+                // Overlapping: always consider in range
+                inAttackRange = targetColliderDist + buffer <= atkDist;
             }
             else
             {
-                inAttackRange = owner.RuntimeStats.IsTargetInAttackRange(
-                    owner.ColliderCenter, facingSign, target.ColliderCenter, target.ColliderHalfExtentX);
+                bool targetInFront = (facingSign > 0 && dx > 0) || (facingSign < 0 && dx < 0);
+                inAttackRange = targetInFront && (targetColliderDist + buffer <= atkDist);
             }
 
             // Also check if target is within any ready skill's range.
@@ -168,7 +178,7 @@ namespace PetGame.AI
                 // Minimum stay in Strike: at least one attack interval to prevent oscillation
                 float minStrikeDuration = 0.3f;
                 bool minStayElapsed = (Time.time - context.StrikeEnteredTime) >= minStrikeDuration;
-                if (minStayElapsed && !inAttackRange && !inSkillRange && dist > engageExitDist)
+                if (minStayElapsed && !inAttackRange && !inSkillRange && targetColliderDist > engageExitDist)
                 {
                     context.CurrentState = AIState.Engage;
                 }
@@ -177,7 +187,7 @@ namespace PetGame.AI
             {
                 // Coming from Wander / PostCombat / Engage.
                 // Enter Strike if in attack range OR within engage distance OR in skill range.
-                if (inAttackRange || inSkillRange || dist <= engageDist)
+                if (inAttackRange || inSkillRange || targetColliderDist <= engageDist)
                 {
                     context.CurrentState = AIState.Strike;
                     context.StrikeEnteredTime = Time.time;
@@ -204,10 +214,11 @@ namespace PetGame.AI
 
         private void TickEngage(CharacterEntity owner, CharacterEntity target)
         {
-            float ownerX = owner.ColliderCenter.x;
-            float targetX = target.ColliderCenter.x;
+            float ownerX = owner.transform.position.x;
+            float targetX = target.transform.position.x;
             float dx = targetX - ownerX;
             float absDx = Mathf.Abs(dx);
+            float targetColliderDist = RuntimeCharacterStats.GetDistanceToColliderEdge(ownerX, target.CharCollider);
             float engageDist = Mathf.Max(owner.RuntimeStats.GetEngageDistance(), MinEngageDistance);
 
             // When overlapping (|dx| < deadzone), use current facing to avoid jitter.
@@ -226,27 +237,26 @@ namespace PetGame.AI
             float targetMinDist = target.RuntimeStats != null ? target.RuntimeStats.minAttackDistance : 0f;
             float minDist = Mathf.Max(ownerMinDist, targetMinDist);
 
-            // If already in attack range, snap to Strike immediately — no movement.
-            // When overlapping, check both directions to avoid false negatives.
+            // If already in attack range (with buffer), snap to Strike immediately — no movement.
+            // Use collider-edge distance for range check. Buffer ensures AI walks past the edge.
+            float atkDist = owner.RuntimeStats.attackDistance;
+            float buffer = owner.RuntimeStats.minAttackDistance;
             bool inRange;
             if (absDx < 0.3f)
             {
-                inRange = owner.RuntimeStats.IsTargetInAttackRange(
-                              owner.ColliderCenter, 1f, target.ColliderCenter, target.ColliderHalfExtentX) ||
-                          owner.RuntimeStats.IsTargetInAttackRange(
-                              owner.ColliderCenter, -1f, target.ColliderCenter, target.ColliderHalfExtentX);
+                inRange = targetColliderDist + buffer <= atkDist;
             }
             else
             {
-                inRange = owner.RuntimeStats.IsTargetInAttackRange(
-                    owner.ColliderCenter, dir, target.ColliderCenter, target.ColliderHalfExtentX);
+                bool targetInFront = (dir > 0 && dx > 0) || (dir < 0 && dx < 0);
+                inRange = targetInFront && (targetColliderDist + buffer <= atkDist);
             }
 
             // Also check skill range — if a skill is ready and target is in skill range,
             // enter Strike immediately so the character can use the skill.
             bool inSkillRangeEngage = IsTargetInSkillRange(owner, target);
 
-            if (inRange || inSkillRangeEngage || absDx <= engageDist)
+            if (inRange || inSkillRangeEngage || targetColliderDist <= engageDist)
             {
                 context.CurrentState = AIState.Strike;
                 context.StrikeEnteredTime = Time.time;
@@ -298,11 +308,21 @@ namespace PetGame.AI
             owner.transform.position = newPos;
 
             // After clamped move, check if we've entered attack range or engage distance → switch to Strike.
-            float newAbsDx = Mathf.Abs(targetX - newPos.x);
-            bool nowInRange = owner.RuntimeStats.IsTargetInAttackRange(
-                newPos, dir, target.ColliderCenter, target.ColliderHalfExtentX);
+            float newOwnerX = newPos.x;
+            float newTargetColliderDist = RuntimeCharacterStats.GetDistanceToColliderEdge(newOwnerX, target.CharCollider);
+            bool nowInRange;
+            float newDx = targetX - newOwnerX;
+            if (Mathf.Abs(newDx) < 0.3f)
+            {
+                nowInRange = newTargetColliderDist + buffer <= atkDist;
+            }
+            else
+            {
+                bool targetInFront = (dir > 0 && newDx > 0) || (dir < 0 && newDx < 0);
+                nowInRange = targetInFront && (newTargetColliderDist + buffer <= atkDist);
+            }
             bool nowInSkillRange = IsTargetInSkillRange(owner, target);
-            bool enteredStrike = nowInRange || nowInSkillRange || newAbsDx <= engageDist || clampedToStop;
+            bool enteredStrike = nowInRange || nowInSkillRange || newTargetColliderDist <= engageDist || clampedToStop;
             if (enteredStrike)
             {
                 context.CurrentState = AIState.Strike;
@@ -521,14 +541,15 @@ namespace PetGame.AI
             if (combatSystem == null) return;
             if (!combatSystem.IsComboWindowOpen) return;
 
-            // Check if target is still alive and in attack range
+            // Check if target is still alive and in attack range using collider edge distance
             if (target == null || !target.RuntimeStats.IsAlive)
             {
                 // No valid target — don't buffer, combo will end at OnStateEnd
                 return;
             }
 
-            float dx = target.ColliderCenter.x - owner.ColliderCenter.x;
+            float ownerX = owner.transform.position.x;
+            float dx = target.transform.position.x - ownerX;
             float facingSign;
             if (Mathf.Abs(dx) < StrikeFacingDeadzone && owner.CharAnimator != null)
             {
@@ -539,19 +560,16 @@ namespace PetGame.AI
                 facingSign = dx >= 0f ? 1f : -1f;
             }
 
+            float targetColliderDist = RuntimeCharacterStats.GetDistanceToColliderEdge(ownerX, target.CharCollider);
             bool inRange;
             if (Mathf.Abs(dx) < 0.3f)
             {
-                // Overlapping: check both directions
-                inRange = owner.RuntimeStats.IsTargetInAttackRange(
-                              owner.ColliderCenter, 1f, target.ColliderCenter, target.ColliderHalfExtentX) ||
-                          owner.RuntimeStats.IsTargetInAttackRange(
-                              owner.ColliderCenter, -1f, target.ColliderCenter, target.ColliderHalfExtentX);
+                inRange = targetColliderDist <= owner.RuntimeStats.attackDistance;
             }
             else
             {
-                inRange = owner.RuntimeStats.IsTargetInAttackRange(
-                    owner.ColliderCenter, facingSign, target.ColliderCenter, target.ColliderHalfExtentX);
+                bool targetInFront = (facingSign > 0 && dx > 0) || (facingSign < 0 && dx < 0);
+                inRange = targetInFront && targetColliderDist <= owner.RuntimeStats.attackDistance;
             }
 
             if (inRange)

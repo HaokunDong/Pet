@@ -96,10 +96,9 @@ namespace PetGame
                 return false;
             }
 
-            // Check attack range using multi-shape system.
-            // When overlapping (|dx| very small), check BOTH directions to ensure
-            // the attack doesn't fail just because the target is slightly "behind" the facing.
-            float dx = target.ColliderCenter.x - entity.ColliderCenter.x;
+            // Check attack range using collider-edge distance.
+            // This ensures consistent behavior with AI's distance detection system.
+            float dx = target.transform.position.x - entity.transform.position.x;
             float facingSign;
             const float FacingDeadzone = 0.15f;
             if (Mathf.Abs(dx) < FacingDeadzone && entity.CharAnimator != null)
@@ -111,19 +110,21 @@ namespace PetGame
                 facingSign = dx >= 0f ? 1f : -1f;
             }
 
+            // Use collider-edge distance for range check
+            float distToEdge = RuntimeCharacterStats.GetDistanceToColliderEdge(
+                entity.transform.position.x, target.CharCollider);
+
             bool inRange;
             if (Mathf.Abs(dx) < 0.3f)
             {
-                // Overlapping: check both facing directions for range
-                inRange = entity.RuntimeStats.IsTargetInAttackRange(
-                              entity.ColliderCenter, 1f, target.ColliderCenter, target.ColliderHalfExtentX) ||
-                          entity.RuntimeStats.IsTargetInAttackRange(
-                              entity.ColliderCenter, -1f, target.ColliderCenter, target.ColliderHalfExtentX);
+                // Overlapping: always consider in range
+                inRange = distToEdge <= entity.RuntimeStats.attackDistance;
             }
             else
             {
-                inRange = entity.RuntimeStats.IsTargetInAttackRange(
-                    entity.ColliderCenter, facingSign, target.ColliderCenter, target.ColliderHalfExtentX);
+                // Target must be in facing direction and within attack distance from collider edge
+                bool targetInFront = (facingSign > 0 && dx > 0) || (facingSign < 0 && dx < 0);
+                inRange = targetInFront && distToEdge <= entity.RuntimeStats.attackDistance;
             }
 
             if (!inRange)
@@ -260,8 +261,23 @@ namespace PetGame
                 CharacterEntity target = candidates[i].GetComponent<CharacterEntity>();
                 if (target == null || !target.RuntimeStats.IsAlive) continue;
 
-                if (entity.RuntimeStats.IsTargetInAttackRange(
-                        attackOrigin, facingSign, target.ColliderCenter, target.ColliderHalfExtentX))
+                // Distance-based attack range check using cached attack position and collider edge
+                float dx = target.transform.position.x - attackOrigin.x;
+                bool targetInFront = (facingSign > 0 && dx >= 0) || (facingSign < 0 && dx <= 0);
+                float distToEdge = RuntimeCharacterStats.GetDistanceToColliderEdge(
+                    attackOrigin.x, target.CharCollider);
+                bool inRange;
+                if (Mathf.Abs(dx) < 0.3f)
+                {
+                    // Overlapping: always hit
+                    inRange = distToEdge <= entity.RuntimeStats.attackDistance;
+                }
+                else
+                {
+                    inRange = targetInFront && distToEdge <= entity.RuntimeStats.attackDistance;
+                }
+
+                if (inRange)
                 {
                     target.TakeDamage(damage, entity);
                     hitCount++;
@@ -306,9 +322,8 @@ namespace PetGame
 
             if (data.attackDamagesDuringDisplacement)
             {
-                // Compute effective facing sign for attack range shapes
-                float rawFacingSign = _cachedFacingSign;
-                float effectiveFacingSign = data.defaultFacesRight ? rawFacingSign : -rawFacingSign;
+                // Use distance-based damage detection during lock-on displacement
+                float facingSign = _cachedFacingSign;
 
                 // Do initial damage at starting position
                 Vector2 casterPos = transform.position;
@@ -318,15 +333,16 @@ namespace PetGame
                     CharacterEntity candidateEntity = candidates[i].GetComponent<CharacterEntity>();
                     if (candidateEntity == null || !candidateEntity.RuntimeStats.IsAlive) continue;
 
-                    Vector2 candidatePos = candidateEntity.transform.position;
-                    if (AttackRangeHelper.IsTargetInRange(casterPos, effectiveFacingSign, data.attackRangeShapes, candidatePos))
+                    float cdx = candidateEntity.transform.position.x - casterPos.x;
+                    bool inFront = (facingSign > 0 && cdx >= 0) || (facingSign < 0 && cdx <= 0);
+                    if ((Mathf.Abs(cdx) < 0.3f || inFront) && Mathf.Abs(cdx) <= entity.RuntimeStats.attackDistance)
                     {
                         candidateEntity.TakeDamage(entity.RuntimeStats.attackPower, entity);
                     }
                 }
 
                 controller.StartLockOnDisplacementWithDamage(lockedPos, data.attackDisplacementDuration,
-                    data.attackRangeShapes, effectiveFacingSign, targetTag, entity.RuntimeStats.attackPower, entity);
+                    entity.RuntimeStats.attackDistance, facingSign, targetTag, entity.RuntimeStats.attackPower, entity);
             }
             else
             {
@@ -389,11 +405,8 @@ namespace PetGame
 
             if (data.attackDamagesDuringDisplacement)
             {
-                // Compute effective facing sign for attack range shapes
-                float effectiveFacingSign = data.defaultFacesRight ? facingSign : -facingSign;
-
                 controller.StartDisplacementWithDamage(finalDirection, data.attackDisplacementDistance,
-                    data.attackDisplacementDuration, data.attackRangeShapes, effectiveFacingSign,
+                    data.attackDisplacementDuration, entity.RuntimeStats.attackDistance, facingSign,
                     targetTag, entity.RuntimeStats.attackPower, entity);
             }
             else
@@ -545,8 +558,16 @@ namespace PetGame
             _comboInputBuffered = false;
             _canBeCancelled = false;
 
-            // Re-cache attack position for the new step
+            // Re-cache attack position and facing for the new step.
+            // _cachedFacingSign was cleared to 0 by ClearAttackStateKeepCombo() after the
+            // previous step's hit frame. We must restore it here, otherwise
+            // ApplyNormalAttackDamage() will fail the "targetInFront" check (facingSign==0
+            // means neither direction passes) and deal no damage on this combo step.
             _cachedAttackPosition = transform.position;
+            if (entity.CharAnimator != null)
+            {
+                _cachedFacingSign = entity.CharAnimator.FacingDirection;
+            }
             _isAttacking = true;
 
             if (entity.CharAnimator != null)
@@ -669,17 +690,16 @@ namespace PetGame
             // Check if we need continuous damage during lock-on displacement
             if (skillEffect.damagesDuringDisplacement)
             {
-                // For MeleeSkillEffectData, we need the shapes and facing info
+                // For MeleeSkillEffectData, we need the skill attack distance
                 MeleeSkillEffectData meleeEffect = skillEffect as MeleeSkillEffectData;
-                if (meleeEffect != null && meleeEffect.skillRangeShapes != null && meleeEffect.skillRangeShapes.Length > 0)
+                if (meleeEffect != null)
                 {
                     CharacterEntity casterEntity = GetComponent<CharacterEntity>();
                     string targetTag = casterEntity.gameObject.CompareTag("Player")
                         ? "Enemy"
                         : "Player";
 
-                    float rawFacingSign = _cachedFacingSign;
-                    float effectiveFacingSign = meleeEffect.defaultFacesRight ? rawFacingSign : -rawFacingSign;
+                    float facingSign = _cachedFacingSign;
 
                     // Do initial damage at starting position
                     Vector2 casterPos = transform.position;
@@ -689,19 +709,20 @@ namespace PetGame
                         CharacterEntity candidateEntity = candidates[i].GetComponent<CharacterEntity>();
                         if (candidateEntity == null || !candidateEntity.RuntimeStats.IsAlive) continue;
 
-                        Vector2 candidatePos = candidateEntity.transform.position;
-                        if (AttackRangeHelper.IsTargetInRange(casterPos, effectiveFacingSign, meleeEffect.skillRangeShapes, candidatePos))
+                        float cdx = candidateEntity.transform.position.x - casterPos.x;
+                        bool inFront = (facingSign > 0 && cdx >= 0) || (facingSign < 0 && cdx <= 0);
+                        if ((Mathf.Abs(cdx) < 0.3f || inFront) && Mathf.Abs(cdx) <= meleeEffect.skillAttackDistance)
                         {
                             candidateEntity.TakeDamage(skillData.damage, casterEntity);
                         }
                     }
 
                     skillEffect.ApplyLockOnDisplacementWithDamage(this, lockedPos, skillData,
-                        meleeEffect.skillRangeShapes, effectiveFacingSign, targetTag);
+                        meleeEffect.skillAttackDistance, facingSign, targetTag);
                 }
                 else
                 {
-                    // No shapes, just do lock-on displacement without damage
+                    // Not a melee effect, just do lock-on displacement without damage
                     skillEffect.ApplyLockOnDisplacement(this, lockedPos);
                 }
             }

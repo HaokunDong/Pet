@@ -88,11 +88,28 @@ namespace PetGame
             // Pick a random enemy template
             CharacterData data = enemyDataList[Random.Range(0, enemyDataList.Length)];
 
-            // Get or create enemy GameObject from pool
-            GameObject enemyObj = PoolMgr.Instance.GetNode(enemyPrefabName);
+            // Get or create enemy GameObject from pool (prefer character-specific Variant Prefab)
+            GameObject enemyObj = null;
+            string prefabKey = data.GetPrefabName();
+
+            if (!string.IsNullOrEmpty(prefabKey))
+            {
+                // Use character-specific Variant Prefab (lazy registration)
+                if (!PoolMgr.Instance.HasPrefab(prefabKey))
+                {
+                    PoolMgr.Instance.SetPrefab(prefabKey, data.prefab);
+                }
+                enemyObj = PoolMgr.Instance.GetNode(prefabKey);
+            }
+            else
+            {
+                // Fallback: use default EnemyPrefab
+                enemyObj = PoolMgr.Instance.GetNode(enemyPrefabName);
+            }
+
             if (enemyObj == null)
             {
-                Logger.Log("[EnemySpawner] Failed to get enemy from pool: " + enemyPrefabName);
+                Logger.Log("[EnemySpawner] Failed to get enemy from pool: " + (prefabKey ?? enemyPrefabName));
                 return;
             }
 
@@ -191,7 +208,23 @@ namespace PetGame
                 return;
             }
 
-            GameObject enemyObj = PoolMgr.Instance.GetNode(enemyPrefabName);
+            // Prefer character-specific Variant Prefab (lazy registration)
+            GameObject enemyObj = null;
+            string prefabKey = data.GetPrefabName();
+
+            if (!string.IsNullOrEmpty(prefabKey))
+            {
+                if (!PoolMgr.Instance.HasPrefab(prefabKey))
+                {
+                    PoolMgr.Instance.SetPrefab(prefabKey, data.prefab);
+                }
+                enemyObj = PoolMgr.Instance.GetNode(prefabKey);
+            }
+            else
+            {
+                enemyObj = PoolMgr.Instance.GetNode(enemyPrefabName);
+            }
+
             if (enemyObj == null) return;
 
             enemyObj.transform.position = position;

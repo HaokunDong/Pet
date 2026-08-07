@@ -265,11 +265,11 @@ namespace PetGame
                     clickedEnemy.OutlineFx.TriggerBoldPulse();
                 }
 
-                // Check if already in attack range using multi-shape system
+                // Check if already in attack range using horizontal distance
                 float atkDx = attackTarget.ColliderCenter.x - entity.ColliderCenter.x;
                 float facingSign1 = atkDx >= 0f ? 1f : -1f;
                 bool inRangeForAttack = entity.RuntimeStats.IsTargetInAttackRange(
-                    entity.ColliderCenter, facingSign1, attackTarget.ColliderCenter, attackTarget.ColliderHalfExtentX);
+                    entity.ColliderCenter, facingSign1, attackTarget.ColliderCenter);
 
                 if (inRangeForAttack)
                 {
@@ -404,7 +404,7 @@ namespace PetGame
             float facingSign2 = dx >= 0f ? 1f : -1f;
 
             if (entity.RuntimeStats.IsTargetInAttackRange(
-                    entity.ColliderCenter, facingSign2, attackTarget.ColliderCenter, attackTarget.ColliderHalfExtentX))
+                    entity.ColliderCenter, facingSign2, attackTarget.ColliderCenter))
             {
                 // In range: stop moving and enter sustained attack mode
                 isChasing = false;
@@ -468,7 +468,7 @@ namespace PetGame
                     ? entity.CharAnimator.FacingDirection
                     : (dx >= 0f ? 1f : -1f);
                 bool inRange = entity.RuntimeStats.IsTargetInAttackRange(
-                    entity.ColliderCenter, facingSign3, attackTarget.ColliderCenter, attackTarget.ColliderHalfExtentX);
+                    entity.ColliderCenter, facingSign3, attackTarget.ColliderCenter);
 
                 if (!inRange)
                 {

@@ -122,11 +122,10 @@ namespace PetGame
         private static readonly int HashHit = Animator.StringToHash("Hit");
         private static readonly int HashDeath = Animator.StringToHash("Death");
 
-        [Header("Sprite Orientation")]
-        [Tooltip("Whether the sprite asset faces right by default. " +
-                 "This value is synced from CharacterData at runtime. " +
-                 "Only used as fallback if no CharacterData is assigned.")]
-        [SerializeField]
+        /// <summary>
+        /// Whether the sprite asset faces right by default.
+        /// Synced from CharacterData at runtime via SyncDefaultFacing().
+        /// </summary>
         private bool defaultFacesRight = true;
 
         private Animator animator;
@@ -152,12 +151,6 @@ namespace PetGame
         /// If false, uses single Skill Bool parameter.
         /// </summary>
         private bool useMultiSkillBools;
-
-        /// <summary>
-        /// Whether the sprite asset faces right by default.
-        /// Exposed for external systems (e.g. Gizmo drawing) that need to know the native orientation.
-        /// </summary>
-        public bool DefaultFacesRight => defaultFacesRight;
 
         /// <summary>
         /// Whether the character is currently in the Hit animation protection period.

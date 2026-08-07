@@ -430,17 +430,14 @@ namespace PetGame
 
 #if UNITY_EDITOR
         /// <summary>
-        /// Get the current facing sign for Gizmo drawing.
-        /// Returns 1 (right) or -1 (left).
+        /// Get the default facing sign for Gizmo drawing.
+        /// Based on CharacterData.defaultFacesRight: true = right (1), false = left (-1).
         /// </summary>
         private float GetFacingSign()
         {
-            if (CharAnimator != null)
+            if (characterData != null)
             {
-                float rawFacing = CharAnimator.FacingDirection;
-                // Convert to effective facing sign relative to sprite's native orientation
-                bool facesRight = CharAnimator.DefaultFacesRight;
-                return facesRight ? rawFacing : -rawFacing;
+                return characterData.defaultFacesRight ? 1f : -1f;
             }
             return 1f;
         }
@@ -465,23 +462,23 @@ namespace PetGame
         }
 
         /// <summary>
-        /// Draw all attack range shapes as Gizmos.
-        /// Also draws minAttackDistance as a green circle.
+        /// Draw attack distance as a horizontal line Gizmo.
+        /// Also draws minAttackDistance as a short vertical marker line.
         /// </summary>
         private void DrawAttackRangeGizmos(bool selected)
         {
             // Resolve data source: prefer RuntimeStats at runtime, fallback to characterData in edit mode
-            AttackRangeShape[] shapes;
+            float atkDist;
             float minAtkDist;
 
             if (RuntimeStats != null)
             {
-                shapes = RuntimeStats.attackRangeShapes;
+                atkDist = RuntimeStats.attackDistance;
                 minAtkDist = RuntimeStats.minAttackDistance;
             }
             else if (characterData != null)
             {
-                shapes = characterData.attackRangeShapes;
+                atkDist = characterData.attackDistance;
                 minAtkDist = characterData.minAttackDistance;
             }
             else
@@ -489,67 +486,55 @@ namespace PetGame
                 return;
             }
 
-            float fillAlpha = selected ? 0.15f : 0.05f;
-            float wireAlpha = selected ? 0.5f : 0.15f;
-            Color fillColor = new Color(1f, 0f, 0f, fillAlpha);
-            Color wireColor = new Color(1f, 0f, 0f, wireAlpha);
-
             float facingSign = GetFacingSign();
             Vector3 pos = transform.position;
 
-            if (shapes != null)
+            // Draw attack distance as a horizontal line in the facing direction
+            if (atkDist > 0f)
             {
-                for (int i = 0; i < shapes.Length; i++)
+                float alpha = selected ? 0.8f : 0.3f;
+                Color lineColor = new Color(1f, 0.2f, 0.2f, alpha);
+                Gizmos.color = lineColor;
+
+                Vector3 endPos = pos + new Vector3(facingSign * atkDist, 0f, 0f);
+                Gizmos.DrawLine(pos, endPos);
+
+                // Draw a small vertical tick at the end point to mark the distance
+                float tickHeight = 0.15f;
+                Gizmos.DrawLine(endPos + Vector3.up * tickHeight, endPos + Vector3.down * tickHeight);
+
+                if (selected)
                 {
-                    if (shapes[i] == null) continue;
-
-                    AttackRangeShape shape = shapes[i];
-                    Vector2 center = (Vector2)pos + new Vector2(shape.offset.x * facingSign, shape.offset.y);
-
-                    switch (shape.shapeType)
-                    {
-                        case AttackShapeType.Circle:
-                            Gizmos.color = wireColor;
-                            Gizmos.DrawWireSphere(center, shape.radius);
-                            if (selected)
-                            {
-                                UnityEditor.Handles.color = fillColor;
-                                UnityEditor.Handles.DrawSolidDisc(center, Vector3.forward, shape.radius);
-                            }
-                            break;
-
-                        case AttackShapeType.Box:
-                            Vector3 boxCenter = new Vector3(center.x, center.y, pos.z);
-                            Vector3 boxSize = new Vector3(shape.size.x, shape.size.y, 0f);
-                            Gizmos.color = wireColor;
-                            Gizmos.DrawWireCube(boxCenter, boxSize);
-                            if (selected)
-                            {
-                                Gizmos.color = fillColor;
-                                Gizmos.DrawCube(boxCenter, boxSize);
-                            }
-                            break;
-                    }
+                    // Draw label showing the attack distance value
+                    Vector3 labelPos = endPos + Vector3.up * 0.2f;
+                    UnityEditor.Handles.color = lineColor;
+                    UnityEditor.Handles.Label(labelPos, $"AtkDist: {atkDist:F2}");
                 }
             }
 
-            // Draw minAttackDistance as a green circle
+            // Draw minAttackDistance as a short green vertical marker line
             if (minAtkDist > 0f)
             {
-                Color minDistWire = new Color(0f, 1f, 0f, selected ? 0.6f : 0.2f);
-                Gizmos.color = minDistWire;
-                Gizmos.DrawWireSphere(pos, minAtkDist);
+                float alpha = selected ? 0.7f : 0.25f;
+                Color minDistColor = new Color(0f, 1f, 0f, alpha);
+                Gizmos.color = minDistColor;
+
+                Vector3 minDistPos = pos + new Vector3(facingSign * minAtkDist, 0f, 0f);
+                float tickHeight = 0.12f;
+                Gizmos.DrawLine(minDistPos + Vector3.up * tickHeight, minDistPos + Vector3.down * tickHeight);
+
                 if (selected)
                 {
-                    UnityEditor.Handles.color = new Color(0f, 1f, 0f, 0.08f);
-                    UnityEditor.Handles.DrawSolidDisc(pos, Vector3.forward, minAtkDist);
+                    Vector3 labelPos = minDistPos + Vector3.down * 0.25f;
+                    UnityEditor.Handles.color = minDistColor;
+                    UnityEditor.Handles.Label(labelPos, $"MinDist: {minAtkDist:F2}");
                 }
             }
 
         }
 
         /// <summary>
-        /// Draw skill range circles and skill effect shapes for each skill slot.
+        /// Draw skill range and skill attack distance as horizontal lines for each skill slot.
         /// This method reads directly from characterData (serialized field),
         /// so it works both in Edit mode and Play mode.
         /// </summary>
@@ -576,98 +561,59 @@ namespace PetGame
                 if (skill == null) continue;
 
                 Color baseColor = skillColors[i % skillColors.Length];
+                float yOffset = 0.08f * (i + 1); // Offset each skill line vertically to avoid overlap
 
-                // Draw skillRange circle (trigger distance)
+                // Draw skillRange as a horizontal line (trigger distance for AI)
                 if (skill.skillRange > 0f)
                 {
-                    Color wireCol = new Color(baseColor.r, baseColor.g, baseColor.b, selected ? 0.6f : 0.2f);
-                    Gizmos.color = wireCol;
-                    Gizmos.DrawWireSphere(pos, skill.skillRange);
+                    float alpha = selected ? 0.6f : 0.2f;
+                    Color lineCol = new Color(baseColor.r, baseColor.g, baseColor.b, alpha);
+                    Gizmos.color = lineCol;
+
+                    Vector3 startPos = pos + new Vector3(0f, yOffset, 0f);
+                    Vector3 endPos = pos + new Vector3(facingSign * skill.skillRange, yOffset, 0f);
+                    Gizmos.DrawLine(startPos, endPos);
+
+                    // Draw a small vertical tick at the end
+                    float tickHeight = 0.1f;
+                    Gizmos.DrawLine(endPos + Vector3.up * tickHeight, endPos + Vector3.down * tickHeight);
 
                     if (selected)
                     {
-                        // Draw a faint filled disc for selected state
-                        UnityEditor.Handles.color = new Color(baseColor.r, baseColor.g, baseColor.b, 0.05f);
-                        UnityEditor.Handles.DrawSolidDisc(pos, Vector3.forward, skill.skillRange);
-
-                        // Draw label showing skill name and range
                         string label = string.IsNullOrEmpty(skill.skillName)
-                            ? $"Skill {i + 1}: {skill.skillRange:F2}"
-                            : $"{skill.skillName}: {skill.skillRange:F2}";
-                        Vector3 labelPos = pos + Vector3.up * skill.skillRange;
-                        UnityEditor.Handles.color = wireCol;
+                            ? $"Skill {i + 1} Range: {skill.skillRange:F2}"
+                            : $"{skill.skillName} Range: {skill.skillRange:F2}";
+                        Vector3 labelPos = endPos + Vector3.up * 0.15f;
+                        UnityEditor.Handles.color = lineCol;
                         UnityEditor.Handles.Label(labelPos, label);
                     }
                 }
 
-                // Draw skill effect shapes (actual damage area) from MeleeSkillEffectData
-                if (skill.skillEffect is MeleeSkillEffectData meleeEffect && meleeEffect.skillRangeShapes != null)
+                // Draw skill attack distance (actual damage range) from MeleeSkillEffectData
+                if (skill.skillEffect is MeleeSkillEffectData meleeEffect && meleeEffect.skillAttackDistance > 0f)
                 {
-                    // Determine effective facing sign for shape offset mirroring
-                    float effectiveFacingSign = meleeEffect.defaultFacesRight ? facingSign : -facingSign;
+                    float skillDist = meleeEffect.skillAttackDistance;
+                    float alpha = selected ? 0.8f : 0.3f;
+                    Color effectLineColor = new Color(baseColor.r, baseColor.g, baseColor.b, alpha);
+                    Gizmos.color = effectLineColor;
 
-                    float effectFillAlpha = selected ? 0.12f : 0.04f;
-                    float effectWireAlpha = selected ? 0.7f : 0.2f;
-                    Color effectFillColor = new Color(baseColor.r, baseColor.g, baseColor.b, effectFillAlpha);
-                    Color effectWireColor = new Color(baseColor.r, baseColor.g, baseColor.b, effectWireAlpha);
+                    float effectYOffset = yOffset - 0.04f; // Slightly below the skill range line
+                    Vector3 startPos = pos + new Vector3(0f, effectYOffset, 0f);
+                    Vector3 endPos = pos + new Vector3(facingSign * skillDist, effectYOffset, 0f);
+                    Gizmos.DrawLine(startPos, endPos);
 
-                    for (int j = 0; j < meleeEffect.skillRangeShapes.Length; j++)
-                    {
-                        AttackRangeShape shape = meleeEffect.skillRangeShapes[j];
-                        if (shape == null) continue;
+                    // Draw a small vertical tick at the end
+                    float tickHeight = 0.08f;
+                    Gizmos.DrawLine(endPos + Vector3.up * tickHeight, endPos + Vector3.down * tickHeight);
 
-                        Vector2 shapeCenter = (Vector2)pos + new Vector2(
-                            shape.offset.x * effectiveFacingSign,
-                            shape.offset.y
-                        );
-
-                        switch (shape.shapeType)
-                        {
-                            case AttackShapeType.Circle:
-                                Gizmos.color = effectWireColor;
-                                Gizmos.DrawWireSphere(shapeCenter, shape.radius);
-                                if (selected)
-                                {
-                                    UnityEditor.Handles.color = effectFillColor;
-                                    UnityEditor.Handles.DrawSolidDisc(shapeCenter, Vector3.forward, shape.radius);
-                                }
-                                break;
-
-                            case AttackShapeType.Box:
-                                Vector3 boxCenter = new Vector3(shapeCenter.x, shapeCenter.y, pos.z);
-                                Vector3 boxSize = new Vector3(shape.size.x, shape.size.y, 0f);
-                                Gizmos.color = effectWireColor;
-                                Gizmos.DrawWireCube(boxCenter, boxSize);
-                                if (selected)
-                                {
-                                    Gizmos.color = effectFillColor;
-                                    Gizmos.DrawCube(boxCenter, boxSize);
-                                }
-                                break;
-                        }
-                    }
-
-                    // Draw a label for the skill effect shapes
-                    if (selected && meleeEffect.skillRangeShapes.Length > 0)
+                    if (selected)
                     {
                         string effectLabel = string.IsNullOrEmpty(skill.skillName)
-                            ? $"Skill {i + 1} Effect"
-                            : $"{skill.skillName} Effect";
-                        // Place label below the skill range label
-                        AttackRangeShape firstShape = meleeEffect.skillRangeShapes[0];
-                        if (firstShape != null)
-                        {
-                            Vector2 firstCenter = (Vector2)pos + new Vector2(
-                                firstShape.offset.x * effectiveFacingSign,
-                                firstShape.offset.y
-                            );
-                            float labelOffset = firstShape.shapeType == AttackShapeType.Circle
-                                ? firstShape.radius
-                                : firstShape.size.y * 0.5f;
-                            Vector3 effectLabelPos = new Vector3(firstCenter.x, firstCenter.y + labelOffset + 0.1f, pos.z);
-                            UnityEditor.Handles.color = effectWireColor;
-                            UnityEditor.Handles.Label(effectLabelPos, effectLabel);
-                        }
+                            ? $"Skill {i + 1} Dist: {skillDist:F2}"
+                            : $"{skill.skillName} Dist: {skillDist:F2}";
+                        Vector3 labelPos = endPos + Vector3.down * 0.2f;
+                        UnityEditor.Handles.color = effectLineColor;
+                        UnityEditor.Handles.Label(labelPos, effectLabel);
                     }
                 }
             }

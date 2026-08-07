@@ -91,10 +91,10 @@ namespace PetGame
 
         /// <summary>
         /// Apply displacement with continuous damage detection during movement.
-        /// Enemies within the skill range shapes along the path will be hit (each only once).
+        /// Enemies within the attack distance along the path will be hit (each only once).
         /// </summary>
         protected void ApplyDisplacementWithDamage(CombatSystem caster, SkillData skillData,
-            AttackRangeShape[] shapes, float effectiveFacingSign, string targetTag)
+            float attackDistance, float facingSign, string targetTag)
         {
             if (displacementDirection == SkillDisplacementDirection.None || displacementDistance <= 0f)
                 return;
@@ -109,13 +109,13 @@ namespace PetGame
             }
 
             // Calculate displacement direction based on caster's facing
-            float facingSign = caster.CachedFacingSign;
+            float casterFacingSign = caster.CachedFacingSign;
             float directionMultiplier = (displacementDirection == SkillDisplacementDirection.Forward) ? 1f : -1f;
-            float finalDirection = facingSign * directionMultiplier;
+            float finalDirection = casterFacingSign * directionMultiplier;
 
             CharacterEntity casterEntity = caster.GetComponent<CharacterEntity>();
             controller.StartDisplacementWithDamage(finalDirection, displacementDistance, displacementDuration,
-                shapes, effectiveFacingSign, targetTag, skillData.damage, casterEntity);
+                attackDistance, facingSign, targetTag, skillData.damage, casterEntity);
         }
 
         /// <summary>
@@ -143,7 +143,7 @@ namespace PetGame
         /// and damagesDuringDisplacement is enabled.
         /// </summary>
         public void ApplyLockOnDisplacementWithDamage(CombatSystem caster, Vector2 lockedTargetPos,
-            SkillData skillData, AttackRangeShape[] shapes, float effectiveFacingSign, string targetTag)
+            SkillData skillData, float attackDistance, float facingSign, string targetTag)
         {
             if (displacementType != SkillDisplacementType.LockOn) return;
             if (caster == null) return;
@@ -157,7 +157,7 @@ namespace PetGame
 
             CharacterEntity casterEntity = caster.GetComponent<CharacterEntity>();
             controller.StartLockOnDisplacementWithDamage(lockedTargetPos, displacementDuration,
-                shapes, effectiveFacingSign, targetTag, skillData.damage, casterEntity);
+                attackDistance, facingSign, targetTag, skillData.damage, casterEntity);
         }
     }
 }

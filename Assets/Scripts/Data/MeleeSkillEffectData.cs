@@ -4,36 +4,26 @@ namespace PetGame
 {
     /// <summary>
     /// Melee skill effect: deals AOE damage to all enemies within the configured
-    /// attack range shapes when the skill animation reaches its hit frame event.
-    /// Shapes are defined as an array of AttackRangeShape (Box / Circle) with individual offsets.
+    /// skill attack distance when the skill animation reaches its hit frame event.
+    /// Uses a simple horizontal distance check from the caster's Transform forward direction.
     /// </summary>
     [CreateAssetMenu(fileName = "NewMeleeSkillEffect", menuName = "Game/SkillEffect/Melee")]
     public class MeleeSkillEffectData : SkillEffectData
     {
-        [Header("Skill Range Shapes")]
-        [Tooltip("Composable attack range shapes for this skill. " +
-                 "Union of all shapes defines the final skill damage area. " +
-                 "Each shape supports independent offset and size.")]
-        public AttackRangeShape[] skillRangeShapes;
-
-        [Tooltip("Whether the character's sprite faces right by default. " +
-                 "Used to correctly mirror shape offsets at runtime.")]
-        public bool defaultFacesRight = true;
+        [Header("Skill Attack Distance")]
+        [Tooltip("The horizontal distance from the caster's Transform forward direction. " +
+                 "Enemies within this distance in the facing direction are considered in skill range.")]
+        [Min(0.1f)]
+        public float skillAttackDistance = 1.5f;
 
         /// <summary>
         /// Execute the melee skill effect.
-        /// Finds all opposing-faction alive characters within the skill range shapes
+        /// Finds all opposing-faction alive characters within the skill attack distance
         /// and deals damage from the SkillData asset.
         /// </summary>
         public override void Execute(CombatSystem caster, CharacterEntity target, SkillData skillData)
         {
             if (caster == null) return;
-
-            // Early out if no shapes configured
-            if (skillRangeShapes == null || skillRangeShapes.Length == 0)
-            {
-                return;
-            }
 
             CharacterEntity casterEntity = caster.GetComponent<CharacterEntity>();
             if (casterEntity == null) return;
@@ -44,9 +34,8 @@ namespace PetGame
                 ? "Enemy"
                 : "Player";
 
-            // Get caster facing direction and compute effective facing sign
-            float rawFacingSign = caster.CachedFacingSign;
-            float effectiveFacingSign = defaultFacesRight ? rawFacingSign : -rawFacingSign;
+            // Get caster facing direction sign
+            float facingSign = caster.CachedFacingSign;
 
             Vector2 casterPos = caster.transform.position;
 
@@ -69,7 +58,7 @@ namespace PetGame
 
                         Vector2 candidatePos = candidateEntity.transform.position;
 
-                        if (AttackRangeHelper.IsTargetInRange(casterPos, effectiveFacingSign, skillRangeShapes, candidatePos))
+                        if (IsInSkillAttackDistance(casterPos, facingSign, candidatePos))
                         {
                             candidateEntity.TakeDamage(skillData.damage, casterEntity);
                         }
@@ -87,20 +76,19 @@ namespace PetGame
 
                     Vector2 candidatePos = candidateEntity.transform.position;
 
-                    if (AttackRangeHelper.IsTargetInRange(casterPos, effectiveFacingSign, skillRangeShapes, candidatePos))
+                    if (IsInSkillAttackDistance(casterPos, facingSign, candidatePos))
                     {
                         candidateEntity.TakeDamage(skillData.damage, casterEntity);
                     }
                 }
 
                 // Start displacement with continuous damage detection
-                ApplyDisplacementWithDamage(caster, skillData, skillRangeShapes, effectiveFacingSign, targetTag);
+                ApplyDisplacementWithDamage(caster, skillData, skillAttackDistance, facingSign, targetTag);
             }
             else
             {
                 // Standard behavior: instant damage at current position, then displace
                 GameObject[] candidates = GameObject.FindGameObjectsWithTag(targetTag);
-                int hitCount = 0;
 
                 for (int i = 0; i < candidates.Length; i++)
                 {
@@ -109,16 +97,28 @@ namespace PetGame
 
                     Vector2 candidatePos = candidateEntity.transform.position;
 
-                    if (AttackRangeHelper.IsTargetInRange(casterPos, effectiveFacingSign, skillRangeShapes, candidatePos))
+                    if (IsInSkillAttackDistance(casterPos, facingSign, candidatePos))
                     {
                         candidateEntity.TakeDamage(skillData.damage, casterEntity);
-                        hitCount++;
                     }
                 }
 
                 // Apply displacement if configured (no continuous damage)
                 ApplyDisplacement(caster);
             }
+        }
+
+        /// <summary>
+        /// Checks if a target position is within the skill attack distance in the facing direction.
+        /// Only checks horizontal (X-axis) distance.
+        /// </summary>
+        private bool IsInSkillAttackDistance(Vector2 casterPos, float facingSign, Vector2 targetPos)
+        {
+            float dx = targetPos.x - casterPos.x;
+            // Target must be in the facing direction
+            if (facingSign > 0 && dx < 0) return false;
+            if (facingSign < 0 && dx > 0) return false;
+            return Mathf.Abs(dx) <= skillAttackDistance;
         }
     }
 }

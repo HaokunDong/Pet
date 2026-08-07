@@ -56,6 +56,7 @@ namespace PetGame
             bossData.moveSpeed = 2f;
             bossData.attackSpeed = 0.8f;
             bossData.minAttackDistance = 0.4f;
+            bossData.attackDistance = 1.5f;
 
             // Knockback settings — Boss is heavier, less knockback
             bossData.knockbackHorizontalSpeed = 1.0f;
@@ -64,9 +65,6 @@ namespace PetGame
 
             // Quality level — Boss gets more skills
             bossData.qualityLevel = QualityLevel.SS;
-
-            // Default facing
-            bossData.defaultFacesRight = true;
 
             // Save asset
             AssetDatabase.CreateAsset(bossData, assetPath);
@@ -83,7 +81,7 @@ namespace PetGame
                 "Next steps:\n" +
                 "1. Assign a sprite and portrait sprite\n" +
                 "2. Assign an AnimatorController\n" +
-                "3. Configure attack range shapes\n" +
+                "3. Configure attack distance\n" +
                 "4. Add skills as needed\n" +
                 "5. Assign this asset to BossFightManager.bossCharacterData",
                 "OK");

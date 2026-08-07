@@ -42,9 +42,10 @@ namespace PetGame
         [Min(0.05f)]
         public float minAttackDistance = 0.3f;
 
-        [Header("Attack Range Shapes")]
-        [Tooltip("Composable attack range shapes. Union of all shapes defines the final attack area. At least one shape must be defined.")]
-        public AttackRangeShape[] attackRangeShapes;
+        [Tooltip("Attack distance: the horizontal range from the character's Transform forward direction. " +
+                 "Enemies within this distance in the facing direction are considered in attack range.")]
+        [Min(0.1f)]
+        public float attackDistance = 1.0f;
 
         [Header("Combo Attack")]
         [Tooltip("Number of combo attack steps. 1 = single attack (default, backward compatible). >1 = multi-step combo.")]
@@ -76,8 +77,7 @@ namespace PetGame
 
         [Header("Sprite Orientation")]
         [Tooltip("Whether the sprite asset faces right by default. " +
-                 "Uncheck this if the sprite faces left in its original art. " +
-                 "Attack range shapes are configured relative to this default facing direction.")]
+                 "Uncheck this if the sprite faces left in its original art.")]
         public bool defaultFacesRight = true;
 
         [Header("Knockback Settings")]
@@ -187,12 +187,11 @@ namespace PetGame
                 );
             }
 
-            float maxAttackDist = AttackRangeHelper.GetMaxAttackDistance(attackRangeShapes);
-            if (minAttackDistance > maxAttackDist * 0.9f)
+            if (minAttackDistance > attackDistance * 0.9f)
             {
                 Debug.LogWarning(
                     $"[CharacterData] \"{characterName}\" minAttackDistance ({minAttackDistance}) is greater than " +
-                    $"90% of max attack distance ({maxAttackDist * 0.9f:F2}). Characters may never enter Strike state. " +
+                    $"90% of attackDistance ({attackDistance * 0.9f:F2}). Characters may never enter Strike state. " +
                     $"Consider reducing minAttackDistance.",
                     this
                 );

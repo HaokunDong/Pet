@@ -30,7 +30,7 @@ namespace PetGame
 
         // --- Continuous damage detection during displacement ---
         private bool continuousDamage;
-        private AttackRangeShape[] damageShapes;
+        private float damageDistance;
         private float damageFacingSign;
         private string damageTargetTag;
         private float damageAmount;
@@ -58,10 +58,10 @@ namespace PetGame
 
         /// <summary>
         /// Start a displacement movement with continuous damage detection.
-        /// Enemies entering the skill range shapes during movement will be hit (each only once).
+        /// Enemies within the attack distance during movement will be hit (each only once).
         /// </summary>
         public void StartDisplacementWithDamage(float dir, float distance, float dur,
-            AttackRangeShape[] shapes, float facingSign, string targetTag, float damage, CharacterEntity casterEntity)
+            float attackDistance, float facingSign, string targetTag, float damage, CharacterEntity casterEntity)
         {
             direction = dir >= 0f ? 1f : -1f;
             totalDistance = Mathf.Max(0f, distance);
@@ -73,7 +73,7 @@ namespace PetGame
             // Setup continuous damage
             continuousDamage = true;
             isLockOn = false;
-            damageShapes = shapes;
+            damageDistance = attackDistance;
             damageFacingSign = facingSign;
             damageTargetTag = targetTag;
             damageAmount = damage;
@@ -84,7 +84,7 @@ namespace PetGame
             else
                 alreadyHitInstanceIDs.Clear();
 
-            // Record enemies already hit at the starting position (handled by MeleeSkillEffectData)
+            // Record enemies already hit at the starting position (handled by caller)
             GameObject[] candidates = GameObject.FindGameObjectsWithTag(targetTag);
             Vector2 currentPos = transform.position;
             for (int i = 0; i < candidates.Length; i++)
@@ -92,8 +92,9 @@ namespace PetGame
                 CharacterEntity candidateEntity = candidates[i].GetComponent<CharacterEntity>();
                 if (candidateEntity == null || !candidateEntity.RuntimeStats.IsAlive) continue;
 
-                Vector2 candidatePos = candidateEntity.transform.position;
-                if (AttackRangeHelper.IsTargetInRange(currentPos, damageFacingSign, damageShapes, candidatePos))
+                float cdx = candidateEntity.transform.position.x - currentPos.x;
+                bool inFront = (damageFacingSign > 0 && cdx >= 0) || (damageFacingSign < 0 && cdx <= 0);
+                if ((Mathf.Abs(cdx) < 0.3f || inFront) && Mathf.Abs(cdx) <= damageDistance)
                 {
                     alreadyHitInstanceIDs.Add(candidates[i].GetInstanceID());
                 }
@@ -135,7 +136,7 @@ namespace PetGame
         /// Moves toward the locked target position while detecting enemies along the path.
         /// </summary>
         public void StartLockOnDisplacementWithDamage(Vector2 targetPos, float dur,
-            AttackRangeShape[] shapes, float facingSign, string targetTag, float damage, CharacterEntity casterEntity)
+            float attackDistance, float facingSign, string targetTag, float damage, CharacterEntity casterEntity)
         {
             lockOnStartPos = transform.position;
             lockOnTargetPos = targetPos;
@@ -148,7 +149,7 @@ namespace PetGame
 
             // Setup continuous damage
             continuousDamage = true;
-            damageShapes = shapes;
+            damageDistance = attackDistance;
             damageFacingSign = facingSign;
             damageTargetTag = targetTag;
             damageAmount = damage;
@@ -167,8 +168,9 @@ namespace PetGame
                 CharacterEntity candidateEntity = candidates[i].GetComponent<CharacterEntity>();
                 if (candidateEntity == null || !candidateEntity.RuntimeStats.IsAlive) continue;
 
-                Vector2 candidatePos = candidateEntity.transform.position;
-                if (AttackRangeHelper.IsTargetInRange(currentPos, damageFacingSign, damageShapes, candidatePos))
+                float cdx = candidateEntity.transform.position.x - currentPos.x;
+                bool inFront = (damageFacingSign > 0 && cdx >= 0) || (damageFacingSign < 0 && cdx <= 0);
+                if ((Mathf.Abs(cdx) < 0.3f || inFront) && Mathf.Abs(cdx) <= damageDistance)
                 {
                     alreadyHitInstanceIDs.Add(candidates[i].GetInstanceID());
                 }
@@ -220,13 +222,11 @@ namespace PetGame
         }
 
         /// <summary>
-        /// Check for new enemies entering the skill range shapes during displacement.
+        /// Check for new enemies entering the attack distance during displacement.
         /// Each enemy is only hit once per displacement.
         /// </summary>
         private void DetectDamageDuringDisplacement()
         {
-            if (damageShapes == null || damageShapes.Length == 0) return;
-
             Vector2 currentPos = transform.position;
             GameObject[] candidates = GameObject.FindGameObjectsWithTag(damageTargetTag);
 
@@ -240,9 +240,9 @@ namespace PetGame
                 CharacterEntity candidateEntity = candidates[i].GetComponent<CharacterEntity>();
                 if (candidateEntity == null || !candidateEntity.RuntimeStats.IsAlive) continue;
 
-                Vector2 candidatePos = candidateEntity.transform.position;
-
-                if (AttackRangeHelper.IsTargetInRange(currentPos, damageFacingSign, damageShapes, candidatePos))
+                float cdx = candidateEntity.transform.position.x - currentPos.x;
+                bool inFront = (damageFacingSign > 0 && cdx >= 0) || (damageFacingSign < 0 && cdx <= 0);
+                if ((Mathf.Abs(cdx) < 0.3f || inFront) && Mathf.Abs(cdx) <= damageDistance)
                 {
                     candidateEntity.TakeDamage(damageAmount, damageCasterEntity);
                     alreadyHitInstanceIDs.Add(instanceID);
