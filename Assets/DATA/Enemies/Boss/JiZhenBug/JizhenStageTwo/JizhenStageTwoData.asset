@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6d4e6ea0883364f97a8ead9ca8741b5c, type: 3}
+  m_Name: JizhenStageTwoData
+  m_EditorClassIdentifier: 
+  characterId: JiZhen_01
+  characterName: "\u51FB\u9488\u866B"
+  attackPower: 50
+  maxHealth: 100
+  defense: 5
+  moveSpeed: 3
+  attackSpeed: 1
+  minAttackDistance: 0.21
+  attackDistance: 0.91
+  comboCount: 2
+  comboDamageMultipliers: []
+  attackDisplacementType: 0
+  attackDisplacementDirection: 1
+  attackDisplacementDistance: 0
+  attackDisplacementDuration: 0.01
+  attackDamagesDuringDisplacement: 0
+  defaultFacesRight: 0
+  knockbackHorizontalSpeed: 2
+  knockbackVerticalSpeed: 1.5
+  knockbackGravity: 8
+  qualityLevel: 0
+  characterType: 0
+  expReward: 10
+  respawnCooldown: 0
+  skills:
+  - {fileID: 11400000, guid: 407614e0c9207834d9e3cfadd5e92cb6, type: 2}
+  characterDescription: "\u54C7\uFF01\u7740\u706B\u7684\u866B\u5B50"
+  prefab: {fileID: 1256386787663591993, guid: 72f0be6cdcfb2a446829eb24eab033af, type: 3}
+  sprite: {fileID: 21300000, guid: ffba4d610ea7bf64483e2fb72984394a, type: 3}
+  portraitSprite: {fileID: 0}
+  animatorController: {fileID: 9100000, guid: c485ce6cd944e5b409b0d2249b811163, type: 2}
