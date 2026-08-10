@@ -121,6 +121,7 @@ namespace PetGame
         private static readonly int HashSkillFour = Animator.StringToHash("SkillFour");
         private static readonly int HashHit = Animator.StringToHash("Hit");
         private static readonly int HashDeath = Animator.StringToHash("Death");
+        private static readonly int HashAttackIndex = Animator.StringToHash("AttackIndex");
 
         /// <summary>
         /// Whether the sprite asset faces right by default.
@@ -139,6 +140,13 @@ namespace PetGame
         private bool hasSkillThreeParam;
         private bool hasSkillFourParam;
         private bool hasDeathParam;
+        private bool hasAttackIndexParam;
+
+        /// <summary>
+        /// Whether the Animator Controller has an Attack Sub-State Machine with EmptyState.
+        /// If false, PlayAttack/PlayComboNextAttack will not call animator.Play("Base Layer.Attack.EmptyState").
+        /// </summary>
+        private bool hasAttackSubStateMachine;
 
         /// <summary>
         /// The internal state machine managing all animation state transitions.
@@ -198,6 +206,8 @@ namespace PetGame
             hasSkillThreeParam = false;
             hasSkillFourParam = false;
             hasDeathParam = false;
+            hasAttackIndexParam = false;
+            hasAttackSubStateMachine = false;
 
             if (animator == null || animator.runtimeAnimatorController == null) return;
 
@@ -223,8 +233,16 @@ namespace PetGame
                     case var h when h == HashDeath:
                         hasDeathParam = true;
                         break;
+                    case var h when h == HashAttackIndex:
+                        hasAttackIndexParam = true;
+                        break;
                 }
             }
+
+            // Check if the Animator has an Attack Sub-State Machine with EmptyState
+            // by attempting to find the state hash. If it exists, we can use animator.Play().
+            int emptyStateHash = Animator.StringToHash("Base Layer.Attack.EmptyState");
+            hasAttackSubStateMachine = animator.HasState(0, emptyStateHash);
         }
 
         private void Update()
@@ -297,7 +315,7 @@ namespace PetGame
                 var playerMachine = new PlayerStateMachine();
                 playerMachine.Initialize(animator, this);
                 playerMachine.ConfigureSkills(skillCount, hasSkillParam, hasSkillOneParam,
-                    hasSkillTwoParam, hasSkillThreeParam, hasSkillFourParam, hasDeathParam);
+                    hasSkillTwoParam, hasSkillThreeParam, hasSkillFourParam, hasDeathParam, hasAttackIndexParam);
                 stateMachine = playerMachine;
             }
             else
@@ -305,7 +323,7 @@ namespace PetGame
                 var enemyMachine = new EnemyStateMachine();
                 enemyMachine.Initialize(animator, this);
                 enemyMachine.ConfigureSkills(skillCount, hasSkillParam, hasSkillOneParam,
-                    hasSkillTwoParam, hasSkillThreeParam, hasSkillFourParam, hasDeathParam);
+                    hasSkillTwoParam, hasSkillThreeParam, hasSkillFourParam, hasDeathParam, hasAttackIndexParam);
                 stateMachine = enemyMachine;
             }
 
@@ -384,11 +402,13 @@ namespace PetGame
             // This is necessary because if the previous attack just ended and we're
             // starting a new combo from step 0, the Animator might still be in the
             // previous attack state (e.g., Attack2) due to loop timing.
-            // Also explicitly set AttackIndex on the Animator in case ChangeState
-            // was a no-op (already in AttackState) and OnEnter didn't fire.
-            if (animator != null)
+            // Only applies to characters with Attack Sub-State Machine (combo system).
+            if (animator != null && hasAttackSubStateMachine)
             {
-                animator.SetInteger(Animator.StringToHash("AttackIndex"), attackIndex);
+                if (hasAttackIndexParam)
+                {
+                    animator.SetInteger(HashAttackIndex, attackIndex);
+                }
                 animator.Play("Base Layer.Attack.EmptyState", 0, 0f);
                 animator.Update(0f);
             }
@@ -421,9 +441,13 @@ namespace PetGame
 
             // Directly update the Animator parameter and force-play the target state.
             // This avoids the Exit→Entry→SubStateMachine re-entry issue.
-            if (animator != null)
+            // Only applies to characters with Attack Sub-State Machine (combo system).
+            if (animator != null && hasAttackSubStateMachine)
             {
-                animator.SetInteger(Animator.StringToHash("AttackIndex"), attackIndex);
+                if (hasAttackIndexParam)
+                {
+                    animator.SetInteger(HashAttackIndex, attackIndex);
+                }
                 // Force the Animator to re-enter the Attack Sub-State Machine's EmptyState.
                 // EmptyState has transitions to Attack1/Attack2 based on AttackIndex value.
                 // Using the full path "Base Layer.Attack.EmptyState" for Sub-State Machine states.

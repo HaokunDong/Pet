@@ -41,8 +41,9 @@ namespace PetGame
         /// <param name="hasSkillThree">Whether Animator has SkillThree parameter.</param>
         /// <param name="hasSkillFour">Whether Animator has SkillFour parameter.</param>
         /// <param name="hasDeath">Whether Animator has Death parameter.</param>
+        /// <param name="hasAttackIndex">Whether Animator has AttackIndex parameter.</param>
         public void ConfigureSkills(int skillCount, bool hasSkill, bool hasSkillOne,
-            bool hasSkillTwo, bool hasSkillThree, bool hasSkillFour, bool hasDeath)
+            bool hasSkillTwo, bool hasSkillThree, bool hasSkillFour, bool hasDeath, bool hasAttackIndex)
         {
             bool useMultiSkillBools = skillCount > 1;
 
@@ -57,6 +58,12 @@ namespace PetGame
             if (deathState != null)
             {
                 deathState.CacheParameterFlags(hasDeath);
+            }
+
+            var attackState = GetState<AttackState>();
+            if (attackState != null)
+            {
+                attackState.CacheParameterFlags(hasAttackIndex);
             }
         }
 

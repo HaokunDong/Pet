@@ -119,6 +119,13 @@ namespace PetGame
         [TextArea(2, 5)]
         public string characterDescription = "";
 
+        [Header("Evolution")]
+        [Tooltip("The CharacterData that this character can evolve into. Null means no evolution available.")]
+        public CharacterData evolutionTarget;
+
+        [Tooltip("List of requirements that must be met before evolution is allowed. Empty list means evolution is unconditional.")]
+        public EvolutionRequirement[] evolutionRequirements;
+
         [Header("Prefab")]
         [Tooltip("Character-specific Prefab Variant. If null, the default PlayerPrefab will be used.")]
         public GameObject prefab;

@@ -20,6 +20,9 @@ namespace PetGame.States
         /// </summary>
         private int attackIndex = 0;
 
+        /// <summary>Whether the Animator Controller has an AttackIndex parameter.</summary>
+        private bool hasAttackIndexParam;
+
         public AttackState(EntityStateMachine stateMachine) : base(stateMachine) { }
 
         /// <summary>
@@ -32,6 +35,14 @@ namespace PetGame.States
             attackIndex = index;
         }
 
+        /// <summary>
+        /// Cache whether the AttackIndex parameter exists in the Animator Controller.
+        /// </summary>
+        public void CacheParameterFlags(bool hasAttackIndex)
+        {
+            hasAttackIndexParam = hasAttackIndex;
+        }
+
         public override void OnEnter()
         {
             machine.isAttacking = true;
@@ -39,7 +50,10 @@ namespace PetGame.States
 
             if (machine.Animator != null)
             {
-                machine.Animator.SetInteger(HashAttackIndex, attackIndex);
+                if (hasAttackIndexParam)
+                {
+                    machine.Animator.SetInteger(HashAttackIndex, attackIndex);
+                }
                 machine.Animator.SetBool(HashAttack, true);
             }
         }

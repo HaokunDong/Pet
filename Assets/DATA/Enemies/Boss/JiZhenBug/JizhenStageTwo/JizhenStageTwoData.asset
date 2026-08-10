@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6d4e6ea0883364f97a8ead9ca8741b5c, type: 3}
   m_Name: JizhenStageTwoData
   m_EditorClassIdentifier: 
-  characterId: JiZhen_01
+  characterId: JiZhen_02
   characterName: "\u51FB\u9488\u866B"
   attackPower: 50
   maxHealth: 100
@@ -39,6 +39,8 @@ MonoBehaviour:
   skills:
   - {fileID: 11400000, guid: 407614e0c9207834d9e3cfadd5e92cb6, type: 2}
   characterDescription: "\u54C7\uFF01\u7740\u706B\u7684\u866B\u5B50"
+  evolutionTarget: {fileID: 0}
+  evolutionRequirements: []
   prefab: {fileID: 1256386787663591993, guid: 72f0be6cdcfb2a446829eb24eab033af, type: 3}
   sprite: {fileID: 21300000, guid: ffba4d610ea7bf64483e2fb72984394a, type: 3}
   portraitSprite: {fileID: 0}

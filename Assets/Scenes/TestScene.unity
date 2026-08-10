@@ -587,7 +587,7 @@ MonoBehaviour:
   spawnCenter: {fileID: 1779445765}
   spawnRange: 8
   spawnInterval: 1
-  maxEnemies: 0
+  maxEnemies: 1
   aiDetectionRange: 10
   aiPatrolRange: 3
 --- !u!4 &267147333
@@ -1275,63 +1275,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1001 &946245037
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 5069724789522046705, guid: 6a1b62633c171f74eabf214ea91be867, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5069724789522046705, guid: 6a1b62633c171f74eabf214ea91be867, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5069724789522046705, guid: 6a1b62633c171f74eabf214ea91be867, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5069724789522046705, guid: 6a1b62633c171f74eabf214ea91be867, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 5069724789522046705, guid: 6a1b62633c171f74eabf214ea91be867, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5069724789522046705, guid: 6a1b62633c171f74eabf214ea91be867, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5069724789522046705, guid: 6a1b62633c171f74eabf214ea91be867, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5069724789522046705, guid: 6a1b62633c171f74eabf214ea91be867, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5069724789522046705, guid: 6a1b62633c171f74eabf214ea91be867, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5069724789522046705, guid: 6a1b62633c171f74eabf214ea91be867, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7213410806470838667, guid: 6a1b62633c171f74eabf214ea91be867, type: 3}
-      propertyPath: m_Name
-      value: SlimeDeadMan
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: 6a1b62633c171f74eabf214ea91be867, type: 3}
 --- !u!1 &1040055587
 GameObject:
   m_ObjectHideFlags: 0
@@ -1545,7 +1488,6 @@ MonoBehaviour:
   characterDataList:
   - {fileID: 11400000, guid: a07fe24d25144484d9c9e8290258d622, type: 2}
   - {fileID: 11400000, guid: 2842bc16e4357c34e9eba347828fa215, type: 2}
-  - {fileID: 11400000, guid: ebd63e8a8a1df274785e4a303d48c055, type: 2}
   - {fileID: 11400000, guid: 7643fda82752571448907a8eec24f349, type: 2}
 --- !u!4 &1303202849
 Transform:
@@ -3122,4 +3064,3 @@ SceneRoots:
   - {fileID: 449787560}
   - {fileID: 871958247}
   - {fileID: 1825091548}
-  - {fileID: 946245037}

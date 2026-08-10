@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using PetGame;
@@ -67,6 +68,11 @@ public class TrainViewController : MonoBehaviour
     private Text talentPointText;
     private Text experienceText;
 
+    // Evolution system UI references
+    private Text requirementText;
+    private Button evolutionButton;
+    private bool hasEvolved = false;
+
     // Available talent points (tracked locally for temp adjustments during preview)
     private int availableTalentPoints;
 
@@ -102,6 +108,7 @@ public class TrainViewController : MonoBehaviour
         InitializePropertyTexts();
         InitializeTalentSystems();
         InitializeLevelSystem();
+        InitializeEvolutionSystem();
 
         // Subscribe to cultivation data events for real-time updates
         if (cultivationData != null)
@@ -513,6 +520,10 @@ public class TrainViewController : MonoBehaviour
 
         // Update all property texts (growth value B depends on level)
         RefreshAllPropertyTexts();
+
+        // Refresh evolution requirement display (level change may affect requirements)
+        UpdateEvolutionRequirementDisplay();
+        UpdateEvolutionButtonState();
     }
 
     /// <summary>
@@ -584,5 +595,214 @@ public class TrainViewController : MonoBehaviour
             UpdateExperienceText();
             RefreshAllPropertyTexts();
         }
+
+        // Refresh evolution display on re-enable
+        UpdateEvolutionRequirementDisplay();
+        UpdateEvolutionButtonState();
     }
+
+    #region Evolution System
+
+    /// <summary>
+    /// Initialize the evolution system: find RequirmentFrame text and EvolutionButton,
+    /// bind events, and display initial state.
+    /// </summary>
+    private void InitializeEvolutionSystem()
+    {
+        // Find RequirmentFrame and its Text child
+        Transform requirementFrame = transform.Find("RequirmentFrame");
+        if (requirementFrame != null)
+        {
+            Transform textNode = requirementFrame.Find("Text (Legacy)");
+            if (textNode != null)
+            {
+                requirementText = textNode.GetComponent<Text>();
+            }
+            if (requirementText == null)
+            {
+                // Fallback: try GetComponentInChildren
+                requirementText = requirementFrame.GetComponentInChildren<Text>();
+            }
+        }
+        else
+        {
+            Debug.LogWarning("TrainViewController: Could not find 'RequirmentFrame' node.");
+        }
+
+        // Find EvolutionButton
+        Transform evolutionButtonNode = transform.Find("EvolutionButton");
+        if (evolutionButtonNode != null)
+        {
+            evolutionButton = evolutionButtonNode.GetComponent<Button>();
+            if (evolutionButton != null)
+            {
+                evolutionButton.onClick.AddListener(OnEvolutionButtonClicked);
+            }
+        }
+        else
+        {
+            Debug.LogWarning("TrainViewController: Could not find 'EvolutionButton' node.");
+        }
+
+        // Initial display
+        UpdateEvolutionRequirementDisplay();
+        UpdateEvolutionButtonState();
+    }
+
+    /// <summary>
+    /// Update the RequirmentFrame text to show evolution requirement statuses.
+    /// Each requirement is displayed as: "[description]: currentValue/targetValue ✓/✗"
+    /// Uses rich text for color coding (green = met, red = not met).
+    /// </summary>
+    private void UpdateEvolutionRequirementDisplay()
+    {
+        if (requirementText == null) return;
+
+        // No character data
+        if (characterData == null)
+        {
+            requirementText.text = "";
+            return;
+        }
+
+        // No evolution target configured
+        if (characterData.evolutionTarget == null)
+        {
+            requirementText.text = "无可用进化";
+            return;
+        }
+
+        // Already evolved
+        if (hasEvolved)
+        {
+            requirementText.text = "<color=#00FF00>已进化</color>";
+            return;
+        }
+
+        // No requirements = unconditional
+        if (characterData.evolutionRequirements == null || characterData.evolutionRequirements.Length == 0)
+        {
+            requirementText.text = "<color=#00FF00>可以进化！</color>";
+            return;
+        }
+
+        // Build requirement display text
+        List<EvolutionRequirementStatus> statuses = EvolutionChecker.CheckAllRequirements(characterData);
+        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+
+        for (int i = 0; i < statuses.Count; i++)
+        {
+            var status = statuses[i];
+            string desc = !string.IsNullOrEmpty(status.requirement.description)
+                ? status.requirement.description
+                : GetDefaultDescription(status.requirement);
+
+            string color = status.isMet ? "#00FF00" : "#FF4444";
+            string mark = status.isMet ? "✓" : "✗";
+
+            sb.Append($"<color={color}>{mark} {desc}: {status.currentValue}/{status.requirement.targetValue}</color>");
+
+            if (i < statuses.Count - 1)
+            {
+                sb.Append("\n");
+            }
+        }
+
+        requirementText.text = sb.ToString();
+    }
+
+    /// <summary>
+    /// Get a default description for a requirement if none is configured.
+    /// </summary>
+    private string GetDefaultDescription(EvolutionRequirement req)
+    {
+        switch (req.type)
+        {
+            case EvolutionRequirementType.Level:
+                return $"等级达到{req.targetValue}";
+            case EvolutionRequirementType.Material:
+                return $"材料[{req.materialId}]x{req.targetValue}";
+            case EvolutionRequirementType.KillCount:
+                return $"击杀数达到{req.targetValue}";
+            default:
+                return "未知条件";
+        }
+    }
+
+    /// <summary>
+    /// Update the EvolutionButton interactable state based on requirement checks.
+    /// </summary>
+    private void UpdateEvolutionButtonState()
+    {
+        if (evolutionButton == null) return;
+
+        // No evolution target or already evolved
+        if (characterData == null || characterData.evolutionTarget == null || hasEvolved)
+        {
+            evolutionButton.interactable = false;
+            return;
+        }
+
+        // Check if all requirements are met
+        evolutionButton.interactable = EvolutionChecker.AreAllRequirementsMet(characterData);
+    }
+
+    /// <summary>
+    /// Handle EvolutionButton click: perform evolution if all conditions are met.
+    /// Adds the evolution target as a new character card and consumes required materials.
+    /// </summary>
+    private void OnEvolutionButtonClicked()
+    {
+        if (characterData == null || characterData.evolutionTarget == null) return;
+
+        // Double-check requirements
+        if (!EvolutionChecker.AreAllRequirementsMet(characterData))
+        {
+            Debug.LogWarning("[TrainViewController] Evolution requirements not met.");
+            return;
+        }
+
+        // Find CardSplineDistributor to add the new character
+        CardSplineDistributor cardDistributor = FindObjectOfType<CardSplineDistributor>();
+        if (cardDistributor == null)
+        {
+            Debug.LogError("[TrainViewController] CardSplineDistributor not found! Cannot perform evolution.");
+            return;
+        }
+
+        // Attempt to add the evolution target to the card list
+        CharacterData evolutionTarget = characterData.evolutionTarget;
+        bool added = cardDistributor.AddCharacterData(evolutionTarget);
+
+        if (!added)
+        {
+            Debug.LogWarning($"[TrainViewController] Evolution target '{evolutionTarget.characterName}' already exists in card list.");
+            // Update display to reflect that evolution target already exists
+            hasEvolved = true;
+            UpdateEvolutionRequirementDisplay();
+            UpdateEvolutionButtonState();
+            return;
+        }
+
+        // Consume materials for Material-type requirements
+        if (characterData.evolutionRequirements != null)
+        {
+            foreach (var req in characterData.evolutionRequirements)
+            {
+                if (req != null && req.type == EvolutionRequirementType.Material)
+                {
+                    MaterialManager.Instance.ConsumeMaterial(req.materialId, req.targetValue);
+                }
+            }
+        }
+
+        // Mark as evolved and update UI
+        hasEvolved = true;
+        UpdateEvolutionRequirementDisplay();
+        UpdateEvolutionButtonState();
+
+        Debug.Log($"[TrainViewController] Evolution successful! '{characterData.characterName}' evolved into '{evolutionTarget.characterName}'.");
+    }
+
+    #endregion
 }

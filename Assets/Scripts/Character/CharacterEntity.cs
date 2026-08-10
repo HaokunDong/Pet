@@ -305,6 +305,9 @@ namespace PetGame
             // Award experience to the killer if this is an enemy killed by a player
             AwardExperienceToKiller();
 
+            // Record kill stats for the killer (player characters only)
+            RecordKillStats();
+
             OnDeath?.Invoke(this);
 
             // Hide health bar on death
@@ -361,6 +364,25 @@ namespace PetGame
 
             CultivationManager.Instance.AddExperience(lastAttacker, expReward);
             Debug.Log($"[CharacterEntity] '{lastAttacker.RuntimeStats.characterId}' gained {expReward} exp from defeating '{RuntimeStats.characterId}'");
+        }
+
+        /// <summary>
+        /// Record a kill for the attacker's kill statistics (used for evolution requirements).
+        /// Only records when a player character kills an enemy.
+        /// </summary>
+        private void RecordKillStats()
+        {
+            if (lastAttacker == null) return;
+            if (RuntimeStats == null || lastAttacker.RuntimeStats == null) return;
+
+            // Only enemies count as kills
+            if (RuntimeStats.characterType == CharacterType.Player) return;
+
+            // Only player characters record kills
+            if (lastAttacker.RuntimeStats.characterType != CharacterType.Player) return;
+
+            string attackerId = lastAttacker.RuntimeStats.characterId;
+            KillStatsManager.Instance.AddKill(attackerId);
         }
 
         /// <summary>

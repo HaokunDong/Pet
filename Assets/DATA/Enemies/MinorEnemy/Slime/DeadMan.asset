@@ -19,9 +19,8 @@ MonoBehaviour:
   defense: 0
   moveSpeed: 0
   attackSpeed: 0.1
-  engageDistance: 0
   minAttackDistance: 0.05
-  attackRangeShapes: []
+  attackDistance: 1
   comboCount: 1
   comboDamageMultipliers: []
   attackDisplacementType: 0
@@ -35,10 +34,13 @@ MonoBehaviour:
   knockbackGravity: 0.1
   qualityLevel: 0
   characterType: 1
-  expReward: 0
+  expReward: 50
   respawnCooldown: 0
   skills: []
   characterDescription: 
+  evolutionTarget: {fileID: 0}
+  evolutionRequirements: []
+  prefab: {fileID: 0}
   sprite: {fileID: -1798011705, guid: afc3f8ed9e4f84d5c9bce596f8394d2b, type: 3}
   portraitSprite: {fileID: 0}
   animatorController: {fileID: 9100000, guid: e451f540dc69b460c8b9268817298615, type: 2}

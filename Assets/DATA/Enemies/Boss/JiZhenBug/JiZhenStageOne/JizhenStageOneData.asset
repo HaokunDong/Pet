@@ -12,9 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6d4e6ea0883364f97a8ead9ca8741b5c, type: 3}
   m_Name: JizhenStageOneData
   m_EditorClassIdentifier: 
-  characterId: 
+  characterId: JiZhen_01
   characterName: 
-  attackPower: 20
+  attackPower: 100
   maxHealth: 100
   defense: 5
   moveSpeed: 3
@@ -37,8 +37,14 @@ MonoBehaviour:
   expReward: 10
   respawnCooldown: 3
   skills: []
-  characterDescription: 
+  characterDescription: "\u5C0F\u866B\u5B50"
+  evolutionTarget: {fileID: 11400000, guid: ebd63e8a8a1df274785e4a303d48c055, type: 2}
+  evolutionRequirements:
+  - type: 0
+    targetValue: 10
+    materialId: 
+    description: 
   prefab: {fileID: 8648961394872403470, guid: a7af1175a97a90e479e55c2e97a5a43a, type: 3}
   sprite: {fileID: 21300000, guid: a96e680a2ca331642a1194ab9f24d31c, type: 3}
   portraitSprite: {fileID: 0}
-  animatorController: {fileID: 0}
+  animatorController: {fileID: 9100000, guid: 443d9359fd3e59541898a09c37226a50, type: 2}
