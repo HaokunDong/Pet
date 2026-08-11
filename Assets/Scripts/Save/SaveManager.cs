@@ -65,7 +65,8 @@ namespace PetGame
                         healthLevel = cultData.healthLevel,
                         attackSpeedLevel = cultData.attackSpeedLevel,
                         moveSpeedLevel = cultData.moveSpeedLevel,
-                        skillCDLevel = cultData.skillCDLevel
+                        skillCDLevel = cultData.skillCDLevel,
+                        hasEvolved = cultData.hasEvolved
                     };
                 }
 
@@ -161,7 +162,8 @@ namespace PetGame
                     healthLevel = charSave.cultivation.healthLevel,
                     attackSpeedLevel = charSave.cultivation.attackSpeedLevel,
                     moveSpeedLevel = charSave.cultivation.moveSpeedLevel,
-                    skillCDLevel = charSave.cultivation.skillCDLevel
+                    skillCDLevel = charSave.cultivation.skillCDLevel,
+                    hasEvolved = charSave.cultivation.hasEvolved
                 };
                 CultivationManager.Instance.SetCultivationData(entity.RuntimeStats.characterId, cultData);
                 CultivationManager.Instance.ApplyCultivationBonuses(entity);

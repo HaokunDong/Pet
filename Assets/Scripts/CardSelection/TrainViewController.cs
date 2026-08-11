@@ -71,7 +71,6 @@ public class TrainViewController : MonoBehaviour
     // Evolution system UI references
     private Text requirementText;
     private Button evolutionButton;
-    private bool hasEvolved = false;
 
     // Available talent points (tracked locally for temp adjustments during preview)
     private int availableTalentPoints;
@@ -673,7 +672,7 @@ public class TrainViewController : MonoBehaviour
         }
 
         // Already evolved
-        if (hasEvolved)
+        if (GetHasEvolved())
         {
             requirementText.text = "<color=#00FF00>已进化</color>";
             return;
@@ -737,7 +736,7 @@ public class TrainViewController : MonoBehaviour
         if (evolutionButton == null) return;
 
         // No evolution target or already evolved
-        if (characterData == null || characterData.evolutionTarget == null || hasEvolved)
+        if (characterData == null || characterData.evolutionTarget == null || GetHasEvolved())
         {
             evolutionButton.interactable = false;
             return;
@@ -750,15 +749,24 @@ public class TrainViewController : MonoBehaviour
     /// <summary>
     /// Handle EvolutionButton click: perform evolution if all conditions are met.
     /// Adds the evolution target as a new character card and consumes required materials.
+    /// Immediately disables the button and updates RequirmentFrame upon success.
     /// </summary>
     private void OnEvolutionButtonClicked()
     {
         if (characterData == null || characterData.evolutionTarget == null) return;
 
+        // Immediately disable button to prevent double-click during processing
+        if (evolutionButton != null)
+        {
+            evolutionButton.interactable = false;
+        }
+
         // Double-check requirements
         if (!EvolutionChecker.AreAllRequirementsMet(characterData))
         {
             Debug.LogWarning("[TrainViewController] Evolution requirements not met.");
+            // Re-enable button state based on actual requirement status
+            UpdateEvolutionButtonState();
             return;
         }
 
@@ -767,6 +775,7 @@ public class TrainViewController : MonoBehaviour
         if (cardDistributor == null)
         {
             Debug.LogError("[TrainViewController] CardSplineDistributor not found! Cannot perform evolution.");
+            UpdateEvolutionButtonState();
             return;
         }
 
@@ -777,11 +786,6 @@ public class TrainViewController : MonoBehaviour
         if (!added)
         {
             Debug.LogWarning($"[TrainViewController] Evolution target '{evolutionTarget.characterName}' already exists in card list.");
-            // Update display to reflect that evolution target already exists
-            hasEvolved = true;
-            UpdateEvolutionRequirementDisplay();
-            UpdateEvolutionButtonState();
-            return;
         }
 
         // Consume materials for Material-type requirements
@@ -796,12 +800,41 @@ public class TrainViewController : MonoBehaviour
             }
         }
 
-        // Mark as evolved and update UI
-        hasEvolved = true;
+        // Mark as evolved — this is the final state, button stays disabled permanently
+        SetHasEvolved(true);
+
+        // Immediately update UI to reflect evolved state
         UpdateEvolutionRequirementDisplay();
-        UpdateEvolutionButtonState();
+        // Ensure button remains disabled (hasEvolved = true guarantees interactable = false)
+        if (evolutionButton != null)
+        {
+            evolutionButton.interactable = false;
+        }
 
         Debug.Log($"[TrainViewController] Evolution successful! '{characterData.characterName}' evolved into '{evolutionTarget.characterName}'.");
+    }
+
+    /// <summary>
+    /// Get the evolution state from CultivationData (persistent across panel open/close).
+    /// </summary>
+    private bool GetHasEvolved()
+    {
+        if (cultivationData != null)
+        {
+            return cultivationData.hasEvolved;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Set the evolution state in CultivationData (persistent across panel open/close).
+    /// </summary>
+    private void SetHasEvolved(bool value)
+    {
+        if (cultivationData != null)
+        {
+            cultivationData.hasEvolved = value;
+        }
     }
 
     #endregion

@@ -35,6 +35,9 @@ namespace PetGame
         public int moveSpeedLevel = 0;
         public int skillCDLevel = 0;
 
+        // Evolution state
+        public bool hasEvolved = false;
+
         // Events for UI updates
         public event Action<int, int> OnExpChanged;       // (currentExp, requiredExp)
         public event Action<int> OnLevelUp;               // (newLevel)

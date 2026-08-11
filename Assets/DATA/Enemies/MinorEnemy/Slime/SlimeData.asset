@@ -34,10 +34,12 @@ MonoBehaviour:
   knockbackGravity: 8
   qualityLevel: 0
   characterType: 1
-  expReward: 200
+  expReward: 1000
   respawnCooldown: 0
   skills: []
   characterDescription: 
+  evolutionTarget: {fileID: 0}
+  evolutionRequirements: []
   prefab: {fileID: 5151626311275029776, guid: ea3cf52b98aae1144bf185483a51c519, type: 3}
   sprite: {fileID: -1798011705, guid: afc3f8ed9e4f84d5c9bce596f8394d2b, type: 3}
   portraitSprite: {fileID: 0}

@@ -41,6 +41,7 @@ namespace PetGame
         public int attackSpeedLevel = 0;
         public int moveSpeedLevel = 0;
         public int skillCDLevel = 0;
+        public bool hasEvolved = false;
     }
 
     /// <summary>
