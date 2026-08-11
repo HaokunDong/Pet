@@ -18,7 +18,7 @@ namespace PetGame
         [SerializeField] private TMP_Text attackText;
         [SerializeField] private TMP_Text healthText;
         [SerializeField] private TMP_Text defenseText;
-        [SerializeField] private TMP_Text descriptionText;
+        [SerializeField] private Text descriptionText;
 
         [Header("Cooldown UI")]
         [Tooltip("Text overlay to display cooldown remaining seconds. Will be created dynamically if not assigned.")]
@@ -60,7 +60,7 @@ namespace PetGame
         /// </summary>
         public float CooldownRemaining { get; private set; }
 
-        private const string DefaultDescription = "\u5b83\u8fd8\u5f88\u795e\u79d8\u54e6~";
+        // Default description text is read from the Text component's initial value in the prefab.
 
         private void Awake()
         {
@@ -190,11 +190,9 @@ namespace PetGame
             if (defenseText != null)
                 defenseText.text = data.defense.ToString("F0");
 
-            if (descriptionText != null)
+            if (descriptionText != null && !string.IsNullOrEmpty(data.characterDescription))
             {
-                descriptionText.text = string.IsNullOrEmpty(data.characterDescription)
-                    ? DefaultDescription
-                    : data.characterDescription;
+                descriptionText.text = data.characterDescription;
             }
         }
 
