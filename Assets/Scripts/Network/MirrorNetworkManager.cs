@@ -3,6 +3,7 @@ using Mirror;
 using Mirror.FizzySteam;
 using Steamworks;
 using System;
+using System.Collections.Generic;
 
 namespace PetGame.Network
 {
@@ -45,6 +46,12 @@ namespace PetGame.Network
         /// <summary>Whether we are running as client only.</summary>
         public bool IsClientOnly => !NetworkServer.active && NetworkClient.active;
 
+        /// <summary>All connected NetworkPlayer instances (server-side tracking).</summary>
+        public List<NetworkPlayer> ConnectedPlayers { get; private set; } = new List<NetworkPlayer>();
+
+        /// <summary>The local player's NetworkPlayer instance.</summary>
+        public NetworkPlayer LocalPlayer { get; set; }
+
         #endregion
 
         public override void Awake()
@@ -58,8 +65,14 @@ namespace PetGame.Network
             singleton = this;
             DontDestroyOnLoad(gameObject);
 
+            // Disable auto create player - we handle it manually
+            autoCreatePlayer = false;
+
             // Ensure FizzySteamworks transport is set
             EnsureTransport();
+
+            // Ensure we have a player prefab
+            EnsurePlayerPrefab();
 
             base.Awake();
         }
@@ -71,7 +84,7 @@ namespace PetGame.Network
             base.OnDestroy();
         }
 
-        #region Transport Setup
+        #region Transport & Prefab Setup
 
         /// <summary>
         /// Ensures FizzySteamworks transport component exists and is assigned.
@@ -87,6 +100,34 @@ namespace PetGame.Network
 
             transport = fizzyTransport;
             Transport.active = fizzyTransport;
+        }
+
+        /// <summary>
+        /// Ensures a NetworkPlayer prefab is assigned as the player prefab.
+        /// If none is assigned, creates one at runtime.
+        /// </summary>
+        private void EnsurePlayerPrefab()
+        {
+            if (playerPrefab != null) return;
+
+            // Try to load from Resources
+            GameObject prefab = Resources.Load<GameObject>("Prefabs/Network/NetworkPlayerPrefab");
+            if (prefab == null)
+            {
+                // Fallback: try without "Prefab" suffix
+                prefab = Resources.Load<GameObject>("Prefabs/Network/NetworkPlayer");
+            }
+
+            if (prefab != null)
+            {
+                playerPrefab = prefab;
+                Debug.Log("[MirrorNetworkManager] Loaded NetworkPlayer prefab from Resources.");
+            }
+            else
+            {
+                Debug.LogWarning("[MirrorNetworkManager] NetworkPlayer prefab not found in Resources. " +
+                    "Please create it at Resources/Prefabs/Network/NetworkPlayerPrefab.");
+            }
         }
 
         #endregion
@@ -170,8 +211,47 @@ namespace PetGame.Network
             OnClientConnectedEvent?.Invoke(conn);
         }
 
+        /// <summary>
+        /// Called on the server when a client requests to add a player.
+        /// We manually instantiate the NetworkPlayer prefab and spawn it.
+        /// </summary>
+        public override void OnServerAddPlayer(NetworkConnectionToClient conn)
+        {
+            // Instantiate the NetworkPlayer prefab
+            GameObject playerObj = Instantiate(playerPrefab);
+            playerObj.name = $"NetworkPlayer [connId={conn.connectionId}]";
+
+            // Spawn it on the network with the connection's authority
+            NetworkServer.AddPlayerForConnection(conn, playerObj);
+
+            // Track the player
+            NetworkPlayer netPlayer = playerObj.GetComponent<NetworkPlayer>();
+            if (netPlayer != null)
+            {
+                ConnectedPlayers.Add(netPlayer);
+                Debug.Log($"[MirrorNetworkManager] NetworkPlayer spawned for connection: {conn.connectionId}");
+            }
+        }
+
         public override void OnServerDisconnect(NetworkConnectionToClient conn)
         {
+            // Remove from tracked players
+            NetworkPlayer disconnectedPlayer = null;
+            foreach (var player in ConnectedPlayers)
+            {
+                if (player != null && player.connectionToClient == conn)
+                {
+                    disconnectedPlayer = player;
+                    break;
+                }
+            }
+
+            if (disconnectedPlayer != null)
+            {
+                ConnectedPlayers.Remove(disconnectedPlayer);
+                Debug.Log($"[MirrorNetworkManager] NetworkPlayer removed for connection: {conn.connectionId}");
+            }
+
             Debug.Log($"[MirrorNetworkManager] Client disconnected from server: {conn.connectionId}");
             OnClientDisconnectedEvent?.Invoke(conn);
             base.OnServerDisconnect(conn);
@@ -181,6 +261,10 @@ namespace PetGame.Network
         {
             base.OnClientConnect();
             Debug.Log("[MirrorNetworkManager] Connected to server.");
+
+            // Request the server to add our player object
+            NetworkClient.AddPlayer();
+
             OnConnectedToServer?.Invoke();
         }
 
@@ -212,7 +296,15 @@ namespace PetGame.Network
         public override void OnStopClient()
         {
             base.OnStopClient();
+            LocalPlayer = null;
             Debug.Log("[MirrorNetworkManager] Client stopped.");
+        }
+
+        public override void OnStopServer()
+        {
+            base.OnStopServer();
+            ConnectedPlayers.Clear();
+            Debug.Log("[MirrorNetworkManager] Server stopped. Player list cleared.");
         }
 
         #endregion

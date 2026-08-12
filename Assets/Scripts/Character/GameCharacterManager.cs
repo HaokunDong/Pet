@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using PetGame.AI;
+using PetGame.Network;
 
 namespace PetGame
 {
@@ -84,6 +85,36 @@ namespace PetGame
             //SpawnPlayerCharacters(saveData);
 
             saveTimer = 0f;
+        }
+
+        /// <summary>
+        /// Get the currently active character's CharacterData.
+        /// Used by NetworkPlayer to determine what character to spawn in multiplayer.
+        /// Returns null if no character is active.
+        /// </summary>
+        public CharacterData GetCurrentCharacterData()
+        {
+            if (PlayerCharacters.Count > 0 && PlayerCharacters[0] != null)
+            {
+                return PlayerCharacters[0].characterData;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Notify the network when the local player switches character.
+        /// Called after SwitchPlayerCharacter succeeds.
+        /// </summary>
+        private void NotifyNetworkCharacterSwitch(CharacterData newData)
+        {
+            if (!IsMultiplayerMode) return;
+            if (MirrorNetworkManager.singleton == null) return;
+
+            PetGame.Network.NetworkPlayer localPlayer = MirrorNetworkManager.singleton.LocalPlayer;
+            if (localPlayer != null)
+            {
+                localPlayer.OnLocalCharacterSwitched(newData.characterId);
+            }
         }
 
         private void Update()
@@ -190,6 +221,9 @@ namespace PetGame
                 CultivationManager.Instance.ApplyCultivationBonuses(newEntity);
             }
             newEntity.RuntimeStats.currentHealth = newEntity.RuntimeStats.maxHealth;
+
+            // Notify network about character switch
+            NotifyNetworkCharacterSwitch(newData);
 
             return true;
         }
