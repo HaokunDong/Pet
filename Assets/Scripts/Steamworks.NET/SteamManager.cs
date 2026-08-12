@@ -39,7 +39,15 @@ public class SteamManager : MonoBehaviour {
 	protected bool m_bInitialized = false;
 	public static bool Initialized {
 		get {
-			return Instance.m_bInitialized;
+			if (s_instance == null)
+			{
+				// If already initialized once in this session, don't create a new instance
+				if (s_EverInitialized)
+					return false;
+				// Otherwise, create the instance
+				return Instance.m_bInitialized;
+			}
+			return s_instance.m_bInitialized;
 		}
 	}
 
