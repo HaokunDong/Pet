@@ -387,25 +387,10 @@ namespace PetGame
 
         /// <summary>
         /// Recycle this character back to the object pool.
-        /// In multiplayer mode, NetworkObjects are despawned instead of pooled.
         /// </summary>
         private void Recycle()
         {
             CleanUp();
-
-            // In multiplayer mode, NetworkObjects cannot be reparented to the pool container.
-            // Use Despawn/Destroy instead.
-            var netObj = GetComponent<Unity.Netcode.NetworkObject>();
-            if (netObj != null && netObj.IsSpawned)
-            {
-                if (Unity.Netcode.NetworkManager.Singleton != null && Unity.Netcode.NetworkManager.Singleton.IsServer)
-                {
-                    netObj.Despawn(true); // destroy on despawn
-                }
-                // Client does nothing — server will handle despawn
-                return;
-            }
-
             PoolMgr.Instance.PutNode(gameObject);
         }
 

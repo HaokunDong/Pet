@@ -116,14 +116,6 @@ public class PoolMgr : Singleton<PoolMgr>
     {
         if (!node) return;
 
-        // Safety check: do not pool NetworkObjects that are still spawned
-        var netObj = node.GetComponent<Unity.Netcode.NetworkObject>();
-        if (netObj != null && netObj.IsSpawned)
-        {
-            Debug.LogWarning($"[PoolMgr] Attempted to pool a spawned NetworkObject '{node.name}'. Skipping.");
-            return;
-        }
-
         string name = node.name;
         NodePool pool = null;
         if (dictPool.ContainsKey(name))

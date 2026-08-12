@@ -93,7 +93,7 @@ namespace PetGame
             GameObject joinCodeInputObj = CreateTMPInputField("JoinCodeInput", initialPanel.transform, "Enter Lobby Code...");
             SetLayoutHeight(joinCodeInputObj, 50f);
             TMP_InputField joinCodeInput = joinCodeInputObj.GetComponent<TMP_InputField>();
-            joinCodeInput.characterLimit = 6;
+            joinCodeInput.characterLimit = 20; // Steam Lobby ID can be up to 18 digits
 
             // Join Button
             GameObject joinBtnObj = CreateTMPButton("JoinButton", initialPanel.transform, "Join");
@@ -171,6 +171,13 @@ namespace PetGame
             copyBtnLE.preferredWidth = 100f;
             Button copyCodeButton = copyBtnObj.GetComponent<Button>();
 
+            // Invite Friends Button
+            GameObject inviteBtnObj = CreateTMPButton("InviteFriendsButton", lobbyPanelObj.transform, "\ud83d\udc65 Invite Friends");
+            SetLayoutHeight(inviteBtnObj, 50f);
+            Image inviteBtnImage = inviteBtnObj.GetComponent<Image>();
+            inviteBtnImage.color = new Color(0.2f, 0.6f, 0.3f, 1f);
+            Button inviteFriendsButton = inviteBtnObj.GetComponent<Button>();
+
             // Status Text
             GameObject statusObj = CreateTMPText("StatusText", lobbyPanelObj.transform, "Waiting for player...", 16, TextAlignmentOptions.Center, new Color(0.7f, 0.7f, 0.7f));
             SetLayoutHeight(statusObj, 25f);
@@ -213,6 +220,7 @@ namespace PetGame
             SetField(type, lobbyPanelScript, "lobbyPanel", lobbyPanelObj, flags);
             SetField(type, lobbyPanelScript, "lobbyCodeText", lobbyCodeText, flags);
             SetField(type, lobbyPanelScript, "copyCodeButton", copyCodeButton, flags);
+            SetField(type, lobbyPanelScript, "inviteFriendsButton", inviteFriendsButton, flags);
             SetField(type, lobbyPanelScript, "playerCountText", playerCountText, flags);
             SetField(type, lobbyPanelScript, "leaveLobbyButton", leaveLobbyButton, flags);
             SetField(type, lobbyPanelScript, "statusText", statusText, flags);
@@ -232,8 +240,8 @@ namespace PetGame
                     "LobbyPanel Prefab Created",
                     $"LobbyPanel prefab created at:\n{prefabPath}\n\n" +
                     "Next steps:\n" +
-                    "1. Drag this prefab into your MainView Canvas as a child\n" +
-                    "2. In MainView Inspector, assign the LobbyPanel reference\n" +
+                    "1. The prefab is saved at Resources/Prefabs/UI/LobbyPanel\n" +
+                    "2. It will be dynamically loaded by MainView when FriendsButton is clicked\n" +
                     "3. All internal SerializeField references are already configured!",
                     "OK");
 

@@ -1,8 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 using PetGame.AI;
-using Unity.Netcode;
-using PetGame.Network;
 
 namespace PetGame
 {
@@ -314,33 +312,15 @@ namespace PetGame
         }
 
         /// <summary>
-        /// Create a player character configured for multiplayer mode.
-        /// Adds NetworkObject and NetworkPlayerController components.
-        /// </summary>
-        public CharacterEntity CreateNetworkPlayerCharacter(CharacterData data, Vector3 position)
-        {
-            CharacterEntity entity = CreatePlayerCharacter(data, position);
-            GameObject playerObj = entity.gameObject;
-
-            // Add NetworkObject if not present
-            if (playerObj.GetComponent<NetworkObject>() == null)
-                playerObj.AddComponent<NetworkObject>();
-
-            // Add NetworkPlayerController for sync
-            if (playerObj.GetComponent<NetworkPlayerController>() == null)
-                playerObj.AddComponent<NetworkPlayerController>();
-
-            return entity;
-        }
-
-        /// <summary>
         /// Check if we are in multiplayer mode.
+        /// Uses Mirror NetworkManager to determine if network is active.
         /// </summary>
         public bool IsMultiplayerMode
         {
             get
             {
-                return NetworkBootstrap.Instance != null && NetworkBootstrap.Instance.IsMultiplayerActive;
+                return PetGame.Network.MirrorNetworkManager.singleton != null
+                    && PetGame.Network.MirrorNetworkManager.singleton.IsNetworkActive;
             }
         }
 

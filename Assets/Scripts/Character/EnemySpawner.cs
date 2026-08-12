@@ -1,7 +1,6 @@
   using UnityEngine;
 using PetGame.AI;
-using Unity.Netcode;
-using PetGame.Network;
+
 
 namespace PetGame
 {
@@ -60,13 +59,6 @@ namespace PetGame
         private void Update()
         {
             if (isPaused) return;
-
-            // In multiplayer mode, only the host spawns enemies
-            if (NetworkBootstrap.Instance != null && NetworkBootstrap.Instance.IsMultiplayerActive
-                && !NetworkManager.Singleton.IsHost)
-            {
-                return;
-            }
 
             spawnTimer += Time.deltaTime;
 
@@ -160,34 +152,6 @@ namespace PetGame
             aiController.patrolRange = aiPatrolRange;
             aiController.InitializeAI();
 
-            // Add network components in multiplayer mode
-            if (NetworkBootstrap.Instance != null && NetworkBootstrap.Instance.IsMultiplayerActive)
-            {
-                var netObj = enemyObj.GetComponent<NetworkObject>();
-                if (netObj == null)
-                {
-                    netObj = enemyObj.AddComponent<NetworkObject>();
-                }
-                if (enemyObj.GetComponent<NetworkEnemyController>() == null)
-                    enemyObj.AddComponent<NetworkEnemyController>();
-
-                // Spawn on network so clients can see it
-                if (netObj != null && !netObj.IsSpawned)
-                {
-                    try
-                    {
-                        netObj.Spawn();
-                    }
-                    catch (System.Exception e)
-                    {
-                        Logger.Log($"[EnemySpawner] Failed to network spawn enemy: {e.Message}");
-                        // Fallback: destroy and skip
-                        Destroy(enemyObj);
-                        return;
-                    }
-                }
-            }
-
             // Listen for death to update count
             entity.OnDeath += OnEnemyDeath;
 
@@ -200,13 +164,6 @@ namespace PetGame
         public void SpawnSpecificEnemy(CharacterData data, Vector3 position)
         {
             if (data == null) return;
-
-            // In multiplayer mode, only the host spawns enemies
-            if (NetworkBootstrap.Instance != null && NetworkBootstrap.Instance.IsMultiplayerActive
-                && !NetworkManager.Singleton.IsHost)
-            {
-                return;
-            }
 
             // Prefer character-specific Variant Prefab (lazy registration)
             GameObject enemyObj = null;
@@ -262,32 +219,6 @@ namespace PetGame
             aiController.detectionRange = aiDetectionRange;
             aiController.patrolRange = aiPatrolRange;
             aiController.InitializeAI();
-
-            // Add network components in multiplayer mode
-            if (NetworkBootstrap.Instance != null && NetworkBootstrap.Instance.IsMultiplayerActive)
-            {
-                var netObj = enemyObj.GetComponent<NetworkObject>();
-                if (netObj == null)
-                {
-                    netObj = enemyObj.AddComponent<NetworkObject>();
-                }
-                if (enemyObj.GetComponent<NetworkEnemyController>() == null)
-                    enemyObj.AddComponent<NetworkEnemyController>();
-
-                if (netObj != null && !netObj.IsSpawned)
-                {
-                    try
-                    {
-                        netObj.Spawn();
-                    }
-                    catch (System.Exception e)
-                    {
-                        Logger.Log($"[EnemySpawner] Failed to network spawn specific enemy: {e.Message}");
-                        Destroy(enemyObj);
-                        return;
-                    }
-                }
-            }
 
             entity.OnDeath += OnEnemyDeath;
             currentEnemyCount++;

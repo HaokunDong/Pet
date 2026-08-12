@@ -2,12 +2,14 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using PetGame.Network;
+using Steamworks;
 
 namespace PetGame.UI
 {
     /// <summary>
     /// UI controller for the multiplayer lobby panel.
-    /// Manages display states: initial view, host view, client view.
+    /// Uses Mirror + Steamworks for networking.
+    /// Manages display states: initial view, in-lobby view.
     /// </summary>
     public class LobbyPanel : MonoBehaviour
     {
@@ -22,6 +24,7 @@ namespace PetGame.UI
         [SerializeField] private GameObject lobbyPanel;
         [SerializeField] private TextMeshProUGUI lobbyCodeText;
         [SerializeField] private Button copyCodeButton;
+        [SerializeField] private Button inviteFriendsButton;
         [SerializeField] private TextMeshProUGUI playerCountText;
         [SerializeField] private Button leaveLobbyButton;
         [SerializeField] private TextMeshProUGUI statusText;
@@ -43,6 +46,8 @@ namespace PetGame.UI
                 closeButton.onClick.AddListener(OnCloseClicked);
             if (copyCodeButton != null)
                 copyCodeButton.onClick.AddListener(OnCopyCodeClicked);
+            if (inviteFriendsButton != null)
+                inviteFriendsButton.onClick.AddListener(OnInviteFriendsClicked);
             if (leaveLobbyButton != null)
                 leaveLobbyButton.onClick.AddListener(OnLeaveLobbyClicked);
 
@@ -52,66 +57,46 @@ namespace PetGame.UI
 
         private void OnEnable()
         {
-            // Ensure network managers exist
-            EnsureNetworkManagersExist();
-
-            // Subscribe to LobbyManager events
-            if (LobbyManager.Instance != null)
+            // Subscribe to SteamLobbyManager events
+            var lobbyMgr = SteamLobbyManager.Instance;
+            if (lobbyMgr != null)
             {
-                LobbyManager.Instance.OnStateChanged += HandleStateChanged;
-                LobbyManager.Instance.OnPlayerCountChanged += HandlePlayerCountChanged;
-                LobbyManager.Instance.OnError += HandleError;
-                LobbyManager.Instance.OnLobbyCreated += HandleLobbyCreated;
-                LobbyManager.Instance.OnLobbyJoined += HandleLobbyJoined;
-                LobbyManager.Instance.OnGameStarting += HandleGameStarting;
+                lobbyMgr.OnLobbyCreated += HandleLobbyCreated;
+                lobbyMgr.OnLobbyEntered += HandleLobbyEntered;
+                lobbyMgr.OnLobbyJoinFailed += HandleLobbyJoinFailed;
+                lobbyMgr.OnPlayerCountChanged += HandlePlayerCountChanged;
+                lobbyMgr.OnHostDisconnected += HandleHostDisconnected;
+                lobbyMgr.OnError += HandleError;
+            }
+
+            // Subscribe to MirrorNetworkManager events
+            if (MirrorNetworkManager.singleton != null)
+            {
+                MirrorNetworkManager.singleton.OnDisconnectedFromServer += HandleDisconnectedFromServer;
             }
 
             // Reset to initial state
             ShowInitialState();
         }
 
-        /// <summary>
-        /// Ensures all required network manager singletons exist in the scene.
-        /// Creates them if they don't exist.
-        /// </summary>
-        private void EnsureNetworkManagersExist()
-        {
-            // Ensure NetworkBootstrap exists
-            if (NetworkBootstrap.Instance == null)
-            {
-                GameObject bootstrapObj = new GameObject("[NetworkBootstrap]");
-                bootstrapObj.AddComponent<NetworkBootstrap>();
-                Debug.Log("[LobbyPanel] Created NetworkBootstrap instance.");
-            }
-
-            // Ensure RelayManager exists
-            if (RelayManager.Instance == null)
-            {
-                GameObject relayObj = new GameObject("[RelayManager]");
-                relayObj.AddComponent<RelayManager>();
-                Debug.Log("[LobbyPanel] Created RelayManager instance.");
-            }
-
-            // Ensure LobbyManager exists
-            if (LobbyManager.Instance == null)
-            {
-                GameObject lobbyObj = new GameObject("[LobbyManager]");
-                lobbyObj.AddComponent<LobbyManager>();
-                Debug.Log("[LobbyPanel] Created LobbyManager instance.");
-            }
-        }
-
         private void OnDisable()
         {
-            // Unsubscribe from LobbyManager events
-            if (LobbyManager.Instance != null)
+            // Unsubscribe from SteamLobbyManager events
+            var lobbyMgr = SteamLobbyManager.Instance;
+            if (lobbyMgr != null)
             {
-                LobbyManager.Instance.OnStateChanged -= HandleStateChanged;
-                LobbyManager.Instance.OnPlayerCountChanged -= HandlePlayerCountChanged;
-                LobbyManager.Instance.OnError -= HandleError;
-                LobbyManager.Instance.OnLobbyCreated -= HandleLobbyCreated;
-                LobbyManager.Instance.OnLobbyJoined -= HandleLobbyJoined;
-                LobbyManager.Instance.OnGameStarting -= HandleGameStarting;
+                lobbyMgr.OnLobbyCreated -= HandleLobbyCreated;
+                lobbyMgr.OnLobbyEntered -= HandleLobbyEntered;
+                lobbyMgr.OnLobbyJoinFailed -= HandleLobbyJoinFailed;
+                lobbyMgr.OnPlayerCountChanged -= HandlePlayerCountChanged;
+                lobbyMgr.OnHostDisconnected -= HandleHostDisconnected;
+                lobbyMgr.OnError -= HandleError;
+            }
+
+            // Unsubscribe from MirrorNetworkManager events
+            if (MirrorNetworkManager.singleton != null)
+            {
+                MirrorNetworkManager.singleton.OnDisconnectedFromServer -= HandleDisconnectedFromServer;
             }
         }
 
@@ -135,6 +120,8 @@ namespace PetGame.UI
             }
         }
 
+        #region Public Methods
+
         /// <summary>
         /// Show the lobby panel.
         /// </summary>
@@ -151,6 +138,10 @@ namespace PetGame.UI
             gameObject.SetActive(false);
         }
 
+        #endregion
+
+        #region UI State Management
+
         private void ShowInitialState()
         {
             if (initialPanel != null) initialPanel.SetActive(true);
@@ -165,16 +156,20 @@ namespace PetGame.UI
             SetButtonsInteractable(true);
         }
 
-        private void ShowLobbyState(string joinCode, bool isHost)
+        private void ShowLobbyState(string lobbyCode, bool isHost)
         {
             if (initialPanel != null) initialPanel.SetActive(false);
             if (lobbyPanel != null) lobbyPanel.SetActive(true);
 
             if (lobbyCodeText != null)
-                lobbyCodeText.text = joinCode;
+                lobbyCodeText.text = lobbyCode;
 
             if (statusText != null)
                 statusText.text = isHost ? "Waiting for player..." : "Connected!";
+
+            // Show invite button only for host
+            if (inviteFriendsButton != null)
+                inviteFriendsButton.gameObject.SetActive(true);
         }
 
         private void SetButtonsInteractable(bool interactable)
@@ -191,118 +186,181 @@ namespace PetGame.UI
                 errorText.gameObject.SetActive(true);
                 errorTimer = errorDisplayDuration;
             }
+            Debug.LogWarning($"[LobbyPanel] Error: {message}");
         }
 
-        // --- Button Handlers ---
+        #endregion
+
+        #region Button Handlers
 
         private void OnCreateLobbyClicked()
         {
-            if (LobbyManager.Instance == null)
+            if (!SteamManager.Initialized)
             {
-                EnsureNetworkManagersExist();
+                ShowError("Steam is not running. Please start Steam first.");
+                return;
             }
 
-            if (LobbyManager.Instance == null)
+            var lobbyMgr = SteamLobbyManager.Instance;
+            if (lobbyMgr == null)
             {
                 ShowError("Network system not available.");
                 return;
             }
 
             SetButtonsInteractable(false);
-            if (statusText != null) statusText.text = "Creating lobby...";
-            LobbyManager.Instance.CreateLobby();
+            if (statusText != null) statusText.text = "Creating room...";
+            lobbyMgr.CreateLobby();
         }
 
         private void OnJoinClicked()
         {
-            string code = joinCodeInput != null ? joinCodeInput.text : "";
-            if (string.IsNullOrWhiteSpace(code))
+            if (!SteamManager.Initialized)
             {
-                ShowError("Please enter a lobby code.");
+                ShowError("Steam is not running. Please start Steam first.");
                 return;
             }
 
-            if (LobbyManager.Instance == null)
+            string code = joinCodeInput != null ? joinCodeInput.text.Trim() : "";
+            if (string.IsNullOrWhiteSpace(code))
             {
-                EnsureNetworkManagersExist();
+                ShowError("Please enter a room code.");
+                return;
             }
 
-            if (LobbyManager.Instance == null)
+            var lobbyMgr = SteamLobbyManager.Instance;
+            if (lobbyMgr == null)
             {
                 ShowError("Network system not available.");
                 return;
             }
 
             SetButtonsInteractable(false);
-            if (statusText != null) statusText.text = "Joining lobby...";
-            LobbyManager.Instance.JoinLobby(code);
+            if (statusText != null) statusText.text = "Joining room...";
+            lobbyMgr.JoinLobby(code);
         }
 
         private void OnCloseClicked()
         {
             // If in lobby, leave first
-            if (LobbyManager.Instance != null &&
-                LobbyManager.Instance.CurrentState != LobbyManager.LobbyState.None)
+            var lobbyMgr = SteamLobbyManager.Instance;
+            if (lobbyMgr != null && lobbyMgr.InLobby)
             {
-                LobbyManager.Instance.LeaveLobby();
+                OnLeaveLobbyClicked();
             }
             Hide();
         }
 
         private void OnCopyCodeClicked()
         {
-            LobbyManager.Instance?.CopyJoinCodeToClipboard();
-            if (statusText != null) statusText.text = "Code copied!";
+            var lobbyMgr = SteamLobbyManager.Instance;
+            if (lobbyMgr != null)
+            {
+                lobbyMgr.CopyLobbyCodeToClipboard();
+                if (statusText != null) statusText.text = "Code copied!";
+                Invoke(nameof(ResetStatusText), 1.5f);
+            }
+        }
 
-            // Reset status text after a moment
-            Invoke(nameof(ResetStatusText), 1.5f);
+        private void OnInviteFriendsClicked()
+        {
+            var lobbyMgr = SteamLobbyManager.Instance;
+            if (lobbyMgr != null)
+            {
+                lobbyMgr.InviteFriends();
+                if (statusText != null) statusText.text = "Invite sent!";
+                Invoke(nameof(ResetStatusText), 1.5f);
+            }
         }
 
         private void OnLeaveLobbyClicked()
         {
-            LobbyManager.Instance?.LeaveLobby();
+            // Stop Mirror network
+            if (MirrorNetworkManager.singleton != null)
+            {
+                MirrorNetworkManager.singleton.StopNetwork();
+            }
+
+            // Leave Steam lobby
+            var lobbyMgr = SteamLobbyManager.Instance;
+            if (lobbyMgr != null)
+            {
+                lobbyMgr.LeaveLobby();
+            }
+
             ShowInitialState();
         }
 
         private void ResetStatusText()
         {
-            if (statusText != null && LobbyManager.Instance != null)
+            if (statusText == null) return;
+
+            var lobbyMgr = SteamLobbyManager.Instance;
+            if (lobbyMgr != null && lobbyMgr.InLobby)
             {
-                if (LobbyManager.Instance.CurrentState == LobbyManager.LobbyState.InLobbyAsHost)
-                    statusText.text = "Waiting for player...";
-                else if (LobbyManager.Instance.CurrentState == LobbyManager.LobbyState.InLobbyAsClient)
-                    statusText.text = "Connected!";
+                statusText.text = lobbyMgr.IsHost ? "Waiting for player..." : "Connected!";
             }
         }
 
-        // --- Event Handlers ---
+        #endregion
 
-        private void HandleStateChanged(LobbyManager.LobbyState state)
+        #region Event Handlers
+
+        private void HandleLobbyCreated(string lobbyCode)
         {
-            switch (state)
+            // Start Mirror host
+            if (MirrorNetworkManager.singleton != null)
             {
-                case LobbyManager.LobbyState.None:
-                    ShowInitialState();
-                    break;
-                case LobbyManager.LobbyState.Creating:
-                    if (statusText != null) statusText.text = "Creating lobby...";
-                    break;
-                case LobbyManager.LobbyState.Joining:
-                    if (statusText != null) statusText.text = "Joining lobby...";
-                    break;
-                case LobbyManager.LobbyState.StartingGame:
-                    if (statusText != null) statusText.text = "Starting game...";
-                    break;
+                MirrorNetworkManager.singleton.StartHostWithSteam();
             }
+
+            ShowLobbyState(lobbyCode, true);
+        }
+
+        private void HandleLobbyEntered()
+        {
+            var lobbyMgr = SteamLobbyManager.Instance;
+            if (lobbyMgr == null) return;
+
+            // If we are not the host, start Mirror client
+            if (!lobbyMgr.IsHost)
+            {
+                CSteamID hostId = lobbyMgr.GetHostSteamId();
+                if (MirrorNetworkManager.singleton != null && hostId.IsValid())
+                {
+                    MirrorNetworkManager.singleton.StartClientWithSteam(hostId);
+                }
+            }
+
+            ShowLobbyState(lobbyMgr.CurrentLobbyCode, lobbyMgr.IsHost);
+        }
+
+        private void HandleLobbyJoinFailed(string error)
+        {
+            ShowError(error);
+            SetButtonsInteractable(true);
+            if (statusText != null) statusText.text = "";
         }
 
         private void HandlePlayerCountChanged(int count)
         {
             if (playerCountText != null)
             {
-                int max = LobbyManager.Instance != null ? LobbyManager.Instance.MaxPlayers : 2;
-                playerCountText.text = $"Lobby ({count}/{max})";
+                playerCountText.text = $"Players: {count}/{SteamLobbyManager.MAX_PLAYERS}";
             }
+        }
+
+        private void HandleHostDisconnected()
+        {
+            ShowError("Host disconnected. Returning to lobby.");
+
+            // Stop Mirror network
+            if (MirrorNetworkManager.singleton != null)
+            {
+                MirrorNetworkManager.singleton.StopNetwork();
+            }
+
+            ShowInitialState();
         }
 
         private void HandleError(string error)
@@ -311,21 +369,18 @@ namespace PetGame.UI
             SetButtonsInteractable(true);
         }
 
-        private void HandleLobbyCreated(string joinCode)
+        private void HandleDisconnectedFromServer()
         {
-            ShowLobbyState(joinCode, true);
+            // If we were a client and got disconnected, return to initial state
+            var lobbyMgr = SteamLobbyManager.Instance;
+            if (lobbyMgr != null && !lobbyMgr.IsHost)
+            {
+                lobbyMgr.LeaveLobby();
+                ShowError("Disconnected from host.");
+                ShowInitialState();
+            }
         }
 
-        private void HandleLobbyJoined()
-        {
-            string code = LobbyManager.Instance != null ? LobbyManager.Instance.CurrentJoinCode : "";
-            ShowLobbyState(code, false);
-        }
-
-        private void HandleGameStarting()
-        {
-            if (statusText != null) statusText.text = "Game starting...";
-            Hide();
-        }
+        #endregion
     }
 }

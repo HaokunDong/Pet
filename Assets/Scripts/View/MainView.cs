@@ -23,7 +23,11 @@ public class MainView : BaseView
     private RingRadialMenuButton settingButton;
 
     [Header("Lobby")]
-    [SerializeField] private LobbyPanel lobbyPanel;
+    [Tooltip("Path to LobbyPanel prefab in Resources folder")]
+    private const string LOBBY_PANEL_PREFAB_PATH = "Prefabs/UI/LobbyPanel";
+
+    // Cached LobbyPanel instance (dynamically loaded)
+    private LobbyPanel lobbyPanelInstance;
 
     // Map buttons to their sprite animation components
     private Dictionary<GameObject, ButtonSpriteAnimation> _btnAnimMap = new Dictionary<GameObject, ButtonSpriteAnimation>();
@@ -148,22 +152,70 @@ public class MainView : BaseView
 
     /// <summary>
     /// Click handler for the RingRadialMenu's FriendsButton.
-    /// Migrated from the legacy Menus/Button3: toggles the LobbyPanel visibility.
+    /// Dynamically instantiates LobbyPanel prefab under GamePanel, or toggles visibility.
     /// </summary>
     private void OnFriendsButtonClick()
     {
-        if (lobbyPanel != null)
+        if (lobbyPanelInstance != null)
         {
             // Toggle: if already active, hide; otherwise show
-            if (lobbyPanel.gameObject.activeSelf)
-                lobbyPanel.Hide();
+            if (lobbyPanelInstance.gameObject.activeSelf)
+                lobbyPanelInstance.Hide();
             else
-                lobbyPanel.Show();
+                lobbyPanelInstance.Show();
         }
         else
         {
-            Debug.LogWarning("[MainView] LobbyPanel reference not set!");
+            // Dynamically load and instantiate LobbyPanel prefab
+            GameObject prefab = Resources.Load<GameObject>(LOBBY_PANEL_PREFAB_PATH);
+            if (prefab == null)
+            {
+                Debug.LogError($"[MainView] LobbyPanel prefab not found at: Resources/{LOBBY_PANEL_PREFAB_PATH}");
+                return;
+            }
+
+            // Find GamePanel as parent (Canvas > GamePanel)
+            Transform gamePanel = FindGamePanel();
+            if (gamePanel == null)
+            {
+                Debug.LogError("[MainView] GamePanel not found. Using MainView as parent.");
+                gamePanel = transform;
+            }
+
+            GameObject instance = Instantiate(prefab, gamePanel);
+            lobbyPanelInstance = instance.GetComponent<LobbyPanel>();
+
+            if (lobbyPanelInstance != null)
+            {
+                lobbyPanelInstance.Show();
+            }
+            else
+            {
+                Debug.LogError("[MainView] LobbyPanel component not found on instantiated prefab!");
+                Destroy(instance);
+            }
         }
+    }
+
+    /// <summary>
+    /// Find the GamePanel transform in the scene hierarchy.
+    /// Searches for a child named "GamePanel" under the Canvas.
+    /// </summary>
+    private Transform FindGamePanel()
+    {
+        // Try to find GamePanel as sibling or parent
+        Canvas canvas = GetComponentInParent<Canvas>();
+        if (canvas != null)
+        {
+            Transform gp = canvas.transform.Find("GamePanel");
+            if (gp != null) return gp;
+        }
+
+        // Fallback: search in scene
+        GameObject gpObj = GameObject.Find("GamePanel");
+        if (gpObj != null) return gpObj.transform;
+
+        return null;
     }
 
     /// <summary>
