@@ -116,6 +116,15 @@ namespace Mirror.FizzySteam
                 }
             }
 
+            // Known client - check if this is a duplicate handshake (client retrying)
+            if (bytesRead == 1 && data[0] == 0xFF)
+            {
+                // Client is retrying handshake - resend acknowledgment
+                byte[] ack = new byte[] { 0xFE };
+                SteamNetworking.SendP2PPacket(remoteSteamId, ack, 1, EP2PSend.k_EP2PSendReliable, transport.reliableChannel);
+                return;
+            }
+
             // Known client - deliver data to Mirror
             ArraySegment<byte> segment = new ArraySegment<byte>(data, 0, (int)bytesRead);
             transport.OnServerDataReceivedInternal(connId, segment, channelId);

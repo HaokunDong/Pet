@@ -24,6 +24,9 @@ namespace Mirror.FizzySteam
         /// <summary>Time when connection attempt started, for timeout detection.</summary>
         private float connectStartTime;
 
+        /// <summary>Time when last handshake packet was sent, for retry logic.</summary>
+        private float lastHandshakeSendTime;
+
         public SteamP2PClient(FizzySteamworks transport)
         {
             this.transport = transport;
@@ -39,21 +42,13 @@ namespace Mirror.FizzySteam
 
             Debug.Log($"[FizzySteamworks Client] Connecting to host: {hostSteamId}");
 
-            // Send an initial "handshake" packet to establish the P2P session
-            byte[] handshake = new byte[] { 0xFF };
-            if (SteamNetworking.SendP2PPacket(hostSteamId, handshake, 1, EP2PSend.k_EP2PSendReliable, transport.reliableChannel))
-            {
-                // Don't report connected yet - wait for server's acknowledgment (0xFE)
-                waitingForAck = true;
-                connectStartTime = Time.realtimeSinceStartup;
-                Debug.Log($"[FizzySteamworks Client] Handshake sent to host: {hostSteamId}, waiting for acknowledgment...");
-            }
-            else
-            {
-                Debug.LogError($"[FizzySteamworks Client] Failed to send handshake to {hostSteamId}");
-                transport.OnClientErrorInternal(TransportError.Refused, "Failed to establish P2P connection.");
-                transport.OnClientDisconnectedInternal();
-            }
+            // Start the handshake process - we'll repeatedly send handshake packets
+            // until the server acknowledges, because the first few packets may be lost
+            // while Steam is establishing the P2P NAT traversal.
+            waitingForAck = true;
+            connectStartTime = Time.realtimeSinceStartup;
+            lastHandshakeSendTime = 0f; // Force immediate first send
+            Debug.Log($"[FizzySteamworks Client] Starting connection to host: {hostSteamId}, will send handshake packets...");
         }
 
         public void Disconnect()
@@ -77,16 +72,27 @@ namespace Mirror.FizzySteam
         {
             if (!Connected && !waitingForAck) return;
 
-            // Check for connection timeout
+            // Handle handshake retry and timeout
             if (waitingForAck)
             {
-                if (Time.realtimeSinceStartup - connectStartTime > transport.connectionTimeout)
+                float now = Time.realtimeSinceStartup;
+
+                if (now - connectStartTime > transport.connectionTimeout)
                 {
                     Debug.LogError("[FizzySteamworks Client] Connection timed out waiting for server acknowledgment.");
                     waitingForAck = false;
                     transport.OnClientErrorInternal(TransportError.Timeout, "Connection timed out.");
                     transport.OnClientDisconnectedInternal();
                     return;
+                }
+
+                // Resend handshake every 0.5 seconds until we get an ack
+                if (now - lastHandshakeSendTime >= 0.5f)
+                {
+                    lastHandshakeSendTime = now;
+                    byte[] handshake = new byte[] { 0xFF };
+                    SteamNetworking.SendP2PPacket(hostSteamId, handshake, 1, EP2PSend.k_EP2PSendReliable, transport.reliableChannel);
+                    Debug.Log($"[FizzySteamworks Client] Handshake sent to host: {hostSteamId}");
                 }
             }
 
