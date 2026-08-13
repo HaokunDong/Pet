@@ -136,7 +136,31 @@ namespace PetGame.Network
             // If this is a remote player and they already have a character, create the mirror
             if (!isOwned && hasCharacter && !string.IsNullOrEmpty(selectedCharacterId))
             {
-                CreateMirrorCharacter(selectedCharacterId);
+                StartCoroutine(CreateMirrorCharacterDelayed(selectedCharacterId));
+            }
+        }
+
+        /// <summary>
+        /// Wait for GameCharacterManager to be ready before creating mirror character.
+        /// </summary>
+        private IEnumerator CreateMirrorCharacterDelayed(string characterId)
+        {
+            // Wait until GameCharacterManager is available and has initialized
+            float timeout = 5f;
+            float elapsed = 0f;
+            while (Object.FindObjectOfType<GameCharacterManager>() == null && elapsed < timeout)
+            {
+                yield return new WaitForSeconds(0.1f);
+                elapsed += 0.1f;
+            }
+
+            // Additional frame wait to ensure Start() has completed
+            yield return null;
+            yield return null;
+
+            if (!mirrorCharacterCreated)
+            {
+                CreateMirrorCharacter(characterId);
             }
         }
 
@@ -176,17 +200,27 @@ namespace PetGame.Network
         #region Local Player - Character Registration
 
         /// <summary>
-        /// Wait a frame then find the existing character in the scene.
+        /// Wait for GameCharacterManager to be ready and have a player character, then register it.
         /// </summary>
         private IEnumerator RegisterLocalCharacterDelayed()
         {
-            // Wait for scene to be fully set up
-            yield return new WaitForEndOfFrame();
+            // Wait for GameCharacterManager to exist
+            GameCharacterManager gcm = null;
+            float timeout = 5f;
+            float elapsed = 0f;
+            while (elapsed < timeout)
+            {
+                gcm = Object.FindObjectOfType<GameCharacterManager>();
+                if (gcm != null && gcm.PlayerCharacters.Count > 0)
+                    break;
+                yield return new WaitForSeconds(0.1f);
+                elapsed += 0.1f;
+            }
 
-            GameCharacterManager gcm = Object.FindObjectOfType<GameCharacterManager>();
             if (gcm == null)
             {
-                Debug.LogWarning("[NetworkPlayer] GameCharacterManager not found.");
+                Debug.LogWarning("[NetworkPlayer] GameCharacterManager not found after timeout.");
+                CmdRegisterNoCharacter();
                 yield break;
             }
 
@@ -205,10 +239,15 @@ namespace PetGame.Network
                         currentChar.RuntimeStats.currentHealth,
                         currentChar.RuntimeStats.maxHealth);
                 }
+                else
+                {
+                    Debug.Log("[NetworkPlayer] Player character exists but has no data.");
+                    CmdRegisterNoCharacter();
+                }
             }
             else
             {
-                Debug.Log("[NetworkPlayer] No local character active. Scene will be empty for this player.");
+                Debug.Log("[NetworkPlayer] No local character active after timeout.");
                 CmdRegisterNoCharacter();
             }
         }
@@ -497,7 +536,7 @@ namespace PetGame.Network
             if (isOwned) return;
 
             Debug.Log($"[NetworkPlayer] RPC: Creating mirror character '{characterId}' for remote player '{playerName}'");
-            CreateMirrorCharacter(characterId);
+            StartCoroutine(CreateMirrorCharacterDelayed(characterId));
         }
 
         /// <summary>
@@ -513,7 +552,7 @@ namespace PetGame.Network
 
             // Destroy old mirror and create new one
             DestroyMirrorCharacter();
-            CreateMirrorCharacter(newCharacterId);
+            StartCoroutine(CreateMirrorCharacterDelayed(newCharacterId));
         }
 
         #endregion
@@ -532,7 +571,7 @@ namespace PetGame.Network
                 // Remote player now has a character - create mirror if not already done
                 if (!mirrorCharacterCreated)
                 {
-                    CreateMirrorCharacter(selectedCharacterId);
+                    StartCoroutine(CreateMirrorCharacterDelayed(selectedCharacterId));
                 }
             }
             else if (!isOwned && !newValue)
@@ -562,9 +601,12 @@ namespace PetGame.Network
 
         /// <summary>
         /// Find a CharacterData ScriptableObject by its characterId.
+        /// Searches GameCharacterManager's list, then all loaded ScriptableObjects.
         /// </summary>
         private CharacterData FindCharacterDataById(string characterId)
         {
+            if (string.IsNullOrEmpty(characterId)) return null;
+
             // First check GameCharacterManager's configured list
             GameCharacterManager gcm = Object.FindObjectOfType<GameCharacterManager>();
             if (gcm != null && gcm.playerCharacterDataList != null)
@@ -576,14 +618,15 @@ namespace PetGame.Network
                 }
             }
 
-            // Fallback: search all CharacterData in Resources
-            CharacterData[] allData = Resources.LoadAll<CharacterData>("");
-            foreach (CharacterData data in allData)
+            // Fallback: search all loaded CharacterData ScriptableObjects in memory
+            CharacterData[] allLoaded = Resources.FindObjectsOfTypeAll<CharacterData>();
+            foreach (CharacterData data in allLoaded)
             {
-                if (data.characterId == characterId)
+                if (data != null && data.characterId == characterId)
                     return data;
             }
 
+            Debug.LogWarning($"[NetworkPlayer] CharacterData not found for ID: {characterId}");
             return null;
         }
 

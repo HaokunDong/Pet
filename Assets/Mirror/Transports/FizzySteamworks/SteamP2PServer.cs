@@ -90,16 +90,23 @@ namespace Mirror.FizzySteam
             // Check if this is a known client
             if (!steamIdToConnId.TryGetValue(remoteSteamId, out int connId))
             {
-                // New client connected
+                // New client - first packet should be the handshake (0xFF)
+                // Register the connection and notify Mirror, but don't deliver the handshake as data
                 connId = nextConnectionId++;
                 connectedClients[connId] = remoteSteamId;
                 steamIdToConnId[remoteSteamId] = connId;
 
                 Debug.Log($"[FizzySteamworks Server] Client connected: {remoteSteamId} (connId: {connId})");
                 transport.OnServerConnectedInternal(connId);
+
+                // Discard the handshake packet - it's not a Mirror message
+                if (bytesRead == 1 && data[0] == 0xFF)
+                {
+                    return;
+                }
             }
 
-            // Deliver data
+            // Deliver data to Mirror
             ArraySegment<byte> segment = new ArraySegment<byte>(data, 0, (int)bytesRead);
             transport.OnServerDataReceivedInternal(connId, segment, channelId);
         }
