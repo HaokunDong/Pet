@@ -61,7 +61,7 @@ namespace PetGame
             Transport.active = steamTransport;
 
             // Configure NetworkManager settings
-            networkManager.maxConnections = 2;
+            networkManager.maxConnections = 4;
 
             // Create a simple NetworkPlayer prefab placeholder
             string playerPrefabPath = CreatePlayerPrefab();

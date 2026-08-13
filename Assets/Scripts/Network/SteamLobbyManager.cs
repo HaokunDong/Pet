@@ -14,7 +14,7 @@ namespace PetGame.Network
         #region Constants
 
         /// <summary>Maximum players allowed in a lobby.</summary>
-        public const int MAX_PLAYERS = 2;
+        public const int MAX_PLAYERS = 4;
 
         /// <summary>Lobby data key for storing the host's Steam ID.</summary>
         private const string LOBBY_KEY_HOST_ID = "HostSteamId";
