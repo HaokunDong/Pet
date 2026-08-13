@@ -18,6 +18,12 @@ namespace Mirror.FizzySteam
 
         public bool Connected { get; private set; }
 
+        /// <summary>Whether we are waiting for the server's acknowledgment packet.</summary>
+        private bool waitingForAck = false;
+
+        /// <summary>Time when connection attempt started, for timeout detection.</summary>
+        private float connectStartTime;
+
         public SteamP2PClient(FizzySteamworks transport)
         {
             this.transport = transport;
@@ -37,9 +43,10 @@ namespace Mirror.FizzySteam
             byte[] handshake = new byte[] { 0xFF };
             if (SteamNetworking.SendP2PPacket(hostSteamId, handshake, 1, EP2PSend.k_EP2PSendReliable, transport.reliableChannel))
             {
-                Connected = true;
-                transport.OnClientConnectedInternal();
-                Debug.Log($"[FizzySteamworks Client] Connected to host: {hostSteamId}");
+                // Don't report connected yet - wait for server's acknowledgment (0xFE)
+                waitingForAck = true;
+                connectStartTime = Time.realtimeSinceStartup;
+                Debug.Log($"[FizzySteamworks Client] Handshake sent to host: {hostSteamId}, waiting for acknowledgment...");
             }
             else
             {
@@ -51,9 +58,10 @@ namespace Mirror.FizzySteam
 
         public void Disconnect()
         {
-            if (!Connected) return;
+            if (!Connected && !waitingForAck) return;
 
             Connected = false;
+            waitingForAck = false;
             SteamNetworking.CloseP2PSessionWithUser(hostSteamId);
 
             p2pSessionRequestCallback?.Dispose();
@@ -67,7 +75,20 @@ namespace Mirror.FizzySteam
 
         public void ReceiveData()
         {
-            if (!Connected) return;
+            if (!Connected && !waitingForAck) return;
+
+            // Check for connection timeout
+            if (waitingForAck)
+            {
+                if (Time.realtimeSinceStartup - connectStartTime > transport.connectionTimeout)
+                {
+                    Debug.LogError("[FizzySteamworks Client] Connection timed out waiting for server acknowledgment.");
+                    waitingForAck = false;
+                    transport.OnClientErrorInternal(TransportError.Timeout, "Connection timed out.");
+                    transport.OnClientDisconnectedInternal();
+                    return;
+                }
+            }
 
             // Process incoming packets on reliable channel
             while (SteamNetworking.IsP2PPacketAvailable(out uint msgSize, transport.reliableChannel))
@@ -77,6 +98,16 @@ namespace Mirror.FizzySteam
                 {
                     if (remoteSteamId == hostSteamId)
                     {
+                        // Check if this is the server's acknowledgment packet
+                        if (waitingForAck && bytesRead == 1 && buffer[0] == 0xFE)
+                        {
+                            waitingForAck = false;
+                            Connected = true;
+                            Debug.Log($"[FizzySteamworks Client] Connected to host: {hostSteamId} (acknowledgment received)");
+                            transport.OnClientConnectedInternal();
+                            continue;
+                        }
+
                         ArraySegment<byte> segment = new ArraySegment<byte>(buffer, 0, (int)bytesRead);
                         transport.OnClientDataReceivedInternal(segment, Channels.Reliable);
                     }

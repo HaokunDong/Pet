@@ -91,22 +91,32 @@ namespace Mirror.FizzySteam
             if (!steamIdToConnId.TryGetValue(remoteSteamId, out int connId))
             {
                 // New client - first packet should be the handshake (0xFF)
-                // Register the connection and notify Mirror, but don't deliver the handshake as data
-                connId = nextConnectionId++;
-                connectedClients[connId] = remoteSteamId;
-                steamIdToConnId[remoteSteamId] = connId;
-
-                Debug.Log($"[FizzySteamworks Server] Client connected: {remoteSteamId} (connId: {connId})");
-                transport.OnServerConnectedInternal(connId);
-
-                // Discard the handshake packet - it's not a Mirror message
                 if (bytesRead == 1 && data[0] == 0xFF)
                 {
+                    // Register the connection
+                    connId = nextConnectionId++;
+                    connectedClients[connId] = remoteSteamId;
+                    steamIdToConnId[remoteSteamId] = connId;
+
+                    Debug.Log($"[FizzySteamworks Server] Client connected: {remoteSteamId} (connId: {connId})");
+
+                    // Send acknowledgment packet (0xFE) back to client
+                    byte[] ack = new byte[] { 0xFE };
+                    SteamNetworking.SendP2PPacket(remoteSteamId, ack, 1, EP2PSend.k_EP2PSendReliable, transport.reliableChannel);
+
+                    // Notify Mirror that a new client has connected
+                    transport.OnServerConnectedInternal(connId);
+                    return;
+                }
+                else
+                {
+                    // Unknown client sent non-handshake data - ignore
+                    Debug.LogWarning($"[FizzySteamworks Server] Received data from unknown client {remoteSteamId} without handshake. Ignoring.");
                     return;
                 }
             }
 
-            // Deliver data to Mirror
+            // Known client - deliver data to Mirror
             ArraySegment<byte> segment = new ArraySegment<byte>(data, 0, (int)bytesRead);
             transport.OnServerDataReceivedInternal(connId, segment, channelId);
         }
