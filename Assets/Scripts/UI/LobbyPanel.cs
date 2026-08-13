@@ -75,8 +75,16 @@ namespace PetGame.UI
                 MirrorNetworkManager.singleton.OnDisconnectedFromServer += HandleDisconnectedFromServer;
             }
 
-            // Reset to initial state
-            ShowInitialState();
+            // If already in a lobby, restore lobby state; otherwise show initial state
+            if (lobbyMgr != null && lobbyMgr.InLobby)
+            {
+                ShowLobbyState(lobbyMgr.CurrentLobbyCode, lobbyMgr.IsHost);
+                HandlePlayerCountChanged(lobbyMgr.PlayerCount);
+            }
+            else
+            {
+                ShowInitialState();
+            }
         }
 
         private void OnDisable()
@@ -242,12 +250,7 @@ namespace PetGame.UI
 
         private void OnCloseClicked()
         {
-            // If in lobby, leave first
-            var lobbyMgr = SteamLobbyManager.Instance;
-            if (lobbyMgr != null && lobbyMgr.InLobby)
-            {
-                OnLeaveLobbyClicked();
-            }
+            // Just hide the panel without leaving the lobby
             Hide();
         }
 
