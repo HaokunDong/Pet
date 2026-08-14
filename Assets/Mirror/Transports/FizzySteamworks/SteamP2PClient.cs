@@ -127,6 +127,15 @@ namespace Mirror.FizzySteam
                         // Only process data if we are fully connected
                         if (Connected)
                         {
+                            // Ignore duplicate ACK packets that may arrive from server's
+                            // handshake retry logic. These are 1-byte 0xFE packets that would
+                            // cause "failed to add batch" if passed to Mirror (< 8 bytes).
+                            if (bytesRead == 1 && buffer[0] == 0xFE)
+                            {
+                                // Duplicate ACK - ignore silently
+                                continue;
+                            }
+
                             ArraySegment<byte> segment = new ArraySegment<byte>(buffer, 0, (int)bytesRead);
                             transport.OnClientDataReceivedInternal(segment, Channels.Reliable);
                         }

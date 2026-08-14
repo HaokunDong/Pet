@@ -85,43 +85,30 @@ namespace PetGame.Network
 
         private void OnEnable()
         {
-            RegisterHandlers();
+            // Handlers are now registered by MirrorNetworkManager.OnStartClient()
+            // to ensure they are available before any messages arrive.
         }
 
         private void OnDisable()
         {
-            UnregisterHandlers();
+            // Handlers are now unregistered by MirrorNetworkManager.OnStopClient()
             CleanupMirrorEnemies();
         }
 
         /// <summary>
         /// Register network message handlers on the client side.
+        /// NOTE: This is now called by MirrorNetworkManager as a fallback.
+        /// Primary registration happens in MirrorNetworkManager.OnStartClient().
         /// </summary>
         private void RegisterHandlers()
         {
-            if (isRegistered) return;
-
-            // Client handlers - only register if we're a client (not host)
-            if (NetworkClient.active && !NetworkServer.active)
-            {
-                NetworkClient.RegisterHandler<EnemySpawnMessage>(OnClientEnemySpawn);
-                NetworkClient.RegisterHandler<EnemyPositionMessage>(OnClientEnemyPosition);
-                NetworkClient.RegisterHandler<EnemyDeathMessage>(OnClientEnemyDeath);
-                isRegistered = true;
-                Debug.Log("[NetworkEnemySpawner] Client message handlers registered.");
-            }
+            // Handlers are registered by MirrorNetworkManager.OnStartClient() now.
+            // This method is kept for compatibility but does nothing.
+            isRegistered = true;
         }
 
         private void UnregisterHandlers()
         {
-            if (!isRegistered) return;
-
-            if (NetworkClient.active)
-            {
-                NetworkClient.UnregisterHandler<EnemySpawnMessage>();
-                NetworkClient.UnregisterHandler<EnemyPositionMessage>();
-                NetworkClient.UnregisterHandler<EnemyDeathMessage>();
-            }
             isRegistered = false;
         }
 
@@ -135,11 +122,9 @@ namespace PetGame.Network
                     localSpawner.enabled = false;
                     Debug.Log("[NetworkEnemySpawner] Client mode: local EnemySpawner disabled (host manages spawning).");
                 }
-
-                // Register handlers (might not have been active in OnEnable)
-                RegisterHandlers();
             }
-            else if (NetworkServer.active)
+
+            if (NetworkServer.active)
             {
                 Debug.Log("[NetworkEnemySpawner] Server started. Enemy sync active on host.");
             }
@@ -147,12 +132,6 @@ namespace PetGame.Network
 
         private void Update()
         {
-            // Try to register handlers if not yet done (for late initialization)
-            if (!isRegistered && NetworkClient.active && !NetworkServer.active)
-            {
-                RegisterHandlers();
-            }
-
             if (!NetworkServer.active) return;
 
             // Server: Periodically scan for new enemies and sync their state
@@ -170,6 +149,9 @@ namespace PetGame.Network
         private void ScanAndSyncEnemies()
         {
             if (!NetworkServer.active) return;
+
+            // Don't scan/send if there are no remote clients connected
+            if (NetworkServer.connections.Count <= 1) return; // Only host's local connection
 
             // Find all active enemies in the scene
             GameObject[] enemyObjects = GameObject.FindGameObjectsWithTag("Enemy");
@@ -208,7 +190,7 @@ namespace PetGame.Network
                         data.lastSyncedPosition = currentPos;
                         data.lastFacingRight = facingRight;
 
-                        NetworkServer.SendToAll(new EnemyPositionMessage
+                        SendToRemoteClients(new EnemyPositionMessage
                         {
                             enemyNetId = existingId,
                             position = currentPos,
@@ -219,7 +201,7 @@ namespace PetGame.Network
                     // Check if enemy died
                     if (entity.RuntimeStats != null && !entity.RuntimeStats.IsAlive)
                     {
-                        NetworkServer.SendToAll(new EnemyDeathMessage { enemyNetId = existingId });
+                        SendToRemoteClients(new EnemyDeathMessage { enemyNetId = existingId });
                         serverEnemies.Remove(existingId);
                         aliveEnemyIds.Remove(existingId);
                     }
@@ -237,7 +219,7 @@ namespace PetGame.Network
             }
             foreach (uint id in toRemove)
             {
-                NetworkServer.SendToAll(new EnemyDeathMessage { enemyNetId = id });
+                SendToRemoteClients(new EnemyDeathMessage { enemyNetId = id });
                 serverEnemies.Remove(id);
             }
         }
@@ -262,20 +244,20 @@ namespace PetGame.Network
 
             serverEnemies[id] = data;
 
-            // Notify all clients to spawn this enemy
+            // Notify remote clients to spawn this enemy (skip host's local client)
             float health = entity.RuntimeStats != null ? entity.RuntimeStats.currentHealth : 100f;
             float maxHealth = entity.RuntimeStats != null ? entity.RuntimeStats.maxHealth : 100f;
 
-            NetworkServer.SendToAll(new EnemySpawnMessage
+            var msg = new EnemySpawnMessage
             {
                 enemyNetId = id,
                 characterDataId = characterDataId,
                 position = enemyObj.transform.position,
                 health = health,
                 maxHealth = maxHealth
-            });
+            };
 
-            Debug.Log($"[NetworkEnemySpawner] Registered enemy #{id}: {characterDataId} at {enemyObj.transform.position}");
+            SendToRemoteClients(msg);
         }
 
         /// <summary>
@@ -290,6 +272,45 @@ namespace PetGame.Network
             }
             return 0;
         }
+
+        /// <summary>
+        /// Send a network message to only remote clients (not the host's local client).
+        /// This avoids unnecessary message processing on the host.
+        /// </summary>
+        private void SendToRemoteClients<T>(T msg) where T : struct, NetworkMessage
+        {
+            foreach (var kvp in NetworkServer.connections)
+            {
+                NetworkConnectionToClient conn = kvp.Value;
+                // Skip the host's local connection (connectionId 0)
+                if (conn != null && conn.connectionId != 0)
+                {
+                    conn.Send(msg);
+                }
+            }
+        }
+
+        #region Public Message Handlers (called by MirrorNetworkManager)
+
+        /// <summary>Handle EnemySpawnMessage forwarded from MirrorNetworkManager.</summary>
+        public void HandleEnemySpawnMessage(EnemySpawnMessage msg)
+        {
+            OnClientEnemySpawn(msg);
+        }
+
+        /// <summary>Handle EnemyPositionMessage forwarded from MirrorNetworkManager.</summary>
+        public void HandleEnemyPositionMessage(EnemyPositionMessage msg)
+        {
+            OnClientEnemyPosition(msg);
+        }
+
+        /// <summary>Handle EnemyDeathMessage forwarded from MirrorNetworkManager.</summary>
+        public void HandleEnemyDeathMessage(EnemyDeathMessage msg)
+        {
+            OnClientEnemyDeath(msg);
+        }
+
+        #endregion
 
         #region Client Message Handlers
 

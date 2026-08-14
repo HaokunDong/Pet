@@ -297,12 +297,20 @@ namespace PetGame.Network
         public override void OnStartClient()
         {
             base.OnStartClient();
+
+            // Register custom message handlers BEFORE any messages can arrive.
+            // This must happen here (not in Update) because the server may send
+            // custom messages (like EnemySpawnMessage) immediately after AddPlayer,
+            // which arrives before NetworkEnemySpawner.Update() runs.
+            RegisterCustomClientHandlers();
+
             Debug.Log("[MirrorNetworkManager] Client started.");
         }
 
         public override void OnStopClient()
         {
             base.OnStopClient();
+            UnregisterCustomClientHandlers();
             LocalPlayer = null;
             Debug.Log("[MirrorNetworkManager] Client stopped.");
         }
@@ -312,6 +320,68 @@ namespace PetGame.Network
             base.OnStopServer();
             ConnectedPlayers.Clear();
             Debug.Log("[MirrorNetworkManager] Server stopped. Player list cleared.");
+        }
+
+        #endregion
+
+        #region Custom Message Handler Registration
+
+        /// <summary>
+        /// Register all custom network message handlers on the client.
+        /// This MUST be called in OnStartClient (before any messages arrive)
+        /// because the server may send custom messages immediately after spawning
+        /// the player object (e.g., EnemySpawnMessage in SyncAllEnemiesToNewClient).
+        /// If we wait for NetworkEnemySpawner.Update(), the messages arrive first
+        /// and cause "Unknown message id" disconnection.
+        /// </summary>
+        private void RegisterCustomClientHandlers()
+        {
+            // Register EnemySpawnMessage, EnemyPositionMessage, EnemyDeathMessage
+            // These are handled by NetworkEnemySpawner, but must be registered
+            // before any messages arrive. We use forwarding handlers that delegate
+            // to NetworkEnemySpawner when it's available.
+            NetworkClient.RegisterHandler<EnemySpawnMessage>(OnEnemySpawnMessageReceived);
+            NetworkClient.RegisterHandler<EnemyPositionMessage>(OnEnemyPositionMessageReceived);
+            NetworkClient.RegisterHandler<EnemyDeathMessage>(OnEnemyDeathMessageReceived);
+            Debug.Log("[MirrorNetworkManager] Custom client message handlers registered.");
+        }
+
+        private void UnregisterCustomClientHandlers()
+        {
+            if (NetworkClient.active)
+            {
+                NetworkClient.UnregisterHandler<EnemySpawnMessage>();
+                NetworkClient.UnregisterHandler<EnemyPositionMessage>();
+                NetworkClient.UnregisterHandler<EnemyDeathMessage>();
+            }
+        }
+
+        // Forwarding handlers - these get called by Mirror and forward to NetworkEnemySpawner
+        private void OnEnemySpawnMessageReceived(EnemySpawnMessage msg)
+        {
+            NetworkEnemySpawner spawner = FindObjectOfType<NetworkEnemySpawner>();
+            if (spawner != null)
+            {
+                spawner.HandleEnemySpawnMessage(msg);
+            }
+        }
+
+        private void OnEnemyPositionMessageReceived(EnemyPositionMessage msg)
+        {
+            NetworkEnemySpawner spawner = FindObjectOfType<NetworkEnemySpawner>();
+            if (spawner != null)
+            {
+                spawner.HandleEnemyPositionMessage(msg);
+            }
+        }
+
+        private void OnEnemyDeathMessageReceived(EnemyDeathMessage msg)
+        {
+            NetworkEnemySpawner spawner = FindObjectOfType<NetworkEnemySpawner>();
+            if (spawner != null)
+            {
+                spawner.HandleEnemyDeathMessage(msg);
+            }
         }
 
         #endregion
