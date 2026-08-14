@@ -71,8 +71,17 @@ namespace PetGame
 
         private void Start()
         {
-            // Load save data
-            //GameSaveData saveData = SaveManager.Instance.LoadGame();
+            saveTimer = 0f;
+
+            // In client-only mode (joined someone else's room), don't spawn local character.
+            // The client's character will be created by NetworkPlayer after connecting.
+            if (IsClientOnlyMode)
+            {
+                Debug.Log("[GameCharacterManager] Client-only mode: skipping local character spawn. Waiting for network.");
+                return;
+            }
+
+            // Host or offline mode: spawn local character normally
             CharacterData data = playerCharacterDataList[0];
             Vector3 spawnPos = Vector3.zero;
             if (playerSpawnPoints != null && playerSpawnPoints[0] != null)
@@ -82,9 +91,6 @@ namespace PetGame
 
             CharacterEntity entity = CreatePlayerCharacter(data, spawnPos);
             PlayerCharacters.Add(entity);
-            //SpawnPlayerCharacters(saveData);
-
-            saveTimer = 0f;
         }
 
         /// <summary>
@@ -355,6 +361,18 @@ namespace PetGame
             {
                 return PetGame.Network.MirrorNetworkManager.singleton != null
                     && PetGame.Network.MirrorNetworkManager.singleton.IsNetworkActive;
+            }
+        }
+
+        /// <summary>
+        /// Check if we are running as client-only (joined someone else's room, not hosting).
+        /// </summary>
+        public bool IsClientOnlyMode
+        {
+            get
+            {
+                return PetGame.Network.MirrorNetworkManager.singleton != null
+                    && PetGame.Network.MirrorNetworkManager.singleton.IsClientOnly;
             }
         }
 

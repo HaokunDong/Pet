@@ -1,5 +1,6 @@
   using UnityEngine;
 using PetGame.AI;
+using PetGame.Network;
 
 
 namespace PetGame
@@ -54,6 +55,14 @@ namespace PetGame
 
             if (spawnCenter == null)
                 spawnCenter = transform;
+
+            // In client-only mode, disable enemy spawning.
+            // The host manages all enemies; clients see them via network sync.
+            if (MirrorNetworkManager.singleton != null && MirrorNetworkManager.singleton.IsClientOnly)
+            {
+                isPaused = true;
+                Debug.Log("[EnemySpawner] Client-only mode: enemy spawning disabled (host manages enemies).");
+            }
         }
 
         private void Update()

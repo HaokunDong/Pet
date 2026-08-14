@@ -231,6 +231,13 @@ namespace PetGame.Network
                 ConnectedPlayers.Add(netPlayer);
                 Debug.Log($"[MirrorNetworkManager] NetworkPlayer spawned for connection: {conn.connectionId}");
             }
+
+            // Sync existing enemies to the new client (late joiner support)
+            NetworkEnemySpawner enemySpawner = FindObjectOfType<NetworkEnemySpawner>();
+            if (enemySpawner != null)
+            {
+                enemySpawner.SyncAllEnemiesToNewClient(conn);
+            }
         }
 
         public override void OnServerDisconnect(NetworkConnectionToClient conn)

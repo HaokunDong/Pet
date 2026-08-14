@@ -111,14 +111,25 @@ namespace Mirror.FizzySteam
                             Connected = true;
                             Debug.Log($"[FizzySteamworks Client] Connected to host: {hostSteamId} (acknowledgment received)");
                             transport.OnClientConnectedInternal();
-                            continue;
+                            // IMPORTANT: Stop processing packets this frame.
+                            // Mirror's NetworkClient needs a full frame to initialize
+                            // (OnClientConnect, AddPlayer, etc.) before it can receive data.
+                            // Processing data packets in the same frame causes "failed to add batch".
+                            return;
                         }
 
-                        ArraySegment<byte> segment = new ArraySegment<byte>(buffer, 0, (int)bytesRead);
-                        transport.OnClientDataReceivedInternal(segment, Channels.Reliable);
+                        // Only process data if we are fully connected
+                        if (Connected)
+                        {
+                            ArraySegment<byte> segment = new ArraySegment<byte>(buffer, 0, (int)bytesRead);
+                            transport.OnClientDataReceivedInternal(segment, Channels.Reliable);
+                        }
                     }
                 }
             }
+
+            // Only process unreliable data if fully connected
+            if (!Connected) return;
 
             // Process incoming packets on unreliable channel
             while (SteamNetworking.IsP2PPacketAvailable(out uint msgSize2, transport.unreliableChannel))

@@ -155,7 +155,7 @@ MonoBehaviour:
   reliableChannel: 0
   unreliableChannel: 1
   connectionTimeout: 25
-  maxPacketSize: 1200
+  maxPacketSize: 524288
 --- !u!114 &9719177
 MonoBehaviour:
   m_ObjectHideFlags: 0

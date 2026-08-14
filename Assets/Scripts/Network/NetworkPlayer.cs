@@ -201,6 +201,7 @@ namespace PetGame.Network
 
         /// <summary>
         /// Wait for GameCharacterManager to be ready and have a player character, then register it.
+        /// In client-only mode, creates the character since GameCharacterManager.Start() skips it.
         /// </summary>
         private IEnumerator RegisterLocalCharacterDelayed()
         {
@@ -211,7 +212,7 @@ namespace PetGame.Network
             while (elapsed < timeout)
             {
                 gcm = Object.FindObjectOfType<GameCharacterManager>();
-                if (gcm != null && gcm.PlayerCharacters.Count > 0)
+                if (gcm != null)
                     break;
                 yield return new WaitForSeconds(0.1f);
                 elapsed += 0.1f;
@@ -222,6 +223,35 @@ namespace PetGame.Network
                 Debug.LogWarning("[NetworkPlayer] GameCharacterManager not found after timeout.");
                 CmdRegisterNoCharacter();
                 yield break;
+            }
+
+            // In client-only mode, GameCharacterManager.Start() skips character creation.
+            // We need to create the character here.
+            bool isClientOnly = MirrorNetworkManager.singleton != null && MirrorNetworkManager.singleton.IsClientOnly;
+
+            if (isClientOnly && gcm.PlayerCharacters.Count == 0)
+            {
+                // Create the local player's character in the host's scene
+                if (gcm.playerCharacterDataList != null && gcm.playerCharacterDataList.Length > 0)
+                {
+                    CharacterData data = gcm.playerCharacterDataList[0];
+                    Vector3 spawnPos = gcm.GetPlayerSpawnPosition();
+
+                    CharacterEntity entity = gcm.CreatePlayerCharacter(data, spawnPos);
+                    gcm.PlayerCharacters.Add(entity);
+
+                    Debug.Log($"[NetworkPlayer] Client-only mode: Created local character '{data.characterId}' in host's scene.");
+                }
+            }
+
+            // Now wait for the character to be ready
+            elapsed = 0f;
+            while (elapsed < timeout)
+            {
+                if (gcm.PlayerCharacters.Count > 0)
+                    break;
+                yield return new WaitForSeconds(0.1f);
+                elapsed += 0.1f;
             }
 
             if (gcm.PlayerCharacters.Count > 0)
