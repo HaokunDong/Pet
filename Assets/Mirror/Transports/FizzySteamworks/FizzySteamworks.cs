@@ -26,7 +26,7 @@ namespace Mirror.FizzySteam
         public float connectionTimeout = 25f;
 
         [Tooltip("Maximum packet size (Steam P2P max is 1MB, but we limit for performance)")]
-        public int maxPacketSize = 524288;
+        public int maxPacketSize = 65536;
 
         private SteamP2PServer server;
         private SteamP2PClient client;

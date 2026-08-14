@@ -19,6 +19,11 @@ namespace Mirror.FizzySteam
         private Callback<P2PSessionRequest_t> p2pSessionRequestCallback;
         private Callback<P2PSessionConnectFail_t> p2pConnectFailCallback;
 
+        // Queue for delayed connection notifications.
+        // We delay notifying Mirror by one frame to let the P2P channel stabilize.
+        private readonly Queue<int> pendingConnections = new Queue<int>();
+        private readonly HashSet<int> pendingConnectionSet = new HashSet<int>();
+
         public bool Active { get; private set; }
 
         public SteamP2PServer(FizzySteamworks transport)
@@ -51,6 +56,8 @@ namespace Mirror.FizzySteam
 
             connectedClients.Clear();
             steamIdToConnId.Clear();
+            pendingConnections.Clear();
+            pendingConnectionSet.Clear();
 
             p2pSessionRequestCallback?.Dispose();
             p2pConnectFailCallback?.Dispose();
@@ -63,6 +70,21 @@ namespace Mirror.FizzySteam
         public void ReceiveData()
         {
             if (!Active) return;
+
+            // Process pending connection notifications (delayed by one frame).
+            // This gives the P2P channel time to stabilize before Mirror starts
+            // sending spawn data to the new client.
+            while (pendingConnections.Count > 0)
+            {
+                int connId = pendingConnections.Dequeue();
+                pendingConnectionSet.Remove(connId);
+
+                // Only notify if the client is still connected (hasn't timed out)
+                if (connectedClients.ContainsKey(connId))
+                {
+                    transport.OnServerConnectedInternal(connId);
+                }
+            }
 
             // Process incoming packets on reliable channel
             while (SteamNetworking.IsP2PPacketAvailable(out uint msgSize, transport.reliableChannel))
@@ -104,8 +126,11 @@ namespace Mirror.FizzySteam
                     byte[] ack = new byte[] { 0xFE };
                     SteamNetworking.SendP2PPacket(remoteSteamId, ack, 1, EP2PSend.k_EP2PSendReliable, transport.reliableChannel);
 
-                    // Notify Mirror that a new client has connected
-                    transport.OnServerConnectedInternal(connId);
+                    // Queue the connection notification for next frame.
+                    // This ensures the client has time to receive the ACK and
+                    // transition to Connected state before Mirror sends spawn data.
+                    pendingConnections.Enqueue(connId);
+                    pendingConnectionSet.Add(connId);
                     return;
                 }
                 else
@@ -122,6 +147,13 @@ namespace Mirror.FizzySteam
                 // Client is retrying handshake - resend acknowledgment
                 byte[] ack = new byte[] { 0xFE };
                 SteamNetworking.SendP2PPacket(remoteSteamId, ack, 1, EP2PSend.k_EP2PSendReliable, transport.reliableChannel);
+                return;
+            }
+
+            // If this client is still pending connection notification, skip data delivery.
+            // Mirror hasn't been notified yet, so it can't process data for this connection.
+            if (pendingConnectionSet.Contains(connId))
+            {
                 return;
             }
 

@@ -36,9 +36,15 @@ namespace Mirror.FizzySteam
         {
             hostSteamId = hostId;
 
-            // Register callbacks
+            // Register callbacks FIRST so we can handle session requests from the host
             p2pSessionRequestCallback = Callback<P2PSessionRequest_t>.Create(OnP2PSessionRequest);
             p2pConnectFailCallback = Callback<P2PSessionConnectFail_t>.Create(OnP2PConnectFail);
+
+            // Proactively accept P2P session with the host.
+            // This is critical: when the server sends us the ACK packet,
+            // Steam needs to have an accepted session on our end, otherwise
+            // the packet gets dropped and causes P2P timeout.
+            SteamNetworking.AcceptP2PSessionWithUser(hostSteamId);
 
             Debug.Log($"[FizzySteamworks Client] Connecting to host: {hostSteamId}");
 
