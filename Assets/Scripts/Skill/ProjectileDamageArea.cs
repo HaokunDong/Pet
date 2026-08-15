@@ -175,7 +175,7 @@ namespace PetGame
 
                 if (AttackRangeHelper.IsTargetInRange(center, facingSign, damageShapes, targetPos))
                 {
-                    target.TakeDamage(damage, null);
+                    PetGame.Network.NetworkDamageHelper.ApplyDamage(target, damage, null);
                     hitCount++;
                 }
             }

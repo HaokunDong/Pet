@@ -60,7 +60,7 @@ namespace PetGame
 
                         if (IsInSkillAttackDistance(casterPos, facingSign, candidatePos))
                         {
-                            candidateEntity.TakeDamage(skillData.damage, casterEntity);
+                            PetGame.Network.NetworkDamageHelper.ApplyDamage(candidateEntity, skillData.damage, casterEntity);
                         }
                     }
                 }
@@ -78,7 +78,7 @@ namespace PetGame
 
                     if (IsInSkillAttackDistance(casterPos, facingSign, candidatePos))
                     {
-                        candidateEntity.TakeDamage(skillData.damage, casterEntity);
+                        PetGame.Network.NetworkDamageHelper.ApplyDamage(candidateEntity, skillData.damage, casterEntity);
                     }
                 }
 
@@ -99,7 +99,7 @@ namespace PetGame
 
                     if (IsInSkillAttackDistance(casterPos, facingSign, candidatePos))
                     {
-                        candidateEntity.TakeDamage(skillData.damage, casterEntity);
+                        PetGame.Network.NetworkDamageHelper.ApplyDamage(candidateEntity, skillData.damage, casterEntity);
                     }
                 }
 

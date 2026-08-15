@@ -244,7 +244,7 @@ namespace PetGame
                 bool inFront = (damageFacingSign > 0 && cdx >= 0) || (damageFacingSign < 0 && cdx <= 0);
                 if ((Mathf.Abs(cdx) < 0.3f || inFront) && Mathf.Abs(cdx) <= damageDistance)
                 {
-                    candidateEntity.TakeDamage(damageAmount, damageCasterEntity);
+                    PetGame.Network.NetworkDamageHelper.ApplyDamage(candidateEntity, damageAmount, damageCasterEntity);
                     alreadyHitInstanceIDs.Add(instanceID);
                 }
             }

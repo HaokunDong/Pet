@@ -31,6 +31,13 @@ namespace PetGame.Network
         public uint enemyNetId;
     }
 
+    /// <summary>Message sent from server to clients when an enemy takes a hit (for animation sync).</summary>
+    public struct EnemyHitMessage : NetworkMessage
+    {
+        public uint enemyNetId;
+        public float currentHealth;
+    }
+
     #endregion
 
     /// <summary>
@@ -105,6 +112,18 @@ namespace PetGame.Network
             // Handlers are registered by MirrorNetworkManager.OnStartClient() now.
             // This method is kept for compatibility but does nothing.
             isRegistered = true;
+        }
+
+        /// <summary>
+        /// Get the network ID of a mirror enemy by its GameObject.
+        /// Used by CombatSystem on clients to route damage to the server.
+        /// </summary>
+        public uint GetMirrorEnemyNetId(GameObject enemyObj)
+        {
+            if (enemyObj == null) return 0;
+            MirrorEnemyTag tag = enemyObj.GetComponent<MirrorEnemyTag>();
+            if (tag != null) return tag.enemyNetId;
+            return 0;
         }
 
         private void UnregisterHandlers()
@@ -310,6 +329,12 @@ namespace PetGame.Network
             OnClientEnemyDeath(msg);
         }
 
+        /// <summary>Handle EnemyHitMessage forwarded from MirrorNetworkManager.</summary>
+        public void HandleEnemyHitMessage(EnemyHitMessage msg)
+        {
+            OnClientEnemyHit(msg);
+        }
+
         #endregion
 
         #region Client Message Handlers
@@ -354,6 +379,35 @@ namespace PetGame.Network
                 Destroy(mirrorObj, 1f);
                 clientMirrorEnemies.Remove(msg.enemyNetId);
                 Debug.Log($"[NetworkEnemySpawner] Mirror enemy #{msg.enemyNetId} died.");
+            }
+        }
+
+        private void OnClientEnemyHit(EnemyHitMessage msg)
+        {
+            if (NetworkServer.active) return;
+
+            if (clientMirrorEnemies.TryGetValue(msg.enemyNetId, out GameObject mirrorObj) && mirrorObj != null)
+            {
+                // Play hit animation
+                CharacterAnimator charAnim = mirrorObj.GetComponent<CharacterAnimator>();
+                if (charAnim != null)
+                {
+                    charAnim.PlayHit();
+                }
+
+                // Update health
+                CharacterEntity entity = mirrorObj.GetComponent<CharacterEntity>();
+                if (entity != null && entity.RuntimeStats != null)
+                {
+                    entity.RuntimeStats.currentHealth = msg.currentHealth;
+                }
+
+                // Trigger flash effect
+                FlashEffect flash = mirrorObj.GetComponent<FlashEffect>();
+                if (flash != null)
+                {
+                    flash.TriggerFlash();
+                }
             }
         }
 
@@ -434,6 +488,11 @@ namespace PetGame.Network
             CombatSystem combat = enemyObj.GetComponent<CombatSystem>();
             if (combat != null) combat.enabled = false;
 
+            // Store the network ID on the enemy for damage routing
+            MirrorEnemyTag tag = enemyObj.GetComponent<MirrorEnemyTag>();
+            if (tag == null) tag = enemyObj.AddComponent<MirrorEnemyTag>();
+            tag.enemyNetId = enemyNetId;
+
             clientMirrorEnemies[enemyNetId] = enemyObj;
             Debug.Log($"[NetworkEnemySpawner] Created mirror enemy #{enemyNetId}: {characterDataId}");
         }
@@ -477,6 +536,37 @@ namespace PetGame.Network
                     Destroy(kvp.Value);
             }
             clientMirrorEnemies.Clear();
+        }
+
+        #endregion
+
+        #region Server - Damage Routing
+
+        /// <summary>
+        /// Server: Apply damage to a tracked enemy by its network ID.
+        /// Called from NetworkPlayer.CmdRequestDamageEnemy.
+        /// </summary>
+        public void ApplyDamageToEnemy(uint enemyNetId, float damage, CharacterEntity attacker)
+        {
+            if (!NetworkServer.active) return;
+
+            if (serverEnemies.TryGetValue(enemyNetId, out EnemyNetData data))
+            {
+                if (data.entity != null && data.entity.RuntimeStats != null && data.entity.RuntimeStats.IsAlive)
+                {
+                    data.entity.TakeDamage(damage, attacker);
+
+                    // Sync hit animation to clients
+                    float currentHealth = data.entity.RuntimeStats.currentHealth;
+                    SendToRemoteClients(new EnemyHitMessage
+                    {
+                        enemyNetId = enemyNetId,
+                        currentHealth = currentHealth
+                    });
+
+                    Debug.Log($"[NetworkEnemySpawner] Server: Enemy #{enemyNetId} took {damage} damage. HP: {currentHealth}");
+                }
+            }
         }
 
         #endregion

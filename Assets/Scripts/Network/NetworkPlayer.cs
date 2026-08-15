@@ -7,63 +7,44 @@ namespace PetGame.Network
 {
     /// <summary>
     /// Network player proxy spawned for each connected player.
-    /// Instead of spawning networked character objects, this component:
-    /// 1. Keeps the local player's existing character untouched
-    /// 2. Syncs character info (ID, position, facing, health) to remote players
-    /// 3. Remote players create a local "mirror character" based on synced data
-    /// This avoids the need for NetworkIdentity on character prefabs.
+    /// Syncs character info, position, animation state, and routes combat damage.
+    /// Remote players create a local "mirror character" based on synced data.
     /// </summary>
     public class NetworkPlayer : NetworkBehaviour
     {
         #region SyncVars
 
-        /// <summary>
-        /// The character ID selected by this player. Empty means no character.
-        /// </summary>
         [SyncVar(hook = nameof(OnCharacterIdChanged))]
         private string selectedCharacterId = "";
 
-        /// <summary>
-        /// The Steam display name of this player.
-        /// </summary>
         [SyncVar]
         private string playerName = "";
 
-        /// <summary>
-        /// Whether this player has an active character.
-        /// </summary>
         [SyncVar(hook = nameof(OnHasCharacterChanged))]
         private bool hasCharacter = false;
 
-        /// <summary>
-        /// Synced position of this player's character.
-        /// </summary>
         [SyncVar]
         private Vector3 syncedPosition;
 
-        /// <summary>
-        /// Synced facing direction (true = facing right).
-        /// </summary>
         [SyncVar]
         private bool syncedFacingRight = true;
 
-        /// <summary>
-        /// Synced current health.
-        /// </summary>
         [SyncVar]
         private float syncedHealth;
 
-        /// <summary>
-        /// Synced max health.
-        /// </summary>
         [SyncVar]
         private float syncedMaxHealth;
 
-        /// <summary>
-        /// Synced alive state.
-        /// </summary>
         [SyncVar(hook = nameof(OnAliveChanged))]
         private bool syncedIsAlive = true;
+
+        /// <summary>Synced animation state name (Idle, Walk, Attack, Hit, Death, etc.)</summary>
+        [SyncVar(hook = nameof(OnAnimStateChanged))]
+        private string syncedAnimState = "Idle";
+
+        /// <summary>Synced attack index for combo system.</summary>
+        [SyncVar]
+        private int syncedAttackIndex = 0;
 
         #endregion
 
@@ -72,15 +53,7 @@ namespace PetGame.Network
         public string SelectedCharacterId => selectedCharacterId;
         public string PlayerName => playerName;
         public bool HasCharacter => hasCharacter;
-
-        /// <summary>
-        /// The local character entity that this player controls (only valid for local player).
-        /// </summary>
         public CharacterEntity LocalCharacter { get; private set; }
-
-        /// <summary>
-        /// The mirror character entity created on remote clients to represent this player.
-        /// </summary>
         public CharacterEntity MirrorCharacter { get; private set; }
 
         #endregion
@@ -91,8 +64,6 @@ namespace PetGame.Network
         [SerializeField] private float syncRate = 20f;
         [SerializeField] private float positionThreshold = 0.01f;
         [SerializeField] private float interpolationSpeed = 15f;
-
-        /// <summary>Offset for the remote player's mirror character so they don't overlap with the host.</summary>
         [SerializeField] private float remotePlayerXOffset = 2f;
 
         #endregion
@@ -102,6 +73,8 @@ namespace PetGame.Network
         private float syncTimer;
         private Vector3 lastSentPosition;
         private bool mirrorCharacterCreated = false;
+        private string lastSentAnimState = "";
+        private int lastSentAttackIndex = 0;
 
         #endregion
 
@@ -112,20 +85,17 @@ namespace PetGame.Network
             base.OnStartLocalPlayer();
             Debug.Log("[NetworkPlayer] Local player started.");
 
-            // Register as the local player in the network manager
             if (MirrorNetworkManager.singleton != null)
             {
                 MirrorNetworkManager.singleton.LocalPlayer = this;
             }
 
-            // Set player name from Steam
             if (SteamManager.Initialized)
             {
                 string steamName = SteamFriends.GetPersonaName();
                 CmdSetPlayerName(steamName);
             }
 
-            // Find and register the existing local character
             StartCoroutine(RegisterLocalCharacterDelayed());
         }
 
@@ -133,19 +103,14 @@ namespace PetGame.Network
         {
             base.OnStartClient();
 
-            // If this is a remote player and they already have a character, create the mirror
             if (!isOwned && hasCharacter && !string.IsNullOrEmpty(selectedCharacterId))
             {
                 StartCoroutine(CreateMirrorCharacterDelayed(selectedCharacterId));
             }
         }
 
-        /// <summary>
-        /// Wait for GameCharacterManager to be ready before creating mirror character.
-        /// </summary>
         private IEnumerator CreateMirrorCharacterDelayed(string characterId)
         {
-            // Wait until GameCharacterManager is available and has initialized
             float timeout = 5f;
             float elapsed = 0f;
             while (Object.FindObjectOfType<GameCharacterManager>() == null && elapsed < timeout)
@@ -154,7 +119,6 @@ namespace PetGame.Network
                 elapsed += 0.1f;
             }
 
-            // Additional frame wait to ensure Start() has completed
             yield return null;
             yield return null;
 
@@ -167,11 +131,8 @@ namespace PetGame.Network
         public override void OnStopClient()
         {
             base.OnStopClient();
-
-            // Clean up mirror character when disconnecting
             DestroyMirrorCharacter();
 
-            // If local player, unregister
             if (isOwned && MirrorNetworkManager.singleton != null)
             {
                 if (MirrorNetworkManager.singleton.LocalPlayer == this)
@@ -185,12 +146,10 @@ namespace PetGame.Network
         {
             if (isOwned)
             {
-                // Local player: send position/state updates to server
                 UpdateLocalPlayerSync();
             }
             else
             {
-                // Remote player: interpolate mirror character to synced position
                 UpdateMirrorCharacter();
             }
         }
@@ -199,13 +158,8 @@ namespace PetGame.Network
 
         #region Local Player - Character Registration
 
-        /// <summary>
-        /// Wait for GameCharacterManager to be ready and have a player character, then register it.
-        /// In client-only mode, creates the character since GameCharacterManager.Start() skips it.
-        /// </summary>
         private IEnumerator RegisterLocalCharacterDelayed()
         {
-            // Wait for GameCharacterManager to exist
             GameCharacterManager gcm = null;
             float timeout = 5f;
             float elapsed = 0f;
@@ -226,25 +180,36 @@ namespace PetGame.Network
             }
 
             // In client-only mode, GameCharacterManager.Start() skips character creation.
-            // We need to create the character here.
             bool isClientOnly = MirrorNetworkManager.singleton != null && MirrorNetworkManager.singleton.IsClientOnly;
 
-            if (isClientOnly && gcm.PlayerCharacters.Count == 0)
+            if (isClientOnly)
             {
-                // Create the local player's character in the host's scene
-                if (gcm.playerCharacterDataList != null && gcm.playerCharacterDataList.Length > 0)
+                // Pause local enemy spawner and clear existing local enemies
+                // Client will see mirror enemies synced from the host instead
+                EnemySpawner localSpawner = Object.FindObjectOfType<EnemySpawner>();
+                if (localSpawner != null)
                 {
-                    CharacterData data = gcm.playerCharacterDataList[0];
-                    Vector3 spawnPos = gcm.GetPlayerSpawnPosition();
+                    localSpawner.PauseSpawning();
+                    localSpawner.ClearAllEnemies();
+                    Debug.Log("[NetworkPlayer] Client-only mode: Local EnemySpawner paused and enemies cleared.");
+                }
 
-                    CharacterEntity entity = gcm.CreatePlayerCharacter(data, spawnPos);
-                    gcm.PlayerCharacters.Add(entity);
+                if (gcm.PlayerCharacters.Count == 0)
+                {
+                    if (gcm.playerCharacterDataList != null && gcm.playerCharacterDataList.Length > 0)
+                    {
+                        CharacterData data = gcm.playerCharacterDataList[0];
+                        Vector3 spawnPos = gcm.GetPlayerSpawnPosition();
 
-                    Debug.Log($"[NetworkPlayer] Client-only mode: Created local character '{data.characterId}' in host's scene.");
+                        CharacterEntity entity = gcm.CreatePlayerCharacter(data, spawnPos);
+                        gcm.PlayerCharacters.Add(entity);
+
+                        Debug.Log($"[NetworkPlayer] Client-only mode: Created local character '{data.characterId}' in host's scene.");
+                    }
                 }
             }
 
-            // Now wait for the character to be ready
+            // Wait for the character to be ready
             elapsed = 0f;
             while (elapsed < timeout)
             {
@@ -263,7 +228,6 @@ namespace PetGame.Network
                     string charId = currentChar.characterData.characterId;
                     Debug.Log($"[NetworkPlayer] Registering existing local character: {charId}");
 
-                    // Tell the server about our character
                     CmdRegisterCharacter(charId,
                         currentChar.transform.position,
                         currentChar.RuntimeStats.currentHealth,
@@ -282,15 +246,11 @@ namespace PetGame.Network
             }
         }
 
-        /// <summary>
-        /// Called when the local player switches character (e.g., via card selection).
-        /// </summary>
         public void OnLocalCharacterSwitched(string newCharacterId)
         {
             if (!isOwned) return;
             if (string.IsNullOrEmpty(newCharacterId)) return;
 
-            // Update local reference
             GameCharacterManager gcm = Object.FindObjectOfType<GameCharacterManager>();
             if (gcm != null && gcm.PlayerCharacters.Count > 0)
             {
@@ -310,9 +270,6 @@ namespace PetGame.Network
 
         #region Local Player - State Sync
 
-        /// <summary>
-        /// Periodically send local character state to the server.
-        /// </summary>
         private void UpdateLocalPlayerSync()
         {
             if (LocalCharacter == null) return;
@@ -343,25 +300,92 @@ namespace PetGame.Network
                 float currentHealth = LocalCharacter.RuntimeStats.currentHealth;
                 float maxHealth = LocalCharacter.RuntimeStats.maxHealth;
                 bool isAlive = LocalCharacter.RuntimeStats.IsAlive;
-
                 CmdUpdateHealth(currentHealth, maxHealth, isAlive);
             }
+
+            // Animation state sync
+            SyncAnimationState();
+        }
+
+        /// <summary>
+        /// Read the current animation state from the local character's Animator and send to server.
+        /// </summary>
+        private void SyncAnimationState()
+        {
+            if (LocalCharacter == null) return;
+
+            Animator animator = LocalCharacter.GetComponent<Animator>();
+            if (animator == null || animator.runtimeAnimatorController == null) return;
+
+            // Get current state info from base layer
+            AnimatorStateInfo stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+            string currentState = GetAnimStateName(animator, stateInfo);
+
+            // Get attack index if in attack state
+            int attackIndex = 0;
+            if (animator.parameterCount > 0)
+            {
+                foreach (var param in animator.parameters)
+                {
+                    if (param.nameHash == Animator.StringToHash("AttackIndex") && param.type == AnimatorControllerParameterType.Int)
+                    {
+                        attackIndex = animator.GetInteger("AttackIndex");
+                        break;
+                    }
+                }
+            }
+
+            // Only send if changed
+            if (currentState != lastSentAnimState || attackIndex != lastSentAttackIndex)
+            {
+                lastSentAnimState = currentState;
+                lastSentAttackIndex = attackIndex;
+                CmdUpdateAnimState(currentState, attackIndex);
+            }
+        }
+
+        /// <summary>
+        /// Determine the animation state name from AnimatorStateInfo.
+        /// Checks common state names used in the project.
+        /// </summary>
+        private string GetAnimStateName(Animator animator, AnimatorStateInfo stateInfo)
+        {
+            // Check Bool parameters to determine state
+            if (animator.GetBool("Death")) return "Death";
+            if (animator.GetBool("Hit")) return "Hit";
+            if (animator.GetBool("Attack")) return "Attack";
+
+            // Check skill bools
+            if (HasParam(animator, "SkillOne") && animator.GetBool("SkillOne")) return "SkillOne";
+            if (HasParam(animator, "SkillTwo") && animator.GetBool("SkillTwo")) return "SkillTwo";
+            if (HasParam(animator, "SkillThree") && animator.GetBool("SkillThree")) return "SkillThree";
+            if (HasParam(animator, "SkillFour") && animator.GetBool("SkillFour")) return "SkillFour";
+            if (HasParam(animator, "Skill") && animator.GetBool("Skill")) return "Skill";
+
+            if (animator.GetBool("Walk")) return "Walk";
+            if (animator.GetBool("Idle")) return "Idle";
+
+            return "Idle";
+        }
+
+        private bool HasParam(Animator animator, string paramName)
+        {
+            foreach (var param in animator.parameters)
+            {
+                if (param.name == paramName) return true;
+            }
+            return false;
         }
 
         #endregion
 
         #region Mirror Character - Remote Representation
 
-        /// <summary>
-        /// Create a local "mirror" character to represent a remote player.
-        /// Uses GameCharacterManager.CreatePlayerCharacter to ensure consistent visuals.
-        /// </summary>
         private void CreateMirrorCharacter(string characterId)
         {
             if (mirrorCharacterCreated) return;
             if (string.IsNullOrEmpty(characterId)) return;
 
-            // Find the CharacterData
             CharacterData charData = FindCharacterDataById(characterId);
             if (charData == null)
             {
@@ -369,11 +393,9 @@ namespace PetGame.Network
                 return;
             }
 
-            // Determine spawn position
             Vector3 spawnPos = syncedPosition;
             if (spawnPos == Vector3.zero)
             {
-                // Fallback: offset from the local player's position
                 GameCharacterManager gcm = Object.FindObjectOfType<GameCharacterManager>();
                 if (gcm != null)
                 {
@@ -381,18 +403,12 @@ namespace PetGame.Network
                 }
             }
 
-            // Create the mirror character using GameCharacterManager's method
             GameCharacterManager gcm2 = Object.FindObjectOfType<GameCharacterManager>();
             if (gcm2 != null)
             {
                 MirrorCharacter = gcm2.CreatePlayerCharacter(charData, spawnPos);
-
-                // Disable AI and manual control on mirror characters - they are driven by network sync
                 DisableMirrorCharacterControllers();
-
-                // Mark the mirror character's tag to differentiate from local player
                 MirrorCharacter.gameObject.name = $"MirrorPlayer_{charData.characterName}_{playerName}";
-
                 mirrorCharacterCreated = true;
                 Debug.Log($"[NetworkPlayer] Mirror character created: {charData.characterName} for player '{playerName}'");
             }
@@ -402,14 +418,10 @@ namespace PetGame.Network
             }
         }
 
-        /// <summary>
-        /// Destroy the mirror character when the remote player disconnects or switches character.
-        /// </summary>
         private void DestroyMirrorCharacter()
         {
             if (MirrorCharacter != null)
             {
-                // Use pool recycling if possible
                 PoolMgr poolMgr = PoolMgr.Instance;
                 if (poolMgr != null)
                 {
@@ -425,9 +437,6 @@ namespace PetGame.Network
             }
         }
 
-        /// <summary>
-        /// Disable AI and manual controllers on the mirror character so it doesn't act on its own.
-        /// </summary>
         private void DisableMirrorCharacterControllers()
         {
             if (MirrorCharacter == null) return;
@@ -442,9 +451,6 @@ namespace PetGame.Network
             if (controlMode != null) controlMode.enabled = false;
         }
 
-        /// <summary>
-        /// Update the mirror character's position and state from synced data.
-        /// </summary>
         private void UpdateMirrorCharacter()
         {
             if (MirrorCharacter == null) return;
@@ -471,6 +477,114 @@ namespace PetGame.Network
             }
         }
 
+        /// <summary>
+        /// Apply animation state to the mirror character's Animator.
+        /// </summary>
+        private void ApplyAnimStateToMirror(string oldState, string newState)
+        {
+            if (MirrorCharacter == null) return;
+
+            Animator animator = MirrorCharacter.GetComponent<Animator>();
+            if (animator == null || animator.runtimeAnimatorController == null) return;
+
+            // Reset all bools first
+            SetBoolSafe(animator, "Idle", false);
+            SetBoolSafe(animator, "Walk", false);
+            SetBoolSafe(animator, "Attack", false);
+            SetBoolSafe(animator, "Hit", false);
+            SetBoolSafe(animator, "Death", false);
+            SetBoolSafe(animator, "Skill", false);
+            SetBoolSafe(animator, "SkillOne", false);
+            SetBoolSafe(animator, "SkillTwo", false);
+            SetBoolSafe(animator, "SkillThree", false);
+            SetBoolSafe(animator, "SkillFour", false);
+
+            // Set the target state bool
+            switch (newState)
+            {
+                case "Idle":
+                    SetBoolSafe(animator, "Idle", true);
+                    break;
+                case "Walk":
+                    SetBoolSafe(animator, "Walk", true);
+                    break;
+                case "Attack":
+                    SetBoolSafe(animator, "Attack", true);
+                    SetIntSafe(animator, "AttackIndex", syncedAttackIndex);
+                    break;
+                case "Hit":
+                    SetBoolSafe(animator, "Hit", true);
+                    break;
+                case "Death":
+                    SetBoolSafe(animator, "Death", true);
+                    break;
+                case "Skill":
+                    SetBoolSafe(animator, "Skill", true);
+                    break;
+                case "SkillOne":
+                    SetBoolSafe(animator, "SkillOne", true);
+                    break;
+                case "SkillTwo":
+                    SetBoolSafe(animator, "SkillTwo", true);
+                    break;
+                case "SkillThree":
+                    SetBoolSafe(animator, "SkillThree", true);
+                    break;
+                case "SkillFour":
+                    SetBoolSafe(animator, "SkillFour", true);
+                    break;
+            }
+        }
+
+        private void SetBoolSafe(Animator animator, string param, bool value)
+        {
+            foreach (var p in animator.parameters)
+            {
+                if (p.name == param && p.type == AnimatorControllerParameterType.Bool)
+                {
+                    animator.SetBool(param, value);
+                    return;
+                }
+            }
+        }
+
+        private void SetIntSafe(Animator animator, string param, int value)
+        {
+            foreach (var p in animator.parameters)
+            {
+                if (p.name == param && p.type == AnimatorControllerParameterType.Int)
+                {
+                    animator.SetInteger(param, value);
+                    return;
+                }
+            }
+        }
+
+        #endregion
+
+        #region Network Combat - Client Damage Routing
+
+        /// <summary>
+        /// Called by client's CombatSystem when it hits a mirror enemy.
+        /// Routes the damage request to the server which applies it to the real enemy.
+        /// </summary>
+        public void RequestDamageEnemy(uint enemyNetId, float damage)
+        {
+            if (!isOwned) return;
+            CmdRequestDamageEnemy(enemyNetId, damage);
+        }
+
+        [Command]
+        private void CmdRequestDamageEnemy(uint enemyNetId, float damage)
+        {
+            // Server-side: find the real enemy and apply damage
+            NetworkEnemySpawner spawner = Object.FindObjectOfType<NetworkEnemySpawner>();
+            if (spawner != null)
+            {
+                spawner.ApplyDamageToEnemy(enemyNetId, damage, null);
+            }
+        }
+
         #endregion
 
         #region Commands (Client -> Server)
@@ -482,9 +596,6 @@ namespace PetGame.Network
             Debug.Log($"[NetworkPlayer] Player name set: {name}");
         }
 
-        /// <summary>
-        /// Register that this player has an active character.
-        /// </summary>
         [Command]
         private void CmdRegisterCharacter(string characterId, Vector3 position, float health, float maxHealth)
         {
@@ -496,14 +607,9 @@ namespace PetGame.Network
             syncedIsAlive = true;
 
             Debug.Log($"[NetworkPlayer] Server: Player registered character '{characterId}'");
-
-            // Notify all clients to create the mirror character
             RpcCreateMirrorCharacter(characterId);
         }
 
-        /// <summary>
-        /// Register that this player has no character.
-        /// </summary>
         [Command]
         private void CmdRegisterNoCharacter()
         {
@@ -512,9 +618,6 @@ namespace PetGame.Network
             Debug.Log("[NetworkPlayer] Server: Player has no character.");
         }
 
-        /// <summary>
-        /// Player switched to a different character.
-        /// </summary>
         [Command]
         private void CmdSwitchCharacter(string newCharacterId, Vector3 position, float health, float maxHealth)
         {
@@ -527,8 +630,6 @@ namespace PetGame.Network
             syncedIsAlive = true;
 
             Debug.Log($"[NetworkPlayer] Server: Player switched character from '{oldId}' to '{newCharacterId}'");
-
-            // Notify all clients to recreate the mirror character
             RpcSwitchMirrorCharacter(newCharacterId);
         }
 
@@ -552,35 +653,30 @@ namespace PetGame.Network
             syncedIsAlive = isAlive;
         }
 
+        [Command]
+        private void CmdUpdateAnimState(string animState, int attackIndex)
+        {
+            syncedAnimState = animState;
+            syncedAttackIndex = attackIndex;
+        }
+
         #endregion
 
         #region ClientRpc (Server -> All Clients)
 
-        /// <summary>
-        /// Tell all clients to create a mirror character for this player.
-        /// </summary>
         [ClientRpc]
         private void RpcCreateMirrorCharacter(string characterId)
         {
-            // Don't create a mirror for our own character
             if (isOwned) return;
-
             Debug.Log($"[NetworkPlayer] RPC: Creating mirror character '{characterId}' for remote player '{playerName}'");
             StartCoroutine(CreateMirrorCharacterDelayed(characterId));
         }
 
-        /// <summary>
-        /// Tell all clients to switch the mirror character for this player.
-        /// </summary>
         [ClientRpc]
         private void RpcSwitchMirrorCharacter(string newCharacterId)
         {
-            // Don't affect our own character
             if (isOwned) return;
-
             Debug.Log($"[NetworkPlayer] RPC: Switching mirror character to '{newCharacterId}' for remote player '{playerName}'");
-
-            // Destroy old mirror and create new one
             DestroyMirrorCharacter();
             StartCoroutine(CreateMirrorCharacterDelayed(newCharacterId));
         }
@@ -598,7 +694,6 @@ namespace PetGame.Network
         {
             if (!isOwned && newValue && !string.IsNullOrEmpty(selectedCharacterId))
             {
-                // Remote player now has a character - create mirror if not already done
                 if (!mirrorCharacterCreated)
                 {
                     StartCoroutine(CreateMirrorCharacterDelayed(selectedCharacterId));
@@ -606,7 +701,6 @@ namespace PetGame.Network
             }
             else if (!isOwned && !newValue)
             {
-                // Remote player no longer has a character - destroy mirror
                 DestroyMirrorCharacter();
             }
         }
@@ -617,7 +711,6 @@ namespace PetGame.Network
 
             if (!newAlive && MirrorCharacter != null)
             {
-                // Remote character died - play death animation
                 if (MirrorCharacter.CharAnimator != null)
                 {
                     MirrorCharacter.CharAnimator.PlayDeath();
@@ -625,19 +718,20 @@ namespace PetGame.Network
             }
         }
 
+        private void OnAnimStateChanged(string oldState, string newState)
+        {
+            if (isOwned) return;
+            ApplyAnimStateToMirror(oldState, newState);
+        }
+
         #endregion
 
         #region Utility
 
-        /// <summary>
-        /// Find a CharacterData ScriptableObject by its characterId.
-        /// Searches GameCharacterManager's list, then all loaded ScriptableObjects.
-        /// </summary>
         private CharacterData FindCharacterDataById(string characterId)
         {
             if (string.IsNullOrEmpty(characterId)) return null;
 
-            // First check GameCharacterManager's configured list
             GameCharacterManager gcm = Object.FindObjectOfType<GameCharacterManager>();
             if (gcm != null && gcm.playerCharacterDataList != null)
             {
@@ -648,7 +742,6 @@ namespace PetGame.Network
                 }
             }
 
-            // Fallback: search all loaded CharacterData ScriptableObjects in memory
             CharacterData[] allLoaded = Resources.FindObjectsOfTypeAll<CharacterData>();
             foreach (CharacterData data in allLoaded)
             {

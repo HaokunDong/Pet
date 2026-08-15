@@ -279,7 +279,7 @@ namespace PetGame
 
                 if (inRange)
                 {
-                    target.TakeDamage(damage, entity);
+                    PetGame.Network.NetworkDamageHelper.ApplyDamage(target, damage, entity);
                     hitCount++;
                 }
             }
@@ -337,7 +337,7 @@ namespace PetGame
                     bool inFront = (facingSign > 0 && cdx >= 0) || (facingSign < 0 && cdx <= 0);
                     if ((Mathf.Abs(cdx) < 0.3f || inFront) && Mathf.Abs(cdx) <= entity.RuntimeStats.attackDistance)
                     {
-                        candidateEntity.TakeDamage(entity.RuntimeStats.attackPower, entity);
+                        PetGame.Network.NetworkDamageHelper.ApplyDamage(candidateEntity, entity.RuntimeStats.attackPower, entity);
                     }
                 }
 
@@ -713,7 +713,7 @@ namespace PetGame
                         bool inFront = (facingSign > 0 && cdx >= 0) || (facingSign < 0 && cdx <= 0);
                         if ((Mathf.Abs(cdx) < 0.3f || inFront) && Mathf.Abs(cdx) <= meleeEffect.skillAttackDistance)
                         {
-                            candidateEntity.TakeDamage(skillData.damage, casterEntity);
+                            PetGame.Network.NetworkDamageHelper.ApplyDamage(candidateEntity, skillData.damage, casterEntity);
                         }
                     }
 

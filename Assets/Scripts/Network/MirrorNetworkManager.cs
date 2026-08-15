@@ -343,6 +343,7 @@ namespace PetGame.Network
             NetworkClient.RegisterHandler<EnemySpawnMessage>(OnEnemySpawnMessageReceived);
             NetworkClient.RegisterHandler<EnemyPositionMessage>(OnEnemyPositionMessageReceived);
             NetworkClient.RegisterHandler<EnemyDeathMessage>(OnEnemyDeathMessageReceived);
+            NetworkClient.RegisterHandler<EnemyHitMessage>(OnEnemyHitMessageReceived);
             Debug.Log("[MirrorNetworkManager] Custom client message handlers registered.");
         }
 
@@ -353,6 +354,7 @@ namespace PetGame.Network
                 NetworkClient.UnregisterHandler<EnemySpawnMessage>();
                 NetworkClient.UnregisterHandler<EnemyPositionMessage>();
                 NetworkClient.UnregisterHandler<EnemyDeathMessage>();
+                NetworkClient.UnregisterHandler<EnemyHitMessage>();
             }
         }
 
@@ -381,6 +383,15 @@ namespace PetGame.Network
             if (spawner != null)
             {
                 spawner.HandleEnemyDeathMessage(msg);
+            }
+        }
+
+        private void OnEnemyHitMessageReceived(EnemyHitMessage msg)
+        {
+            NetworkEnemySpawner spawner = FindObjectOfType<NetworkEnemySpawner>();
+            if (spawner != null)
+            {
+                spawner.HandleEnemyHitMessage(msg);
             }
         }
 
