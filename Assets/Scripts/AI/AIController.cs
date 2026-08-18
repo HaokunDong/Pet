@@ -57,6 +57,11 @@ namespace PetGame.AI
 
         private void Start()
         {
+            // Skip if InitializeAI() was already called (e.g. during CreatePlayerCharacter).
+            // This prevents Start() from rebuilding the tree and overriding the setup
+            // done by InitializeAI() + ResetToAIMode() for freshly instantiated objects.
+            if (behaviorTree != null) return;
+
             if (entity != null && entity.IsInitialized)
             {
                 BuildTree();
@@ -72,6 +77,7 @@ namespace PetGame.AI
         {
             if (entity == null)
                 entity = GetComponent<CharacterEntity>();
+            Debug.Log($"[AIController] InitializeAI called on '{gameObject.name}'. IsActive was={IsActive}, entity.IsAlive={entity?.RuntimeStats?.IsAlive}");
             BuildTree();
             IsActive = true;
         }
@@ -117,15 +123,56 @@ namespace PetGame.AI
             return new BTSelector(combatSeq, postCombat, wander);
         }
 
+        /// <summary>
+        /// Frame counter used to throttle diagnostic logs (only log first N frames after switch).
+        /// </summary>
+        private int diagFrameCount = 0;
+        private const int DiagFrameLimit = 10;
+
+        /// <summary>
+        /// Reset the diagnostic frame counter. Called after initialization to start logging.
+        /// </summary>
+        public void ResetDiagCounter()
+        {
+            diagFrameCount = 0;
+        }
+
         private void Update()
         {
-            if (!IsActive || behaviorTree == null) return;
-            if (entity == null || !entity.RuntimeStats.IsAlive) return;
+            if (!IsActive || behaviorTree == null)
+            {
+                if (diagFrameCount < DiagFrameLimit)
+                {
+                    Debug.LogWarning($"[AIController] Update SKIPPED on '{gameObject.name}': IsActive={IsActive}, tree={(behaviorTree != null ? "exists" : "NULL")}");
+                    diagFrameCount++;
+                }
+                return;
+            }
+            if (entity == null || !entity.RuntimeStats.IsAlive)
+            {
+                if (diagFrameCount < DiagFrameLimit)
+                {
+                    Debug.LogWarning($"[AIController] Update SKIPPED on '{gameObject.name}': entity={(entity != null ? "exists" : "NULL")}, IsAlive={entity?.RuntimeStats?.IsAlive}");
+                    diagFrameCount++;
+                }
+                return;
+            }
 
             // Keep runtime hysteresis / duration tunables in sync with Inspector tweaks.
             SyncContextTunables();
 
             behaviorTree.Tick();
+
+            // Log first N frames after character switch to diagnose stuck-in-Idle
+            if (diagFrameCount < DiagFrameLimit)
+            {
+                var sm = entity.CharAnimator?.StateMachine;
+                Debug.Log($"[AIController] Tick #{diagFrameCount} on '{gameObject.name}': " +
+                    $"AIState={context.CurrentState}, " +
+                    $"SM=[isIdle={sm?.isIdle}, isWalking={sm?.isWalking}, isAttacking={sm?.isAttacking}, isHit={sm?.isHit}, isDead={sm?.isDead}, canBeInterrupted={sm?.canBeInterrupted}], " +
+                    $"Target={(context.CurrentTarget != null ? context.CurrentTarget.gameObject.name : "none")}");
+                diagFrameCount++;
+            }
         }
 
         /// <summary>
@@ -168,14 +215,21 @@ namespace PetGame.AI
 
             if (behaviorTree == null || context == null)
             {
+                Debug.Log($"[AIController] ResumeAI on '{gameObject.name}': tree/context null, rebuilding.");
                 BuildTree();
             }
             else
             {
+                Debug.Log($"[AIController] ResumeAI on '{gameObject.name}': reusing existing tree. OldState={context.CurrentState}");
                 context.CurrentTarget = null;
                 context.CurrentState = AIState.Wander;
                 context.HasFiredFirstStrike = false;
                 context.TargetWasBehindOnEngage = false;
+                // Reset attack cooldown so the character can attack immediately after switching.
+                // Without this, stale LastAttackTime from the previous session can gate attacks
+                // for up to 1/attackSpeed seconds, causing the character to idle in Strike state.
+                context.LastAttackTime = -999f;
+                context.StrikeEnteredTime = 0f;
             }
 
             IsActive = true;

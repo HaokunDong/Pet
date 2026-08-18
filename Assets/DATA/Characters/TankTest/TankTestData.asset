@@ -19,13 +19,10 @@ MonoBehaviour:
   defense: 10
   moveSpeed: 2
   attackSpeed: 0.6
-  engageDistance: 0.75
   minAttackDistance: 0.41
-  attackRangeShapes:
-  - shapeType: 0
-    offset: {x: 0.41, y: 0.03}
-    radius: 0.65
-    size: {x: 0, y: 0}
+  attackDistance: 1
+  comboCount: 1
+  comboDamageMultipliers: []
   attackDisplacementType: 0
   attackDisplacementDirection: 0
   attackDisplacementDistance: 0.1
@@ -42,6 +39,9 @@ MonoBehaviour:
   skills:
   - {fileID: 11400000, guid: 14dada5195316f54298b52c029c4749f, type: 2}
   characterDescription: This is Tank
+  evolutionTarget: {fileID: 0}
+  evolutionRequirements: []
+  prefab: {fileID: 7555975994170973282, guid: 8d3aca897c7891845b95576588c2c16f, type: 3}
   sprite: {fileID: -408986372, guid: d8c68a76bc1fd164b930310ffdd7390f, type: 3}
   portraitSprite: {fileID: 1039488526, guid: 3340b330c3b87c8418a78d48086dd261, type: 3}
   animatorController: {fileID: 9100000, guid: 4243dde28c9ea274db0468e715146b22, type: 2}

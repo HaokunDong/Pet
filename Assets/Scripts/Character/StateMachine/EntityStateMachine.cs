@@ -154,7 +154,11 @@ namespace PetGame
         public bool ChangeState<T>() where T : class, IState
         {
             // Safety: if dead, reject all normal transitions
-            if (isDead) return false;
+            if (isDead)
+            {
+                Debug.LogWarning($"[EntityStateMachine] ChangeState<{typeof(T).Name}> REJECTED: isDead=true");
+                return false;
+            }
 
             var type = typeof(T);
             if (!states.TryGetValue(type, out IState targetState))
@@ -176,11 +180,13 @@ namespace PetGame
             // Check transition conditions
             if (currentState != null && !isHitReentry && !currentState.CanExit())
             {
+                Debug.LogWarning($"[EntityStateMachine] ChangeState<{typeof(T).Name}> REJECTED: currentState={currentState.GetType().Name}.CanExit()=false, canBeInterrupted={canBeInterrupted}");
                 return false;
             }
 
             if (!targetState.CanEnter())
             {
+                Debug.LogWarning($"[EntityStateMachine] ChangeState<{typeof(T).Name}> REJECTED: CanEnter()=false");
                 return false;
             }
 

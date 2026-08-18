@@ -16,6 +16,6 @@ MonoBehaviour:
   skillName: "\u53EC\u5524"
   cooldown: 20
   damage: 0
-  skillRange: 10
+  skillRange: 6
   icon: {fileID: 0}
   skillEffect: {fileID: 11400000, guid: 1fa66f065e547b34fa3c7279417217d7, type: 2}

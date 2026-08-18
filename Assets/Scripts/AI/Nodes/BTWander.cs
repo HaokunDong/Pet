@@ -62,6 +62,7 @@ namespace PetGame.AI
 
             if (needsInit)
             {
+                Debug.Log($"[BTWander] '{owner.gameObject.name}' needsInit=true: hasInitFirst={hasInitializedFirstSegment}, state={context.CurrentState}, phaseEnd={context.WanderPhaseEndTime:F2}, time={Time.time:F2}");
                 hasInitializedFirstSegment = true;
                 StartWalkSegment(owner);
             }
@@ -115,6 +116,14 @@ namespace PetGame.AI
 
             if (owner.CharAnimator != null)
             {
+                // Log if PlayWalk might fail
+                var sm = owner.CharAnimator.StateMachine;
+                if (sm != null && !sm.isWalking && !sm.canBeInterrupted)
+                {
+                    Debug.LogWarning($"[BTWander] '{owner.gameObject.name}' TickWalk: PlayWalk will likely FAIL! " +
+                        $"SM state: isIdle={sm.isIdle}, isWalking={sm.isWalking}, isAttacking={sm.isAttacking}, " +
+                        $"isHit={sm.isHit}, isDead={sm.isDead}, canBeInterrupted={sm.canBeInterrupted}");
+                }
                 owner.CharAnimator.PlayWalk();
                 owner.CharAnimator.SetFacingDirection(dir);
             }

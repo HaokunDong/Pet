@@ -34,10 +34,28 @@ namespace PetGame.AI
         /// when characters overlap. Works together with CharacterAnimator's FacingChangeCooldown.</summary>
         private const float StrikeFacingDeadzone = 0.15f;
 
+        /// <summary>Maximum consecutive frames TryNormalAttack can fail in Strike before forcing back to Engage.</summary>
+        private const int MaxStrikeFailFrames = 5;
+
         private readonly BTContext context;
         private CombatSystem combatSystem;
         private KnockbackController knockbackController;
         private SkillDisplacementController displacementController;
+
+        /// <summary>Consecutive frames where TryNormalAttack failed while in Strike state.</summary>
+        private int strikeFailCount;
+
+        /// <summary>Time when Engage state was last entered. Used to enforce minimum stay before re-entering Strike.</summary>
+        private float engageEnteredTime;
+
+        /// <summary>
+        /// When true, inSkillRange will NOT trigger Strike entry. Set by the safety valve
+        /// when attack fails in Strike (meaning the character entered Strike via skill range
+        /// but couldn't actually attack). Cleared when the character reaches engageDist or inAttackRange.
+        /// This forces the character to walk all the way to melee range instead of repeatedly
+        /// entering Strike at skill range and failing.
+        /// </summary>
+        private bool skipSkillRangeEntry;
 
         public BTCombat(BTContext context)
         {
@@ -139,7 +157,6 @@ namespace PetGame.AI
             float ownerX = owner.transform.position.x;
             float targetColliderDist = RuntimeCharacterStats.GetDistanceToColliderEdge(ownerX, target.CharCollider);
             float engageDist = Mathf.Max(owner.RuntimeStats.GetEngageDistance(), MinEngageDistance);
-            float engageExitDist = engageDist + context.EngageExitHysteresis;
 
             // Use collider-edge-based distance to decide Strike eligibility.
             // Check facing direction to ensure target is in front.
@@ -176,34 +193,59 @@ namespace PetGame.AI
             // Also check if target is within any ready skill's range.
             // This allows the character to enter Strike early to use a ranged skill
             // instead of walking all the way to melee attack range.
-            bool inSkillRange = IsTargetInSkillRange(owner, target);
+            // However, if skipSkillRangeEntry is set (safety valve fired because attack failed
+            // at skill range), ignore skill range until we reach melee range.
+            bool inSkillRange = !skipSkillRangeEntry && IsTargetInSkillRange(owner, target);
+
+            // Clear skipSkillRangeEntry once we're actually in attack range or engage distance.
+            // This means the character has walked close enough to attack normally.
+            if (skipSkillRangeEntry && (inAttackRange || targetColliderDist <= engageDist))
+            {
+                skipSkillRangeEntry = false;
+                // Re-evaluate inSkillRange now that the flag is cleared
+                inSkillRange = IsTargetInSkillRange(owner, target);
+            }
 
             // Decide Engage vs Strike:
             // - Enter Strike when within engage distance OR actually in attack range OR in skill range.
-            // - Exit Strike only when both out of attack range AND beyond engageExitDist AND not in skill range
-            //   AND minimum stay duration has elapsed (prevents jitter at boundary).
+            // - Exit Strike when both out of attack range AND not in skill range AND beyond
+            //   effective exit distance (atkDist - buffer + hysteresis). Minimum stay prevents jitter.
             if (context.CurrentState == AIState.Strike)
             {
                 // Minimum stay in Strike: at least one attack interval to prevent oscillation
                 float minStrikeDuration = 0.3f;
                 bool minStayElapsed = (Time.time - context.StrikeEnteredTime) >= minStrikeDuration;
-                if (minStayElapsed && !inAttackRange && !inSkillRange && targetColliderDist > engageExitDist)
+                // Exit Strike when not in attack range AND no skill ready in range AND
+                // beyond the effective attack threshold (atkDist - buffer) plus hysteresis.
+                // Using (atkDist - buffer) as the base ensures no dead zone between
+                // inAttackRange check and the exit threshold.
+                float effectiveExitDist = (atkDist - buffer) + context.EngageExitHysteresis;
+                if (minStayElapsed && !inAttackRange && !inSkillRange && targetColliderDist > effectiveExitDist)
                 {
                     context.CurrentState = AIState.Engage;
+                    engageEnteredTime = Time.time;
                 }
             }
             else
             {
                 // Coming from Wander / PostCombat / Engage.
                 // Enter Strike if in attack range OR within engage distance OR in skill range.
-                if (inAttackRange || inSkillRange || targetColliderDist <= engageDist)
+                // But require minimum stay in Engage (prevents Strike↔Engage oscillation when
+                // the safety valve forces back to Engage but the character is already close).
+                // NOTE: Only inAttackRange bypasses the minimum stay. inSkillRange does NOT bypass
+                // because the character might be in skill range but out of normal attack range,
+                // and if the skill fails (cooldown just started), it would cause an infinite loop.
+                bool engageMinStayElapsed = (Time.time - engageEnteredTime) >= 0.15f;
+                if (inAttackRange || (engageMinStayElapsed && (inSkillRange || targetColliderDist <= engageDist)))
                 {
                     context.CurrentState = AIState.Strike;
                     context.StrikeEnteredTime = Time.time;
+                    strikeFailCount = 0;
                 }
                 else
                 {
                     context.CurrentState = AIState.Engage;
+                    if (engageEnteredTime == 0f) engageEnteredTime = Time.time;
                 }
             }
 
@@ -263,12 +305,27 @@ namespace PetGame.AI
 
             // Also check skill range — if a skill is ready and target is in skill range,
             // enter Strike immediately so the character can use the skill.
-            bool inSkillRangeEngage = IsTargetInSkillRange(owner, target);
+            // Respect skipSkillRangeEntry: if the safety valve fired, don't use skill range.
+            bool inSkillRangeEngage = !skipSkillRangeEntry && IsTargetInSkillRange(owner, target);
 
-            if (inRange || inSkillRangeEngage || targetColliderDist <= engageDist)
+            // Clear skipSkillRangeEntry if we've reached melee range
+            if (skipSkillRangeEntry && (inRange || targetColliderDist <= engageDist))
+            {
+                skipSkillRangeEntry = false;
+                inSkillRangeEngage = IsTargetInSkillRange(owner, target);
+            }
+
+            // Only inRange (actual attack range) bypasses the minimum Engage stay.
+            // inSkillRange and engageDist require the minimum stay to prevent
+            // Strike↔Engage oscillation when the safety valve forces back to Engage.
+            bool engageMinStayOk = (Time.time - engageEnteredTime) >= 0.15f;
+            bool shouldEnterStrike = inRange || (engageMinStayOk && (inSkillRangeEngage || targetColliderDist <= engageDist));
+
+            if (shouldEnterStrike)
             {
                 context.CurrentState = AIState.Strike;
                 context.StrikeEnteredTime = Time.time;
+                strikeFailCount = 0;
                 if (owner.CharAnimator != null)
                 {
                     owner.CharAnimator.PlayIdle();
@@ -330,12 +387,21 @@ namespace PetGame.AI
                 bool targetInFront = (dir > 0 && newDx > 0) || (dir < 0 && newDx < 0);
                 nowInRange = targetInFront && (newTargetColliderDist + buffer <= atkDist);
             }
-            bool nowInSkillRange = IsTargetInSkillRange(owner, target);
-            bool enteredStrike = nowInRange || nowInSkillRange || newTargetColliderDist <= engageDist || clampedToStop;
+            bool nowInSkillRange = !skipSkillRangeEntry && IsTargetInSkillRange(owner, target);
+            // Clear skipSkillRangeEntry if we've reached melee range after moving
+            if (skipSkillRangeEntry && (nowInRange || newTargetColliderDist <= engageDist))
+            {
+                skipSkillRangeEntry = false;
+                nowInSkillRange = IsTargetInSkillRange(owner, target);
+            }
+            // Same rule: only nowInRange and clampedToStop bypass minimum stay.
+            bool engageMinStayOkPost = (Time.time - engageEnteredTime) >= 0.15f;
+            bool enteredStrike = nowInRange || clampedToStop || (engageMinStayOkPost && (nowInSkillRange || newTargetColliderDist <= engageDist));
             if (enteredStrike)
             {
                 context.CurrentState = AIState.Strike;
                 context.StrikeEnteredTime = Time.time;
+                strikeFailCount = 0;
             }
 
             if (owner.CharAnimator != null)
@@ -377,17 +443,19 @@ namespace PetGame.AI
             // Face the target while in Strike.
             // During attack animation, facing is locked by CombatSystem (SetFacingDirection is a no-op).
             // During attack cooldown (idle waiting), only update facing if the target is clearly
-            // on one side (large deadzone to prevent jitter when overlapping).
+            // on one side (deadzone matches TryNormalAttack's FacingDeadzone to prevent mismatch).
             float facingDx = target.ColliderCenter.x - owner.ColliderCenter.x;
             bool isInAttackAnim = (combatSystem != null && combatSystem.IsAttacking) ||
                 (owner.CharAnimator != null && owner.CharAnimator.StateMachine != null 
                  && owner.CharAnimator.StateMachine.isAttacking);
 
-            // Use a larger deadzone (0.3) to prevent jitter when overlapping with the target.
-            // Only update facing when NOT in attack animation AND target is clearly to one side.
+            // Use the same deadzone (0.15) as TryNormalAttack to ensure facing is always
+            // consistent with the attack range check. Previously 0.3 caused a gap where
+            // TickStrike wouldn't update facing but TryNormalAttack would check it, leading
+            // to permanent attack failures when the character faced the wrong direction.
             if (!isInAttackAnim && owner.CharAnimator != null 
                 && !owner.CharAnimator.IsFacingLocked 
-                && Mathf.Abs(facingDx) > 0.3f)
+                && Mathf.Abs(facingDx) > StrikeFacingDeadzone)
             {
                 owner.CharAnimator.SetFacingDirection(facingDx);
             }
@@ -481,12 +549,43 @@ namespace PetGame.AI
             {
                 context.LastAttackTime = Time.time;
                 context.HasFiredFirstStrike = true;
+                strikeFailCount = 0;
             }
             else if (owner.CharAnimator != null)
             {
                 // Attack range check may have failed this frame; stay in Strike and idle.
                 // Execute() will re-evaluate next frame and switch to Engage if needed.
                 owner.CharAnimator.PlayIdle();
+
+                // Safety: if attack keeps failing in Strike (e.g. facing mismatch, range edge case),
+                // first try to force-face the target (bypassing deadzone), then if still failing
+                // force back to Engage to walk closer.
+                strikeFailCount++;
+                if (strikeFailCount == 2 && owner.CharAnimator != null && !owner.CharAnimator.IsFacingLocked)
+                {
+                    // After 2 failures, force face the target regardless of deadzone.
+                    // This fixes the case where the character spawned facing the wrong direction
+                    // and the target is within the facing deadzone.
+                    float forceDx = target.transform.position.x - owner.transform.position.x;
+                    if (Mathf.Abs(forceDx) > 0.01f)
+                    {
+                        owner.CharAnimator.SetFacingDirection(forceDx);
+                    }
+                }
+                else if (strikeFailCount >= MaxStrikeFailFrames)
+                {
+                    Debug.LogWarning($"[BTCombat] '{owner.gameObject.name}': TryNormalAttack failed {strikeFailCount} times in Strike. Forcing back to Engage.");
+                    context.CurrentState = AIState.Engage;
+                    engageEnteredTime = Time.time;
+                    // Set StrikeEnteredTime far in the future so the minStrikeDuration check
+                    // won't immediately allow re-entry to Strike on the next frame.
+                    context.StrikeEnteredTime = Time.time;
+                    strikeFailCount = 0;
+                    // Disable skill-range-based Strike entry. The character was in Strike
+                    // (likely entered via skill range) but couldn't attack. Force it to
+                    // walk all the way to melee range before trying again.
+                    skipSkillRangeEntry = true;
+                }
             }
         }
 

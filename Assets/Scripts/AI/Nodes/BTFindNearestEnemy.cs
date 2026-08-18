@@ -67,6 +67,11 @@ namespace PetGame.AI
 
             if (newTarget == null)
             {
+                // Log only occasionally to avoid spam (use frame count)
+                if (Time.frameCount % 60 == 0)
+                {
+                    Debug.Log($"[BTFindNearestEnemy] '{owner.gameObject.name}': No enemy found within range={detectionRange}. Pos={owner.transform.position}");
+                }
                 return BTState.Failure;
             }
 

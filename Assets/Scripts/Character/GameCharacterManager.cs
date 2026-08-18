@@ -210,6 +210,14 @@ namespace PetGame
                 // Unsubscribe death event before recycling
                 currentEntity.OnDeath -= OnPlayerCharacterDeath;
 
+                // Pause AI and reset animator state before recycling to prevent stale
+                // behavior tree ticks or animation states when the object is reused.
+                AIController oldAI = currentEntity.GetComponent<AIController>();
+                if (oldAI != null) oldAI.PauseAI();
+                if (currentEntity.CharAnimator != null) currentEntity.CharAnimator.ResetStateMachine();
+
+                Debug.Log($"[GameCharacterManager] SwitchPlayerCharacter: recycling old character '{currentEntity.gameObject.name}', switching to '{newData.characterName}'");
+
                 // Recycle to pool using the object's name (which matches its prefab key)
                 PoolMgr.Instance.PutNode(currentEntity.gameObject);
             }
@@ -340,6 +348,7 @@ namespace PetGame
             if (ai == null)
                 ai = playerObj.AddComponent<AIController>();
             ai.InitializeAI();
+            ai.ResetDiagCounter(); // Start diagnostic logging for first N frames
 
             // Add ControlModeManager
             ControlModeManager controlMode = playerObj.GetComponent<ControlModeManager>();
@@ -348,6 +357,8 @@ namespace PetGame
             // For pooled objects, Start() won't re-execute, so explicitly reset to AI_Auto mode.
             // This ensures the character begins actively seeking enemies immediately after switching.
             controlMode.ResetToAIMode();
+
+            Debug.Log($"[GameCharacterManager] CreatePlayerCharacter COMPLETE: '{playerObj.name}', pos={position}, data={data.characterName}");
 
             // Subscribe to death event for cooldown management
             entity.OnDeath += OnPlayerCharacterDeath;

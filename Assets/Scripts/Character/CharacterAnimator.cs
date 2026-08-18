@@ -259,10 +259,20 @@ namespace PetGame
         /// <summary>
         /// Sync the defaultFacesRight setting from CharacterData.
         /// Called by CharacterEntity during initialization.
+        /// Also resets FacingDirection and flipX to the correct default for the new character,
+        /// preventing backwards walking when reusing pooled objects with different facing settings.
         /// </summary>
         public void SyncDefaultFacing(bool facesRight)
         {
             defaultFacesRight = facesRight;
+
+            // Reset facing to default right (+1) and sync flipX accordingly.
+            // This prevents stale flipX from a previous pooled character causing backwards walking.
+            FacingDirection = 1;
+            if (spriteRenderer != null)
+            {
+                spriteRenderer.flipX = defaultFacesRight ? false : true;
+            }
         }
 
         /// <summary>
@@ -307,6 +317,12 @@ namespace PetGame
             // from the Prefab but SetAnimatorController() was not called beforehand.
             CacheParameterFlags();
 
+            // Clear all stale Animator Bool parameters from previous pooled object use.
+            // Without this, a recycled object may retain Death/Attack/Skill Bools from its
+            // previous life, causing the Animator to stay in a wrong state (e.g. stuck in Idle
+            // because Death Bool is still true and has higher priority in Entry transitions).
+            ResetAllBools();
+
             // Create the appropriate state machine based on GameObject tag.
             // A Boss character used by the player (tag "Player") should use PlayerStateMachine.
             bool isPlayerControlled = gameObject.CompareTag("Player");
@@ -329,6 +345,7 @@ namespace PetGame
 
             // Start in Idle state
             stateMachine.ForceChangeState<IdleState>();
+            Debug.Log($"[CharacterAnimator] InitializeStateMachine on '{gameObject.name}': type={characterType}, skillCount={skillCount}, isPlayerControlled={isPlayerControlled}. SM created, forced to Idle.");
         }
 
         /// <summary>
@@ -339,7 +356,11 @@ namespace PetGame
         /// </summary>
         public void PlayIdle()
         {
-            if (stateMachine == null) return;
+            if (stateMachine == null)
+            {
+                Debug.LogWarning($"[CharacterAnimator] {gameObject.name}: PlayIdle FAILED - stateMachine is NULL!");
+                return;
+            }
 
             // Skip if already in Idle state (no need to re-enter from Entry)
             if (stateMachine.isIdle)
@@ -357,6 +378,12 @@ namespace PetGame
             {
                 ClearAttackStateIfNeeded();
             }
+            else
+            {
+                Debug.LogWarning($"[CharacterAnimator] {gameObject.name}: PlayIdle - ChangeState<IdleState> REJECTED! " +
+                    $"SM: isIdle={stateMachine.isIdle}, isWalking={stateMachine.isWalking}, isAttacking={stateMachine.isAttacking}, " +
+                    $"isHit={stateMachine.isHit}, isDead={stateMachine.isDead}, canBeInterrupted={stateMachine.canBeInterrupted}");
+            }
         }
 
         /// <summary>
@@ -366,7 +393,11 @@ namespace PetGame
         /// </summary>
         public void PlayWalk()
         {
-            if (stateMachine == null) return;
+            if (stateMachine == null)
+            {
+                Debug.LogWarning($"[CharacterAnimator] {gameObject.name}: PlayWalk FAILED - stateMachine is NULL!");
+                return;
+            }
 
             // Skip if already in Walk state (no need to re-enter from Entry)
             if (stateMachine.isWalking) return;
@@ -374,6 +405,12 @@ namespace PetGame
             if (stateMachine.ChangeState<WalkState>())
             {
                 ClearAttackStateIfNeeded();
+            }
+            else
+            {
+                Debug.LogWarning($"[CharacterAnimator] {gameObject.name}: PlayWalk - ChangeState<WalkState> REJECTED! " +
+                    $"SM: isIdle={stateMachine.isIdle}, isWalking={stateMachine.isWalking}, isAttacking={stateMachine.isAttacking}, " +
+                    $"isHit={stateMachine.isHit}, isDead={stateMachine.isDead}, canBeInterrupted={stateMachine.canBeInterrupted}");
             }
         }
 

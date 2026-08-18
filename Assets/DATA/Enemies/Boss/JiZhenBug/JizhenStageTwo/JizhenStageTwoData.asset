@@ -35,7 +35,7 @@ MonoBehaviour:
   qualityLevel: 1
   characterType: 0
   expReward: 10
-  respawnCooldown: 0
+  respawnCooldown: 5
   skills:
   - {fileID: 11400000, guid: 407614e0c9207834d9e3cfadd5e92cb6, type: 2}
   - {fileID: 11400000, guid: 622d9ee0bd417c64c8fc704e7c88c033, type: 2}
