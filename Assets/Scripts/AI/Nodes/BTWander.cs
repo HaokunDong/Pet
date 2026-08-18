@@ -21,6 +21,14 @@ namespace PetGame.AI
 
         private readonly BTContext context;
 
+        /// <summary>
+        /// Tracks whether the first walk segment has been initialized.
+        /// This is needed because BuildTree/ResumeAI sets CurrentState = Wander
+        /// but doesn't initialize WanderTargetX/WanderPhaseEndTime, so the old
+        /// condition (CurrentState != Wander) would skip initialization.
+        /// </summary>
+        private bool hasInitializedFirstSegment = false;
+
         public BTWander(BTContext context)
         {
             this.context = context;
@@ -44,9 +52,17 @@ namespace PetGame.AI
                 return BTState.Running;
             }
 
-            // First entry / state just switched to Wander: initialize a walk segment.
-            if (context.CurrentState != AIState.Wander && context.CurrentState != AIState.WanderPause)
+            // First entry or state just switched to Wander from a non-wander state:
+            // initialize a walk segment so the character starts moving immediately.
+            // Also re-initialize if WanderPhaseEndTime is stale (already expired), which
+            // happens when returning from Combat/PostCombat with outdated timing data.
+            bool needsInit = !hasInitializedFirstSegment
+                || (context.CurrentState != AIState.Wander && context.CurrentState != AIState.WanderPause)
+                || (context.CurrentState == AIState.Wander && Time.time >= context.WanderPhaseEndTime);
+
+            if (needsInit)
             {
+                hasInitializedFirstSegment = true;
                 StartWalkSegment(owner);
             }
 

@@ -90,6 +90,19 @@ namespace PetGame
         }
 
         /// <summary>
+        /// Explicitly reset to AI_Auto mode. Called by GameCharacterManager for pooled objects
+        /// where Start() won't re-execute after SetActive(true).
+        /// </summary>
+        public void ResetToAIMode()
+        {
+            previousMode = ControlMode.AI_Auto;
+            isButtonShowing = false;
+            if (panelInstance != null)
+                panelInstance.SetActive(false);
+            SetMode(ControlMode.AI_Auto);
+        }
+
+        /// <summary>
         /// Called when the character is clicked (via OnMouseDown on Collider2D).
         /// </summary>
         private void OnMouseDown()

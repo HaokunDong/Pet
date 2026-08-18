@@ -9,12 +9,16 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a6a0b0d820e370e4ba3c9378a58acab8, type: 3}
-  m_Name: JiZhenStageTwo_SkillOneEffect
+  m_Script: {fileID: 11500000, guid: 0f08320acc876ba4b9131e8774efbbc4, type: 3}
+  m_Name: JiZhenStageTwo_SkillTwoEffect
   m_EditorClassIdentifier: 
   displacementType: 0
   displacementDirection: 0
   displacementDistance: 0
   displacementDuration: 0.2
   damagesDuringDisplacement: 0
-  skillAttackDistance: 1.5
+  summonPrefab: {fileID: 8834705981564148498, guid: feab63f341a341d4293bc35b90a14299, type: 3}
+  summonCount: 3
+  summonDuration: 10
+  allowMultipleWaves: 1
+  spawnRadius: 2

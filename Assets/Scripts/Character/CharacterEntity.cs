@@ -358,6 +358,9 @@ namespace PetGame
             // Only player characters receive experience
             if (lastAttacker.RuntimeStats.characterType != CharacterType.Player) return;
 
+            // Skip if the attacker has no characterId (e.g. summoned entities without an ID)
+            if (string.IsNullOrEmpty(lastAttacker.RuntimeStats.characterId)) return;
+
             // Get exp reward from CharacterData
             int expReward = (characterData != null) ? characterData.expReward : 10;
             if (expReward <= 0) expReward = 10; // Default fallback
@@ -381,7 +384,10 @@ namespace PetGame
             // Only player characters record kills
             if (lastAttacker.RuntimeStats.characterType != CharacterType.Player) return;
 
+            // Skip if the attacker has no characterId (e.g. summoned entities without an ID)
             string attackerId = lastAttacker.RuntimeStats.characterId;
+            if (string.IsNullOrEmpty(attackerId)) return;
+
             KillStatsManager.Instance.AddKill(attackerId);
         }
 

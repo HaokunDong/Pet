@@ -81,6 +81,15 @@ namespace PetGame.AI
                 return BTState.Failure;
             }
 
+            // Target object may have been deactivated/recycled (e.g. player switched
+            // character and the old one was returned to the pool). In that case the
+            // combat target is no longer valid — abandon combat and re-scan.
+            if (!target.gameObject.activeInHierarchy)
+            {
+                context.CurrentTarget = null;
+                return BTState.Failure;
+            }
+
             if (combatSystem == null)
                 combatSystem = owner.GetComponent<CombatSystem>();
 

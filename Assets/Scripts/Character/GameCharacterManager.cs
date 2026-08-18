@@ -342,8 +342,12 @@ namespace PetGame
             ai.InitializeAI();
 
             // Add ControlModeManager
-            if (playerObj.GetComponent<ControlModeManager>() == null)
-                playerObj.AddComponent<ControlModeManager>();
+            ControlModeManager controlMode = playerObj.GetComponent<ControlModeManager>();
+            if (controlMode == null)
+                controlMode = playerObj.AddComponent<ControlModeManager>();
+            // For pooled objects, Start() won't re-execute, so explicitly reset to AI_Auto mode.
+            // This ensures the character begins actively seeking enemies immediately after switching.
+            controlMode.ResetToAIMode();
 
             // Subscribe to death event for cooldown management
             entity.OnDeath += OnPlayerCharacterDeath;

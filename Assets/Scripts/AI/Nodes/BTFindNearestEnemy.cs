@@ -38,10 +38,12 @@ namespace PetGame.AI
             if (owner == null || !owner.RuntimeStats.IsAlive)
                 return BTState.Failure;
 
-            // Validate the existing target first — only replace it if it has died or disengaged.
+            // Validate the existing target first — only replace it if it has died, been
+            // deactivated/recycled (e.g. player switched character), or disengaged.
             if (context.CurrentTarget != null)
             {
                 bool dead = context.CurrentTarget.gameObject == null
+                            || !context.CurrentTarget.gameObject.activeInHierarchy
                             || !context.CurrentTarget.RuntimeStats.IsAlive;
 
                 float distToCurrent = dead
@@ -95,6 +97,10 @@ namespace PetGame.AI
             for (int i = 0; i < candidates.Length; i++)
             {
                 GameObject go = candidates[i];
+                // Skip deactivated/recycled objects (e.g. a previously controlled
+                // character that was returned to the pool during a character switch).
+                if (!go.activeInHierarchy) continue;
+
                 CharacterEntity entity = go.GetComponent<CharacterEntity>();
                 if (entity == null || !entity.RuntimeStats.IsAlive) continue;
 

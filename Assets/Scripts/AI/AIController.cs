@@ -65,12 +65,15 @@ namespace PetGame.AI
 
         /// <summary>
         /// Initialize the AI controller after the entity is ready.
+        /// Always activates the AI so it begins ticking immediately (important for
+        /// pooled objects whose IsActive may have been set to false by PauseAI).
         /// </summary>
         public void InitializeAI()
         {
             if (entity == null)
                 entity = GetComponent<CharacterEntity>();
             BuildTree();
+            IsActive = true;
         }
 
         /// <summary>
