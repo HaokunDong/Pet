@@ -12,10 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e008fbfcb086b4309bd7c12f80de35ab, type: 3}
   m_Name: JiZhenStageOne_Skill
   m_EditorClassIdentifier: 
-  skillId: 
-  skillName: 
+  skillId: JiZhenStageOne_Skill
+  skillName: "\u51B2\u649E"
   cooldown: 5
-  damage: 10
-  skillRange: 2
+  damage: 40
+  skillRange: 1.02
   icon: {fileID: 0}
-  skillEffect: {fileID: 0}
+  skillEffect: {fileID: 11400000, guid: 0f3f91873d9dc4d498894b10e3b51890, type: 2}

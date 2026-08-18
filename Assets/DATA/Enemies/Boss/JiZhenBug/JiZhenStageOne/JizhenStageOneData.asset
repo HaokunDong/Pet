@@ -36,7 +36,8 @@ MonoBehaviour:
   characterType: 0
   expReward: 10
   respawnCooldown: 3
-  skills: []
+  skills:
+  - {fileID: 11400000, guid: 7099cd9152788c147a0db28007b4ed36, type: 2}
   characterDescription: "\u5C0F\u866B\u5B50"
   evolutionTarget: {fileID: 11400000, guid: ebd63e8a8a1df274785e4a303d48c055, type: 2}
   evolutionRequirements:

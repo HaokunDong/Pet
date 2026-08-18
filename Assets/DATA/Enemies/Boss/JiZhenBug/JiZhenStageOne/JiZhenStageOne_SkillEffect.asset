@@ -17,4 +17,4 @@ MonoBehaviour:
   displacementDistance: 0
   displacementDuration: 0.2
   damagesDuringDisplacement: 0
-  skillAttackDistance: 1.5
+  skillAttackDistance: 1.09
