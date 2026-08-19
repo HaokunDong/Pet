@@ -17,7 +17,7 @@ namespace PetGame.Network
         [SyncVar(hook = nameof(OnCharacterIdChanged))]
         private string selectedCharacterId = "";
 
-        [SyncVar]
+        [SyncVar(hook = nameof(OnPlayerNameChanged))]
         private string playerName = "";
 
         [SyncVar(hook = nameof(OnHasCharacterChanged))]
@@ -232,6 +232,13 @@ namespace PetGame.Network
                         currentChar.transform.position,
                         currentChar.RuntimeStats.currentHealth,
                         currentChar.RuntimeStats.maxHealth);
+
+                    // Set the local player's Steam name on the character name tag
+                    if (SteamManager.Initialized)
+                    {
+                        string steamName = SteamFriends.GetPersonaName();
+                        LocalCharacter.SetPlayerName(steamName);
+                    }
                 }
                 else
                 {
@@ -410,6 +417,10 @@ namespace PetGame.Network
                 DisableMirrorCharacterControllers();
                 MirrorCharacter.gameObject.name = $"MirrorPlayer_{charData.characterName}_{playerName}";
                 mirrorCharacterCreated = true;
+
+                // Set the remote player's Steam name on the mirror character name tag
+                MirrorCharacter.SetPlayerName(playerName);
+
                 Debug.Log($"[NetworkPlayer] Mirror character created: {charData.characterName} for player '{playerName}'");
             }
             else
@@ -722,6 +733,17 @@ namespace PetGame.Network
         {
             if (isOwned) return;
             ApplyAnimStateToMirror(oldState, newState);
+        }
+
+        private void OnPlayerNameChanged(string oldName, string newName)
+        {
+            if (isOwned) return;
+
+            // Update the mirror character's name tag if it exists
+            if (MirrorCharacter != null)
+            {
+                MirrorCharacter.SetPlayerName(newName);
+            }
         }
 
         #endregion

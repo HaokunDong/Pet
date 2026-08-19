@@ -43,6 +43,11 @@ namespace PetGame
         private HealthBar healthBar;
 
         /// <summary>
+        /// Reference to the PlayerNameTag component displayed above the health bar.
+        /// </summary>
+        private PlayerNameTag nameTag;
+
+        /// <summary>
         /// Whether this entity has been initialized.
         /// </summary>
         public bool IsInitialized { get; private set; }
@@ -162,6 +167,9 @@ namespace PetGame
             // Create or re-initialize the health bar above this character
             InitializeHealthBar();
 
+            // Create or re-initialize the name tag above the health bar
+            InitializeNameTag();
+
             // Initialize velocity tracking
             lastFramePosition = transform.position;
             Velocity = Vector2.zero;
@@ -230,6 +238,46 @@ namespace PetGame
             // Update to full health and show
             healthBar.UpdateHealth(RuntimeStats.currentHealth, RuntimeStats.maxHealth);
             healthBar.Show();
+        }
+
+        /// <summary>
+        /// Create or re-initialize the PlayerNameTag child object.
+        /// Handles both first-time creation and object pool reuse.
+        /// The name tag is hidden by default and only shown when SetPlayerName is called (online mode).
+        /// </summary>
+        private void InitializeNameTag()
+        {
+            // Check if a PlayerNameTag child already exists (object pool reuse)
+            nameTag = GetComponentInChildren<PlayerNameTag>(true);
+
+            if (nameTag == null)
+            {
+                // Create a new PlayerNameTag child object
+                GameObject ntObj = new GameObject("PlayerNameTag");
+                ntObj.transform.SetParent(transform, false);
+                nameTag = ntObj.AddComponent<PlayerNameTag>();
+
+                SpriteRenderer sr = GetComponent<SpriteRenderer>();
+                nameTag.Initialize(sr);
+            }
+
+            // Hide by default - only shown when SetPlayerName is called (online mode)
+            nameTag.Hide();
+        }
+
+        /// <summary>
+        /// Set the player name displayed above this character.
+        /// Called by NetworkPlayer after character creation (online mode only).
+        /// This also makes the name tag visible.
+        /// </summary>
+        /// <param name="name">The player's Steam display name.</param>
+        public void SetPlayerName(string name)
+        {
+            if (nameTag != null)
+            {
+                nameTag.SetName(name);
+                nameTag.Show();
+            }
         }
 
         private void Update()
@@ -420,6 +468,13 @@ namespace PetGame
             if (healthBar != null)
             {
                 healthBar.Hide();
+            }
+
+            // Reset and hide name tag when recycled (will be re-shown on next Initialize)
+            if (nameTag != null)
+            {
+                nameTag.ResetState();
+                nameTag.Hide();
             }
 
             // Reset outline effect when recycled
