@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;
 
 namespace PetGame
 {
@@ -14,15 +13,15 @@ namespace PetGame
     {
         [Header("UI References (drag-assign in prefab)")]
         [SerializeField] private Image portraitImage;
-        [SerializeField] private TMP_Text nameText;
-        [SerializeField] private TMP_Text attackText;
-        [SerializeField] private TMP_Text healthText;
-        [SerializeField] private TMP_Text defenseText;
+        [SerializeField] private Text nameText;
+        [SerializeField] private Text attackText;
+        [SerializeField] private Text healthText;
+        [SerializeField] private Text defenseText;
         [SerializeField] private Text descriptionText;
 
         [Header("Cooldown UI")]
         [Tooltip("Text overlay to display cooldown remaining seconds. Will be created dynamically if not assigned.")]
-        [SerializeField] private TMP_Text cooldownText;
+        [SerializeField] private Text cooldownText;
 
         [Header("Train Button")]
         [Tooltip("Reference to the Train button. Will be found dynamically if not assigned.")]
@@ -303,11 +302,11 @@ namespace PetGame
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
 
-            cooldownText = textObj.AddComponent<TextMeshProUGUI>();
-            cooldownText.alignment = TextAlignmentOptions.Center;
+            cooldownText = textObj.AddComponent<Text>();
+            cooldownText.alignment = TextAnchor.MiddleCenter;
             cooldownText.fontSize = 36;
             cooldownText.color = Color.white;
-            cooldownText.fontStyle = FontStyles.Bold;
+            cooldownText.fontStyle = FontStyle.Bold;
         }
     }
 }

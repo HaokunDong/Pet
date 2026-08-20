@@ -809,6 +809,22 @@ PrefabInstance:
       propertyPath: m_Name
       value: RingRadialMenu
       objectReference: {fileID: 0}
+    - target: {fileID: 3132539874417106022, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: m_Color.b
+      value: 0.8780098
+      objectReference: {fileID: 0}
+    - target: {fileID: 3132539874417106022, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: m_Color.g
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3132539874417106022, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: m_Color.r
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3132539874417106022, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 7796395629034492277, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
       propertyPath: m_Color.b
       value: 0
@@ -1271,7 +1287,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: a07fe24d25144484d9c9e8290258d622, type: 2}
   - {fileID: 11400000, guid: 2842bc16e4357c34e9eba347828fa215, type: 2}
   - {fileID: 11400000, guid: 7643fda82752571448907a8eec24f349, type: 2}
-  - {fileID: 11400000, guid: ebd63e8a8a1df274785e4a303d48c055, type: 2}
 --- !u!4 &1303202849
 Transform:
   m_ObjectHideFlags: 0

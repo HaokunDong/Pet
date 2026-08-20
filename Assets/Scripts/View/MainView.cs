@@ -143,11 +143,25 @@ public class MainView : BaseView
 
     /// <summary>
     /// Click handler for the RingRadialMenu's ControlButton.
-    /// Migrated from the legacy Menus/Button2.
+    /// Toggles between Manual control and AI auto control for the current player character.
     /// </summary>
     private void OnControlButtonClick()
     {
-        Debug.Log("ControlButton");
+        var manager = FindObjectOfType<PetGame.GameCharacterManager>();
+        if (manager == null || manager.PlayerCharacters == null || manager.PlayerCharacters.Count == 0)
+        {
+            Debug.LogWarning("[MainView] No player character found to toggle control mode.");
+            return;
+        }
+
+        var entity = manager.PlayerCharacters[0];
+        if (entity == null) return;
+
+        var controlMode = entity.GetComponent<PetGame.ControlModeManager>();
+        if (controlMode != null)
+        {
+            controlMode.ToggleControlMode();
+        }
     }
 
     /// <summary>

@@ -48,7 +48,6 @@ namespace PetGame
         // Runtime references
         private CharacterEntity currentEntity;
         private CultivationData currentData;
-        private ControlModeManager controlModeManager;
 
         /// <summary>
         /// Whether the panel is currently open.
@@ -81,12 +80,11 @@ namespace PetGame
         /// <summary>
         /// Open the cultivation panel for a specific character.
         /// </summary>
-        public void Open(CharacterEntity entity, ControlModeManager modeManager = null)
+        public void Open(CharacterEntity entity)
         {
             if (entity == null || entity.RuntimeStats == null) return;
 
             currentEntity = entity;
-            controlModeManager = modeManager;
 
             // Get cultivation data for this character
             string characterId = entity.RuntimeStats.characterId;
@@ -113,15 +111,10 @@ namespace PetGame
             gameObject.SetActive(false);
             IsOpen = false;
 
-            // Notify ControlModeManager to restore previous mode
-            if (controlModeManager != null)
-            {
-                controlModeManager.OnCultivationPanelClosed();
-            }
+
 
             currentEntity = null;
             currentData = null;
-            controlModeManager = null;
         }
 
         /// <summary>
