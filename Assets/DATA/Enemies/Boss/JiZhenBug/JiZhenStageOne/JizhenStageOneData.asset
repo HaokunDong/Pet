@@ -47,5 +47,6 @@ MonoBehaviour:
     description: 
   prefab: {fileID: 8648961394872403470, guid: a7af1175a97a90e479e55c2e97a5a43a, type: 3}
   sprite: {fileID: 21300000, guid: a96e680a2ca331642a1194ab9f24d31c, type: 3}
-  portraitSprite: {fileID: 0}
+  portraitSprite: {fileID: 21300000, guid: 249b86185cb6c8a45938a05ac92f2888, type: 3}
+  decorationSprite: {fileID: 0}
   animatorController: {fileID: 9100000, guid: 443d9359fd3e59541898a09c37226a50, type: 2}

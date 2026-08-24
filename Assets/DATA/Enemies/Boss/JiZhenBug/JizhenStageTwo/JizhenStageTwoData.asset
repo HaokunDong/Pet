@@ -44,5 +44,6 @@ MonoBehaviour:
   evolutionRequirements: []
   prefab: {fileID: 1256386787663591993, guid: 72f0be6cdcfb2a446829eb24eab033af, type: 3}
   sprite: {fileID: 21300000, guid: ffba4d610ea7bf64483e2fb72984394a, type: 3}
-  portraitSprite: {fileID: 0}
+  portraitSprite: {fileID: 21300000, guid: edf4f23270a69ee4b95a27cfbbde0e31, type: 3}
+  decorationSprite: {fileID: 21300000, guid: 2050249bc85309641b5e0451046b1437, type: 3}
   animatorController: {fileID: 9100000, guid: c485ce6cd944e5b409b0d2249b811163, type: 2}

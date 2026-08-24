@@ -18,6 +18,7 @@ namespace PetGame
         [SerializeField] private Text healthText;
         [SerializeField] private Text defenseText;
         [SerializeField] private Text descriptionText;
+        [SerializeField] private Image decorationImage;
 
         [Header("Cooldown UI")]
         [Tooltip("Text overlay to display cooldown remaining seconds. Will be created dynamically if not assigned.")]
@@ -193,6 +194,12 @@ namespace PetGame
             {
                 descriptionText.text = data.characterDescription;
             }
+
+            if (decorationImage != null)
+            {
+                decorationImage.sprite = data.decorationSprite;
+                decorationImage.enabled = data.decorationSprite != null;
+            }
         }
 
         /// <summary>
@@ -220,6 +227,12 @@ namespace PetGame
 
             if (descriptionText != null)
                 descriptionText.text = "";
+
+            if (decorationImage != null)
+            {
+                decorationImage.sprite = null;
+                decorationImage.enabled = false;
+            }
         }
 
         /// <summary>
