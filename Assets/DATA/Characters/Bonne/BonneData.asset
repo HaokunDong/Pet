@@ -29,8 +29,8 @@ MonoBehaviour:
   attackDisplacementDuration: 0.2
   attackDamagesDuringDisplacement: 1
   defaultFacesRight: 0
-  knockbackHorizontalSpeed: 2
-  knockbackVerticalSpeed: 1.5
+  knockbackHorizontalSpeed: 0
+  knockbackVerticalSpeed: 0
   knockbackGravity: 8
   qualityLevel: 0
   characterType: 0
@@ -39,7 +39,10 @@ MonoBehaviour:
   skills:
   - {fileID: 11400000, guid: 1d3b349038d514f4e8eea5de44833f3e, type: 2}
   characterDescription: Cute!!!
+  evolutionTarget: {fileID: 0}
+  evolutionRequirements: []
   prefab: {fileID: 8625264734783289836, guid: ba91b690b29590040a1f2055f212cbde, type: 3}
   sprite: {fileID: -1679921973, guid: 325996c4e6f1740778132667857c1356, type: 3}
   portraitSprite: {fileID: 807168342, guid: efaa67d8d9b95e647b7e11972d093ddf, type: 3}
+  decorationSprite: {fileID: 0}
   animatorController: {fileID: 9100000, guid: 7eac7da675b804d11a4235a1f91a1025, type: 2}

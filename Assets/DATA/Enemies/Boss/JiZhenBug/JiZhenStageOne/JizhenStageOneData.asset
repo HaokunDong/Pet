@@ -29,8 +29,8 @@ MonoBehaviour:
   attackDisplacementDuration: 0.1
   attackDamagesDuringDisplacement: 0
   defaultFacesRight: 0
-  knockbackHorizontalSpeed: 2
-  knockbackVerticalSpeed: 1.5
+  knockbackHorizontalSpeed: 0
+  knockbackVerticalSpeed: 0
   knockbackGravity: 8
   qualityLevel: 0
   characterType: 0

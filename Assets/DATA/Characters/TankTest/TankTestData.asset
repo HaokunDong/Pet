@@ -29,8 +29,8 @@ MonoBehaviour:
   attackDisplacementDuration: 0.2
   attackDamagesDuringDisplacement: 1
   defaultFacesRight: 1
-  knockbackHorizontalSpeed: 2
-  knockbackVerticalSpeed: 1.5
+  knockbackHorizontalSpeed: 0
+  knockbackVerticalSpeed: 0
   knockbackGravity: 8
   qualityLevel: 0
   characterType: 0
@@ -44,4 +44,5 @@ MonoBehaviour:
   prefab: {fileID: 7555975994170973282, guid: 8d3aca897c7891845b95576588c2c16f, type: 3}
   sprite: {fileID: -408986372, guid: d8c68a76bc1fd164b930310ffdd7390f, type: 3}
   portraitSprite: {fileID: 1039488526, guid: 3340b330c3b87c8418a78d48086dd261, type: 3}
+  decorationSprite: {fileID: 0}
   animatorController: {fileID: 9100000, guid: 4243dde28c9ea274db0468e715146b22, type: 2}
