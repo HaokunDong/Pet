@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using Mirror;
+using PetGame.Network;
 
 namespace PetGame
 {
@@ -21,8 +23,13 @@ namespace PetGame
     /// </summary>
     [RequireComponent(typeof(Image))]
     [RequireComponent(typeof(RectTransform))]
+    [RequireComponent(typeof(NetworkIdentity))]
     public class PortalController : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
     {
+        [Header("Special Level")]
+        [Tooltip("SpecialLevelData associated with this portal for multiplayer level requests")]
+        public SpecialLevelData specialLevelData;
+
         [Header("Drag Settings")]
         [Tooltip("Minimum drag distance (in pixels) to distinguish drag from click")]
         [Range(1f, 20f)]
@@ -80,9 +87,27 @@ namespace PetGame
                 return;
             }
 
-            Debug.Log("[PortalController] Portal clicked, triggering Boss fight.");
+            // Check if we are in multiplayer mode
+            var lobbyMgr = SteamLobbyManager.Instance;
+            if (lobbyMgr != null && lobbyMgr.InLobby)
+            {
+                // Multiplayer mode: submit a request to the SpecialLevelListManager
+                HandleMultiplayerPortalClick();
+            }
+            else
+            {
+                // Single player mode: directly start boss fight
+                HandleSinglePlayerPortalClick();
+            }
+        }
 
-            // Find BossFightManager and start Boss fight with this portal reference
+        /// <summary>
+        /// Handle portal click in single player mode - directly starts boss fight.
+        /// </summary>
+        private void HandleSinglePlayerPortalClick()
+        {
+            Debug.Log("[PortalController] Portal clicked (single player), triggering Boss fight.");
+
             BossFightManager bossFightManager = FindObjectOfType<BossFightManager>();
             if (bossFightManager != null)
             {
@@ -92,6 +117,59 @@ namespace PetGame
             {
                 Debug.LogWarning("[PortalController] BossFightManager not found. Boss fight will not be triggered.");
             }
+        }
+
+        /// <summary>
+        /// Handle portal click in multiplayer mode - submits a request to the level list.
+        /// </summary>
+        private void HandleMultiplayerPortalClick()
+        {
+            Debug.Log("[PortalController] Portal clicked (multiplayer), submitting level request.");
+
+            var manager = SpecialLevelListManager.Instance;
+            if (manager == null)
+            {
+                manager = FindObjectOfType<SpecialLevelListManager>();
+            }
+
+            if (manager == null)
+            {
+                Debug.LogWarning("[PortalController] SpecialLevelListManager not found. Cannot submit request.");
+                return;
+            }
+
+            // Get the level data index for this portal
+            if (specialLevelData == null)
+            {
+                Debug.LogWarning("[PortalController] No SpecialLevelData assigned to this portal.");
+                return;
+            }
+
+            int levelDataIndex = manager.GetLevelDataIndex(specialLevelData);
+            if (levelDataIndex < 0)
+            {
+                Debug.LogWarning("[PortalController] SpecialLevelData not registered in SpecialLevelListManager.");
+                return;
+            }
+
+            // Get this portal's NetworkIdentity netId
+            var portalNetIdentity = GetComponent<NetworkIdentity>();
+            if (portalNetIdentity == null)
+            {
+                Debug.LogWarning("[PortalController] Portal has no NetworkIdentity. Cannot submit request.");
+                return;
+            }
+
+            // Get the local player's NetworkPlayer netId
+            var localPlayer = MirrorNetworkManager.singleton?.LocalPlayer;
+            if (localPlayer == null)
+            {
+                Debug.LogWarning("[PortalController] Local NetworkPlayer not found. Cannot submit request.");
+                return;
+            }
+
+            // Submit the request via Command
+            manager.CmdRequestAddOption(portalNetIdentity.netId, localPlayer.netId, levelDataIndex);
         }
 
         // =====================================================================
@@ -183,6 +261,32 @@ namespace PetGame
                 canvasHalfSize.y - portalHalfSize.y);
 
             _rectTransform.localPosition = new Vector3(clampedX, clampedY, localPos.z);
+        }
+
+        // =====================================================================
+        // Cleanup on Destroy
+        // =====================================================================
+
+        /// <summary>
+        /// When this portal is destroyed, notify SpecialLevelListManager to remove
+        /// any associated option from the list (server-side only).
+        /// </summary>
+        private void OnDestroy()
+        {
+            // Only run on server
+            if (!NetworkServer.active) return;
+
+            var netIdentity = GetComponent<NetworkIdentity>();
+            if (netIdentity == null) return;
+
+            var manager = SpecialLevelListManager.Instance;
+            if (manager == null)
+                manager = FindObjectOfType<SpecialLevelListManager>();
+
+            if (manager != null)
+            {
+                manager.RemoveOptionsByPortal(netIdentity.netId);
+            }
         }
     }
 }

@@ -1,0 +1,16 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dd0f3e2df7630ce4ba1c5dd7357d93b9, type: 3}
+  m_Name: LiHuo_Test
+  m_EditorClassIdentifier: 
+  LevelImage: {fileID: -2092357511, guid: ee992c2e5224f2443811c734d1feca13, type: 3}
+  RewardDescription: "\u5956\u52B1\u79BB\u706B\u4E00\u53EA~\uFF08\u8FD9\u6E38\u620F\u91CC\u600E\u4E48\u4F1A\u6709\u79BB\u706B\uFF1F\uFF1F\uFF1F\uFF09"

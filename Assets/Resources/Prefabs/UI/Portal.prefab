@@ -16,6 +16,7 @@ GameObject:
   - component: {fileID: 8307845471110230428}
   - component: {fileID: 4147905576289453361}
   - component: {fileID: 887424867111867440}
+  - component: {fileID: -1369082778563082026}
   m_Layer: 5
   m_Name: Portal
   m_TagString: Untagged
@@ -234,4 +235,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2dbc23a0c40f212458477fcb3ab599b4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  specialLevelData: {fileID: 11400000, guid: b007beba51ad13640a0762e175ee94a2, type: 2}
   dragThreshold: 5
+--- !u!114 &-1369082778563082026
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6436511713167366648}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b91ecbcc199f4492b9a91e820070131, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  sceneId: 0
+  _assetId: 139738298
+  serverOnly: 0
+  visibility: 0
+  hasSpawned: 0

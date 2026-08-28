@@ -6,6 +6,7 @@ using UnityEngine.EventSystems;
 using System.Linq;
 using PetGame;
 using PetGame.UI;
+using PetGame.Network;
 
 public class MainView : BaseView
 {
@@ -21,6 +22,8 @@ public class MainView : BaseView
     private RingRadialMenuButton friendsButton;
     // SettingButton on the RingRadialMenu replaces the legacy Menus/Button4.
     private RingRadialMenuButton settingButton;
+    // SpecialLevelListButton on the RingRadialMenu opens the multiplayer level request list.
+    private RingRadialMenuButton specialLevelListButton;
 
     [Header("Lobby")]
     [Tooltip("Path to LobbyPanel prefab in Resources folder")]
@@ -28,6 +31,9 @@ public class MainView : BaseView
 
     // Cached LobbyPanel instance (dynamically loaded)
     private LobbyPanel lobbyPanelInstance;
+
+    // Cached SpecialLevelListView instance
+    private SpecialLevelListView specialLevelListView;
 
     // Map buttons to their sprite animation components
     private Dictionary<GameObject, ButtonSpriteAnimation> _btnAnimMap = new Dictionary<GameObject, ButtonSpriteAnimation>();
@@ -49,10 +55,11 @@ public class MainView : BaseView
         //   ControlButton   -> Button2
         //   FriendsButton   -> Button3 (toggle LobbyPanel)
         //   SettingButton   -> Button4
-        characterButton = BindRingButton("CharacterButton", OnCharacterButtonClick);
-        controlButton   = BindRingButton("ControlButton",   OnControlButtonClick);
-        friendsButton   = BindRingButton("FriendsButton",   OnFriendsButtonClick);
-        settingButton   = BindRingButton("SettingButton",   OnSettingButtonClick);
+        characterButton      = BindRingButton("CharacterButton",      OnCharacterButtonClick);
+        controlButton        = BindRingButton("ControlButton",        OnControlButtonClick);
+        friendsButton        = BindRingButton("FriendsButton",        OnFriendsButtonClick);
+        settingButton        = BindRingButton("SettingButton",        OnSettingButtonClick);
+        specialLevelListButton = BindRingButton("SpecialLevelListButton", OnSpecialLevelListButtonClick);
 
         // Load sprite sheets from Resources
         Sprite[] idleSprites = Resources.LoadAll<Sprite>("UI/MainMenu/idle")
@@ -239,6 +246,36 @@ public class MainView : BaseView
     private void OnSettingButtonClick()
     {
         Debug.Log("SettingButton");
+    }
+
+    /// <summary>
+    /// Click handler for the RingRadialMenu's SpecialLevelListButton.
+    /// Only responds when in a multiplayer lobby. Toggles the SpecialLevelListForMultiplayer panel.
+    /// </summary>
+    private void OnSpecialLevelListButtonClick()
+    {
+        // Only respond in multiplayer mode
+        var lobbyMgr = SteamLobbyManager.Instance;
+        if (lobbyMgr == null || !lobbyMgr.InLobby)
+        {
+            Debug.Log("[MainView] SpecialLevelListButton: Not in a lobby. Ignoring.");
+            return;
+        }
+
+        // Find or cache the SpecialLevelListView
+        if (specialLevelListView == null)
+        {
+            specialLevelListView = FindObjectOfType<SpecialLevelListView>(true);
+        }
+
+        if (specialLevelListView != null)
+        {
+            specialLevelListView.ToggleVisibility();
+        }
+        else
+        {
+            Debug.LogWarning("[MainView] SpecialLevelListView not found in scene.");
+        }
     }
 
     // protected override void AddEvent() {

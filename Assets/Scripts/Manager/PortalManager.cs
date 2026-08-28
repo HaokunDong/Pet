@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using Mirror;
 
 namespace PetGame
 {
@@ -113,6 +114,14 @@ namespace PetGame
                 return;
             }
 
+            // In multiplayer mode, only the host/server can spawn portals
+            bool isMultiplayer = NetworkServer.active;
+            if (isMultiplayer && !NetworkServer.active)
+            {
+                Debug.LogWarning("[PortalManager] Only the server/host can spawn portals in multiplayer mode.");
+                return;
+            }
+
             // Generate random world position within the spawn area
             float randomX = Random.Range(
                 settings.spawnAreaCenter.x - settings.spawnAreaSize.x * 0.5f,
@@ -143,6 +152,12 @@ namespace PetGame
                 }
             }
 
+            // In multiplayer mode, register the portal with the network so it gets a valid netId
+            if (isMultiplayer)
+            {
+                NetworkServer.Spawn(portal);
+                Debug.Log($"[PortalManager] Portal spawned and registered with NetworkServer (netId={portal.GetComponent<NetworkIdentity>()?.netId}).");
+            }
         }
 
         // =====================================================================

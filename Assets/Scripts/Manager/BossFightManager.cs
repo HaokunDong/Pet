@@ -1,5 +1,7 @@
 using UnityEngine;
+using Mirror;
 using PetGame.AI;
+using PetGame.Network;
 
 namespace PetGame
 {
@@ -257,6 +259,22 @@ namespace PetGame
             UnsubscribePlayerDeath();
 
             Debug.Log($"[BossFightManager] Boss '{bossCharacterData.characterName}' defeated!");
+
+            // Notify SpecialLevelListManager to remove the option for this portal (multiplayer)
+            if (currentPortal != null)
+            {
+                var netIdentity = currentPortal.GetComponent<NetworkIdentity>();
+                if (netIdentity != null && NetworkServer.active)
+                {
+                    var levelListManager = SpecialLevelListManager.Instance;
+                    if (levelListManager == null)
+                        levelListManager = FindObjectOfType<SpecialLevelListManager>();
+                    if (levelListManager != null)
+                    {
+                        levelListManager.RemoveOptionAfterBossDefeat(netIdentity.netId);
+                    }
+                }
+            }
 
             // Destroy the portal that triggered this fight
             if (currentPortal != null)
