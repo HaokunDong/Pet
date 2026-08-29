@@ -115,7 +115,7 @@ namespace PetGame
             }
 
             // In multiplayer mode, only the host/server can spawn portals
-            bool isMultiplayer = NetworkServer.active;
+            bool isMultiplayer = NetworkClient.active;
             if (isMultiplayer && !NetworkServer.active)
             {
                 Debug.LogWarning("[PortalManager] Only the server/host can spawn portals in multiplayer mode.");

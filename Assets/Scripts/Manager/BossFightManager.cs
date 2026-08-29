@@ -11,11 +11,12 @@ namespace PetGame
     /// listening for Boss death, granting rewards, and resuming normal gameplay.
     /// 
     /// Setup:
-    ///   1. Attach to a GameObject in the scene.
+    ///   1. Attach to a GameObject in the scene (must have NetworkIdentity for multiplayer).
     ///   2. Assign bossCharacterData, bossSpawnPoint, enemySpawner, and cardDistributor in Inspector.
     ///   3. Call StartBossFight() to initiate the Boss encounter (triggered by PortalManager).
     /// </summary>
-    public class BossFightManager : MonoBehaviour
+    [RequireComponent(typeof(NetworkIdentity))]
+    public class BossFightManager : NetworkBehaviour
     {
         [Header("Boss Configuration")]
         [Tooltip("CharacterData asset for the Boss character")]
@@ -77,6 +78,7 @@ namespace PetGame
         /// 2. Clear all existing enemies
         /// 3. Spawn Boss at configured spawn point
         /// 4. Listen for Boss death
+        /// In multiplayer mode, notifies all clients to also start the boss fight locally.
         /// </summary>
         /// <param name="portalObj">The portal GameObject that triggered this fight. Will be destroyed on Boss defeat.</param>
         public void StartBossFight(GameObject portalObj = null)
@@ -98,6 +100,37 @@ namespace PetGame
             // Store portal reference for destruction on Boss defeat
             currentPortal = portalObj;
 
+            // Execute the boss fight locally
+            ExecuteBossFightLocally();
+
+            // In multiplayer mode, notify all clients to also start the boss fight
+            if (NetworkServer.active)
+            {
+                RpcStartBossFightOnClients();
+            }
+
+            Debug.Log("[BossFightManager] Boss fight started!");
+        }
+
+        /// <summary>
+        /// RPC to notify all clients to start the boss fight locally.
+        /// </summary>
+        [ClientRpc]
+        private void RpcStartBossFightOnClients()
+        {
+            // Host already executed locally, skip
+            if (NetworkServer.active) return;
+
+            Debug.Log("[BossFightManager] Client received RPC to start boss fight.");
+            IsBossFightActive = true;
+            ExecuteBossFightLocally();
+        }
+
+        /// <summary>
+        /// Executes the boss fight sequence locally (both server and client).
+        /// </summary>
+        private void ExecuteBossFightLocally()
+        {
             // Step 1: Pause enemy spawning
             if (enemySpawner != null)
             {
@@ -122,8 +155,6 @@ namespace PetGame
 
             // Step 4: Monitor player death for retry logic
             SubscribePlayerDeath();
-
-            Debug.Log("[BossFightManager] Boss fight started!");
         }
 
         /// <summary>

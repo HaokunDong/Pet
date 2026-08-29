@@ -75,6 +75,10 @@ namespace PetGame.Network
         private bool mirrorCharacterCreated = false;
         private string lastSentAnimState = "";
         private int lastSentAttackIndex = 0;
+        private bool lastSentFacingRight = true;
+        private float lastSentHealth;
+        private float lastSentMaxHealth;
+        private bool lastSentIsAlive = true;
 
         #endregion
 
@@ -293,21 +297,33 @@ namespace PetGame.Network
                 lastSentPosition = currentPos;
             }
 
-            // Facing direction
+            // Facing direction (only send when changed)
             SpriteRenderer sr = LocalCharacter.GetComponent<SpriteRenderer>();
             if (sr != null)
             {
                 bool facingRight = !sr.flipX;
-                CmdUpdateFacing(facingRight);
+                if (facingRight != lastSentFacingRight)
+                {
+                    lastSentFacingRight = facingRight;
+                    CmdUpdateFacing(facingRight);
+                }
             }
 
-            // Health
+            // Health (only send when changed)
             if (LocalCharacter.RuntimeStats != null)
             {
                 float currentHealth = LocalCharacter.RuntimeStats.currentHealth;
                 float maxHealth = LocalCharacter.RuntimeStats.maxHealth;
                 bool isAlive = LocalCharacter.RuntimeStats.IsAlive;
-                CmdUpdateHealth(currentHealth, maxHealth, isAlive);
+                if (Mathf.Abs(currentHealth - lastSentHealth) > 0.1f ||
+                    Mathf.Abs(maxHealth - lastSentMaxHealth) > 0.1f ||
+                    isAlive != lastSentIsAlive)
+                {
+                    lastSentHealth = currentHealth;
+                    lastSentMaxHealth = maxHealth;
+                    lastSentIsAlive = isAlive;
+                    CmdUpdateHealth(currentHealth, maxHealth, isAlive);
+                }
             }
 
             // Animation state sync
