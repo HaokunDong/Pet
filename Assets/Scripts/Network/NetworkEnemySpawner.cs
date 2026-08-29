@@ -374,6 +374,13 @@ namespace PetGame.Network
                 {
                     entity.RuntimeStats.currentHealth = msg.health;
                     entity.RuntimeStats.maxHealth = msg.maxHealth;
+
+                    // Update the HealthBar UI to reflect the synced health
+                    HealthBar healthBar = mirrorObj.GetComponentInChildren<HealthBar>();
+                    if (healthBar != null)
+                    {
+                        healthBar.UpdateHealth(msg.health, msg.maxHealth);
+                    }
                 }
             }
         }
@@ -416,6 +423,13 @@ namespace PetGame.Network
                 if (entity != null && entity.RuntimeStats != null)
                 {
                     entity.RuntimeStats.currentHealth = msg.currentHealth;
+
+                    // Update the HealthBar UI to reflect the synced health
+                    HealthBar healthBar = mirrorObj.GetComponentInChildren<HealthBar>();
+                    if (healthBar != null)
+                    {
+                        healthBar.UpdateHealth(msg.currentHealth, entity.RuntimeStats.maxHealth);
+                    }
                 }
 
                 // Trigger flash effect

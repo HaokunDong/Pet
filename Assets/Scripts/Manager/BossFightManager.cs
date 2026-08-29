@@ -58,10 +58,10 @@ namespace PetGame
         private CharacterEntity currentBossEntity;
 
         /// <summary>
-        /// Reference to the portal GameObject that triggered this Boss fight.
-        /// Will be destroyed upon Boss defeat.
+        /// The portalId that triggered this Boss fight.
+        /// Used to notify clients to destroy their local portal on Boss defeat.
         /// </summary>
-        private GameObject currentPortal;
+        private uint currentPortalId;
 
         /// <summary>
         /// Reference to the player entity being monitored for death during Boss fight.
@@ -80,8 +80,9 @@ namespace PetGame
         /// 4. Listen for Boss death
         /// In multiplayer mode, notifies all clients to also start the boss fight locally.
         /// </summary>
-        /// <param name="portalObj">The portal GameObject that triggered this fight. Will be destroyed on Boss defeat.</param>
-        public void StartBossFight(GameObject portalObj = null)
+        /// <param name="portalObj">The portal GameObject that triggered this fight (can be null in multiplayer if portal is on another client).</param>
+        /// <param name="portalId">The portal ID for network identification. Used to destroy the portal on all clients after Boss defeat.</param>
+        public void StartBossFight(GameObject portalObj = null, uint portalId = 0)
         {
             if (IsBossFightActive)
             {
@@ -97,8 +98,14 @@ namespace PetGame
 
             IsBossFightActive = true;
 
-            // Store portal reference for destruction on Boss defeat
-            currentPortal = portalObj;
+            // Store portal ID for cleanup on Boss defeat
+            currentPortalId = portalId;
+
+            // If we have a local portal reference, destroy it now (it's on this client's Canvas)
+            if (portalObj != null)
+            {
+                Destroy(portalObj);
+            }
 
             // Execute the boss fight locally
             ExecuteBossFightLocally();
@@ -106,7 +113,7 @@ namespace PetGame
             // In multiplayer mode, notify all clients to also start the boss fight
             if (NetworkServer.active)
             {
-                RpcStartBossFightOnClients();
+                RpcStartBossFightOnClients(portalId);
             }
 
             Debug.Log("[BossFightManager] Boss fight started!");
@@ -114,15 +121,24 @@ namespace PetGame
 
         /// <summary>
         /// RPC to notify all clients to start the boss fight locally.
+        /// Also destroys the local portal (if it exists on this client) by portalId.
         /// </summary>
         [ClientRpc]
-        private void RpcStartBossFightOnClients()
+        private void RpcStartBossFightOnClients(uint portalId)
         {
             // Host already executed locally, skip
             if (NetworkServer.active) return;
 
             Debug.Log("[BossFightManager] Client received RPC to start boss fight.");
             IsBossFightActive = true;
+            currentPortalId = portalId;
+
+            // Destroy the local portal if it exists on this client's Canvas
+            if (portalId != 0)
+            {
+                DestroyLocalPortalById(portalId);
+            }
+
             ExecuteBossFightLocally();
         }
 
@@ -200,6 +216,9 @@ namespace PetGame
 
         /// <summary>
         /// Spawns the Boss at the configured spawn point using the object pool.
+        /// On the server/host, the Boss has full AI and combat capabilities.
+        /// On clients, the Boss is visual-only (AI and CombatSystem disabled) to prevent
+        /// local attacks on MirrorCharacters which would cause jitter/death animations.
         /// </summary>
         private void SpawnBoss()
         {
@@ -257,19 +276,40 @@ namespace PetGame
             if (bossCharacterData.animatorController != null)
                 charAnim.SetAnimatorController(bossCharacterData.animatorController);
 
-            // Setup AI controller
-            AIController aiController = bossObj.GetComponent<AIController>();
-            if (aiController == null)
-                aiController = bossObj.AddComponent<AIController>();
+            // On clients (non-host), disable AI and CombatSystem.
+            // The Boss on clients is visual-only; the host handles all combat logic.
+            // This prevents the client-side Boss from attacking MirrorCharacters,
+            // which would cause jitter, knockback, and false death animations.
+            bool isClientOnly = !NetworkServer.active && NetworkClient.active;
+            if (isClientOnly)
+            {
+                // Disable CombatSystem so Boss doesn't deal damage locally on client
+                CombatSystem combat = bossObj.GetComponent<CombatSystem>();
+                if (combat != null) combat.enabled = false;
 
-            aiController.detectionRange = bossDetectionRange;
-            aiController.patrolRange = bossPatrolRange;
-            aiController.InitializeAI();
+                // Disable AnimEventReceiver so attack animation events don't trigger damage
+                AnimEventReceiver animEvent = bossObj.GetComponent<AnimEventReceiver>();
+                if (animEvent != null) animEvent.enabled = false;
 
-            // Step 4: Listen for Boss death
-            currentBossEntity.OnDeath += OnBossDeath;
+                // Don't initialize AI on client - Boss movement will be synced from host
+                Debug.Log("[BossFightManager] Client: Boss spawned as visual-only (AI/Combat disabled).");
+            }
+            else
+            {
+                // Setup AI controller (server/host only)
+                AIController aiController = bossObj.GetComponent<AIController>();
+                if (aiController == null)
+                    aiController = bossObj.AddComponent<AIController>();
 
-            Debug.Log($"[BossFightManager] Boss '{bossCharacterData.characterName}' spawned at {spawnPosition}");
+                aiController.detectionRange = bossDetectionRange;
+                aiController.patrolRange = bossPatrolRange;
+                aiController.InitializeAI();
+
+                // Step 4: Listen for Boss death (server only)
+                currentBossEntity.OnDeath += OnBossDeath;
+
+                Debug.Log($"[BossFightManager] Host: Boss '{bossCharacterData.characterName}' spawned at {spawnPosition} with full AI.");
+            }
         }
 
         // =====================================================================
@@ -292,28 +332,21 @@ namespace PetGame
             Debug.Log($"[BossFightManager] Boss '{bossCharacterData.characterName}' defeated!");
 
             // Notify SpecialLevelListManager to remove the option for this portal (multiplayer)
-            if (currentPortal != null)
+            if (currentPortalId != 0 && NetworkServer.active)
             {
-                var netIdentity = currentPortal.GetComponent<NetworkIdentity>();
-                if (netIdentity != null && NetworkServer.active)
+                var levelListManager = SpecialLevelListManager.Instance;
+                if (levelListManager == null)
+                    levelListManager = FindObjectOfType<SpecialLevelListManager>();
+                if (levelListManager != null)
                 {
-                    var levelListManager = SpecialLevelListManager.Instance;
-                    if (levelListManager == null)
-                        levelListManager = FindObjectOfType<SpecialLevelListManager>();
-                    if (levelListManager != null)
-                    {
-                        levelListManager.RemoveOptionAfterBossDefeat(netIdentity.netId);
-                    }
+                    levelListManager.RemoveOptionAfterBossDefeat(currentPortalId);
                 }
+
+                // Notify all clients to destroy their local portal
+                RpcDestroyPortalOnClients(currentPortalId);
             }
 
-            // Destroy the portal that triggered this fight
-            if (currentPortal != null)
-            {
-                Destroy(currentPortal);
-                currentPortal = null;
-                Debug.Log("[BossFightManager] Associated portal destroyed.");
-            }
+            currentPortalId = 0;
 
             // Check if this is the first time defeating this Boss
             bool isFirstDefeat = !HasBossDataInDeck(bossCharacterData);
@@ -408,6 +441,41 @@ namespace PetGame
             else
             {
                 Debug.LogError("[BossFightManager] CardSplineDistributor not found! Cannot grant Boss reward.");
+            }
+        }
+
+        // =====================================================================
+        // Portal Cleanup (Network)
+        // =====================================================================
+
+        /// <summary>
+        /// RPC: Notify all clients to destroy their local portal by portalId.
+        /// Since portals are local UI elements (not networked objects), each client
+        /// must find and destroy its own local copy.
+        /// </summary>
+        [ClientRpc]
+        private void RpcDestroyPortalOnClients(uint portalId)
+        {
+            DestroyLocalPortalById(portalId);
+        }
+
+        /// <summary>
+        /// Find and destroy a local portal by its portalId.
+        /// Portals are local UI elements on each client's Canvas.
+        /// </summary>
+        private void DestroyLocalPortalById(uint portalId)
+        {
+            if (portalId == 0) return;
+
+            PortalController[] allPortals = FindObjectsOfType<PortalController>();
+            foreach (var portal in allPortals)
+            {
+                if (portal.portalId == portalId)
+                {
+                    Destroy(portal.gameObject);
+                    Debug.Log($"[BossFightManager] Local portal (portalId={portalId}) destroyed.");
+                    return;
+                }
             }
         }
     }

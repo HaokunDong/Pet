@@ -20,12 +20,19 @@ namespace PetGame
     ///
     /// Note: The sprite texture MUST have Read/Write Enabled in import settings
     ///       for AlphaHitTestImage to work correctly.
+    /// Portal is a local UI element (not a networked object). Each client spawns its own
+    /// Portal instance on its own Canvas. A shared portalId is used for network identification.
     /// </summary>
     [RequireComponent(typeof(Image))]
     [RequireComponent(typeof(RectTransform))]
-    [RequireComponent(typeof(NetworkIdentity))]
     public class PortalController : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
     {
+        /// <summary>
+        /// Unique portal ID assigned by the server. Used for network identification
+        /// instead of NetworkIdentity.netId since Portal is a local UI element.
+        /// </summary>
+        [HideInInspector]
+        public uint portalId;
         [Header("Special Level")]
         [Tooltip("SpecialLevelData associated with this portal for multiplayer level requests")]
         public SpecialLevelData specialLevelData;
@@ -111,7 +118,7 @@ namespace PetGame
             BossFightManager bossFightManager = FindObjectOfType<BossFightManager>();
             if (bossFightManager != null)
             {
-                bossFightManager.StartBossFight(gameObject);
+                bossFightManager.StartBossFight(gameObject, portalId);
             }
             else
             {
@@ -152,11 +159,10 @@ namespace PetGame
                 return;
             }
 
-            // Get this portal's NetworkIdentity netId
-            var portalNetIdentity = GetComponent<NetworkIdentity>();
-            if (portalNetIdentity == null)
+            // Validate portal has a valid ID
+            if (portalId == 0)
             {
-                Debug.LogWarning("[PortalController] Portal has no NetworkIdentity. Cannot submit request.");
+                Debug.LogWarning("[PortalController] Portal has no valid portalId. Cannot submit request.");
                 return;
             }
 
@@ -169,7 +175,7 @@ namespace PetGame
             }
 
             // Submit the request via Command
-            manager.CmdRequestAddOption(portalNetIdentity.netId, localPlayer.netId, levelDataIndex);
+            manager.CmdRequestAddOption(portalId, localPlayer.netId, levelDataIndex);
         }
 
         // =====================================================================
@@ -276,8 +282,7 @@ namespace PetGame
             // Only run on server
             if (!NetworkServer.active) return;
 
-            var netIdentity = GetComponent<NetworkIdentity>();
-            if (netIdentity == null) return;
+            if (portalId == 0) return;
 
             var manager = SpecialLevelListManager.Instance;
             if (manager == null)
@@ -285,7 +290,7 @@ namespace PetGame
 
             if (manager != null)
             {
-                manager.RemoveOptionsByPortal(netIdentity.netId);
+                manager.RemoveOptionsByPortal(portalId);
             }
         }
     }

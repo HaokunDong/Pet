@@ -151,16 +151,25 @@ namespace PetGame
         }
 
         /// <summary>
-        /// Spawn a portal locally (used in single player mode and called by server after network spawn).
+        /// Spawn a portal locally on this client's Canvas.
+        /// In multiplayer mode, the portalId is assigned by the server for network identification.
+        /// In single player mode, portalId is 0 (not used).
         /// </summary>
-        public void SpawnPortalLocally(Vector3 worldPos)
+        public void SpawnPortalLocally(Vector3 worldPos, uint portalId = 0)
         {
             PortalSettings settings = PortalSettings.Instance;
             if (settings.portalPrefab == null) return;
 
             // Instantiate portal as child of the Canvas
             GameObject portal = Instantiate(settings.portalPrefab, portalCanvas.transform);
-            portal.name = "Portal";
+            portal.name = portalId > 0 ? $"Portal_{portalId}" : "Portal";
+
+            // Set the portal ID for network identification
+            PortalController controller = portal.GetComponent<PortalController>();
+            if (controller != null)
+            {
+                controller.portalId = portalId;
+            }
 
             // Convert world position to Canvas local position
             RectTransform portalRect = portal.GetComponent<RectTransform>();
@@ -178,12 +187,7 @@ namespace PetGame
                 }
             }
 
-            // In multiplayer mode, register the portal with the network so it gets a valid netId
-            if (NetworkServer.active)
-            {
-                NetworkServer.Spawn(portal);
-                Debug.Log($"[PortalManager] Portal spawned and registered with NetworkServer (netId={portal.GetComponent<NetworkIdentity>()?.netId}).");
-            }
+            Debug.Log($"[PortalManager] Portal spawned locally at world position {worldPos}, portalId={portalId}.");
         }
 
         // =====================================================================

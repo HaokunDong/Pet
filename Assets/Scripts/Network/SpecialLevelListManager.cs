@@ -306,24 +306,28 @@ namespace PetGame.Network
             OptionList.RemoveAt(optionIndex);
             _playersWithPendingRequest.Remove(approvedOption.requesterNetId);
 
-            // Find the portal GameObject by netId and start boss fight
-            if (NetworkServer.spawned.TryGetValue(approvedOption.portalNetId, out NetworkIdentity portalIdentity))
+            // Start boss fight - pass portalId instead of portal object reference,
+            // because the portal only exists on the requesting player's local Canvas.
+            if (bossFightManager != null)
             {
-                GameObject portalObj = portalIdentity.gameObject;
+                // Find the portal on the host's local Canvas (may be null if another player spawned it)
+                PortalController[] allPortals = FindObjectsOfType<PortalController>();
+                GameObject localPortalObj = null;
+                foreach (var portal in allPortals)
+                {
+                    if (portal.portalId == approvedOption.portalNetId)
+                    {
+                        localPortalObj = portal.gameObject;
+                        break;
+                    }
+                }
 
-                if (bossFightManager != null)
-                {
-                    bossFightManager.StartBossFight(portalObj);
-                    Debug.Log($"[SpecialLevelListManager] Option approved. Boss fight started for portal (netId={approvedOption.portalNetId}).");
-                }
-                else
-                {
-                    Debug.LogError("[SpecialLevelListManager] BossFightManager not found! Cannot start boss fight.");
-                }
+                bossFightManager.StartBossFight(localPortalObj, approvedOption.portalNetId);
+                Debug.Log($"[SpecialLevelListManager] Option approved. Boss fight started for portal (portalId={approvedOption.portalNetId}).");
             }
             else
             {
-                Debug.LogWarning($"[SpecialLevelListManager] Portal with netId={approvedOption.portalNetId} not found on server.");
+                Debug.LogError("[SpecialLevelListManager] BossFightManager not found! Cannot start boss fight.");
             }
 
             // Notify all clients

@@ -83,6 +83,9 @@ namespace PetGame.Network
         private bool lastSentIsAlive = true;
         private bool lastSentKnockbackState = false;
 
+        /// <summary>Server-side counter for generating unique portal IDs.</summary>
+        private static uint nextPortalId = 1;
+
         #endregion
 
         #region Lifecycle
@@ -510,6 +513,20 @@ namespace PetGame.Network
 
             var controlMode = MirrorCharacter.GetComponent<ControlModeManager>();
             if (controlMode != null) controlMode.enabled = false;
+
+            // Disable CombatSystem on mirror characters - they don't attack locally
+            var combat = MirrorCharacter.GetComponent<CombatSystem>();
+            if (combat != null) combat.enabled = false;
+
+            // Disable KnockbackController on mirror characters - knockback is synced via RPC,
+            // not driven by local TakeDamage. This prevents local Boss attacks from causing
+            // jitter/knockback on mirror characters.
+            var knockback = MirrorCharacter.GetComponent<KnockbackController>();
+            if (knockback != null) knockback.enabled = false;
+
+            // Disable AnimEventReceiver so attack animation events don't trigger damage
+            var animEvent = MirrorCharacter.GetComponent<AnimEventReceiver>();
+            if (animEvent != null) animEvent.enabled = false;
         }
 
         private void UpdateMirrorCharacter()
@@ -540,6 +557,13 @@ namespace PetGame.Network
             {
                 MirrorCharacter.RuntimeStats.currentHealth = syncedHealth;
                 MirrorCharacter.RuntimeStats.maxHealth = syncedMaxHealth;
+
+                // Update the HealthBar UI to reflect the synced health
+                HealthBar healthBar = MirrorCharacter.GetComponentInChildren<HealthBar>();
+                if (healthBar != null)
+                {
+                    healthBar.UpdateHealth(syncedHealth, syncedMaxHealth);
+                }
             }
         }
 
@@ -780,6 +804,8 @@ namespace PetGame.Network
         /// <summary>
         /// Called by PortalManager to request the server to spawn a portal.
         /// Allows both host and client players to spawn portals.
+        /// The portal is spawned locally on each client's own Canvas (not via NetworkServer.Spawn),
+        /// because Portal is a UI element that must be a child of Canvas to render correctly.
         /// </summary>
         public void RequestSpawnPortal(Vector3 worldPos)
         {
@@ -790,16 +816,26 @@ namespace PetGame.Network
         [Command]
         private void CmdSpawnPortal(Vector3 worldPos)
         {
-            // Server-side: find PortalManager and spawn the portal
+            // Generate a unique portal ID on the server
+            uint portalId = nextPortalId++;
+
+            // Spawn portal only on the requesting player's client (not on all clients).
+            // Portal is a personal UI element that only appears on the spawner's own desktop.
+            TargetRpcSpawnPortal(connectionToClient, worldPos, portalId);
+        }
+
+        /// <summary>
+        /// TargetRpc: Spawn a portal only on the requesting player's client.
+        /// Portal is a personal UI element that only appears on the player's own Canvas/desktop.
+        /// </summary>
+        [TargetRpc]
+        private void TargetRpcSpawnPortal(NetworkConnection target, Vector3 worldPos, uint portalId)
+        {
             PortalManager portalManager = Object.FindObjectOfType<PortalManager>();
             if (portalManager != null)
             {
-                portalManager.SpawnPortalLocally(worldPos);
-                Debug.Log($"[NetworkPlayer] Server: Portal spawned at {worldPos} by player '{playerName}'.");
-            }
-            else
-            {
-                Debug.LogWarning("[NetworkPlayer] PortalManager not found. Cannot spawn portal.");
+                portalManager.SpawnPortalLocally(worldPos, portalId);
+                Debug.Log($"[NetworkPlayer] Portal spawned locally at {worldPos}, portalId={portalId}.");
             }
         }
 
