@@ -23,6 +23,8 @@ namespace PetGame.Network
         public uint enemyNetId;
         public Vector3 position;
         public bool facingRight;
+        public float health;
+        public float maxHealth;
     }
 
     /// <summary>Message sent from server to clients when an enemy dies.</summary>
@@ -209,11 +211,17 @@ namespace PetGame.Network
                         data.lastSyncedPosition = currentPos;
                         data.lastFacingRight = facingRight;
 
+                        // Include real-time health in position sync so clients always have up-to-date HP
+                        float health = entity.RuntimeStats != null ? entity.RuntimeStats.currentHealth : 100f;
+                        float maxHealth = entity.RuntimeStats != null ? entity.RuntimeStats.maxHealth : 100f;
+
                         SendToRemoteClients(new EnemyPositionMessage
                         {
                             enemyNetId = existingId,
                             position = currentPos,
-                            facingRight = facingRight
+                            facingRight = facingRight,
+                            health = health,
+                            maxHealth = maxHealth
                         });
                     }
 
@@ -359,6 +367,14 @@ namespace PetGame.Network
                 SpriteRenderer sr = mirrorObj.GetComponent<SpriteRenderer>();
                 if (sr != null)
                     sr.flipX = !msg.facingRight;
+
+                // Update real-time health from position sync
+                CharacterEntity entity = mirrorObj.GetComponent<CharacterEntity>();
+                if (entity != null && entity.RuntimeStats != null)
+                {
+                    entity.RuntimeStats.currentHealth = msg.health;
+                    entity.RuntimeStats.maxHealth = msg.maxHealth;
+                }
             }
         }
 

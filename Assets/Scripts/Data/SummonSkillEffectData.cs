@@ -1,4 +1,6 @@
 using UnityEngine;
+using Mirror;
+using PetGame.Network;
 
 namespace PetGame
 {
@@ -65,6 +67,16 @@ namespace PetGame
             {
                 GameObject summonObj = Instantiate(summonPrefab, spawnPositions[i], Quaternion.identity);
                 InitializeSummonedEntity(summonObj, casterEntity, summonTag);
+            }
+
+            // Network sync: notify other clients to spawn the same summons visually
+            if (NetworkClient.active && MirrorNetworkManager.singleton != null)
+            {
+                PetGame.Network.NetworkPlayer localPlayer = MirrorNetworkManager.singleton.LocalPlayer;
+                if (localPlayer != null)
+                {
+                    localPlayer.RequestSpawnSummon(summonPrefab.name, spawnPositions, summonTag);
+                }
             }
         }
 

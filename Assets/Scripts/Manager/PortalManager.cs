@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using Mirror;
+using PetGame.Network;
 
 namespace PetGame
 {
@@ -103,6 +104,7 @@ namespace PetGame
         /// <summary>
         /// Called when the spawn button is clicked.
         /// Instantiates a portal prefab at a random position within the configured spawn area.
+        /// In multiplayer mode, clients send a request to the server to spawn the portal.
         /// </summary>
         private void OnSpawnButtonClicked()
         {
@@ -111,14 +113,6 @@ namespace PetGame
             if (settings.portalPrefab == null)
             {
                 Debug.LogWarning("[PortalManager] Portal prefab is not assigned in PortalSettings!");
-                return;
-            }
-
-            // In multiplayer mode, only the host/server can spawn portals
-            bool isMultiplayer = NetworkClient.active;
-            if (isMultiplayer && !NetworkServer.active)
-            {
-                Debug.LogWarning("[PortalManager] Only the server/host can spawn portals in multiplayer mode.");
                 return;
             }
 
@@ -131,6 +125,38 @@ namespace PetGame
                 settings.spawnAreaCenter.y + settings.spawnAreaSize.y * 0.5f);
 
             Vector3 worldPos = new Vector3(randomX, randomY, 0f);
+
+            // Check if we are in multiplayer mode
+            bool isMultiplayer = NetworkClient.active;
+
+            if (isMultiplayer)
+            {
+                // In multiplayer mode, request the server to spawn the portal
+                // Both host and client go through the same Command path
+                PetGame.Network.NetworkPlayer localPlayer = MirrorNetworkManager.singleton?.LocalPlayer;
+                if (localPlayer != null)
+                {
+                    localPlayer.RequestSpawnPortal(worldPos);
+                }
+                else
+                {
+                    Debug.LogWarning("[PortalManager] Local NetworkPlayer not found. Cannot spawn portal in multiplayer.");
+                }
+            }
+            else
+            {
+                // Single player mode: spawn directly
+                SpawnPortalLocally(worldPos);
+            }
+        }
+
+        /// <summary>
+        /// Spawn a portal locally (used in single player mode and called by server after network spawn).
+        /// </summary>
+        public void SpawnPortalLocally(Vector3 worldPos)
+        {
+            PortalSettings settings = PortalSettings.Instance;
+            if (settings.portalPrefab == null) return;
 
             // Instantiate portal as child of the Canvas
             GameObject portal = Instantiate(settings.portalPrefab, portalCanvas.transform);
@@ -153,7 +179,7 @@ namespace PetGame
             }
 
             // In multiplayer mode, register the portal with the network so it gets a valid netId
-            if (isMultiplayer)
+            if (NetworkServer.active)
             {
                 NetworkServer.Spawn(portal);
                 Debug.Log($"[PortalManager] Portal spawned and registered with NetworkServer (netId={portal.GetComponent<NetworkIdentity>()?.netId}).");

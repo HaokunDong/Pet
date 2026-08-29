@@ -2,6 +2,7 @@ using UnityEngine;
 using Mirror;
 using Steamworks;
 using System.Collections;
+using System.Collections.Generic;
 
 namespace PetGame.Network
 {
@@ -76,9 +77,11 @@ namespace PetGame.Network
         private string lastSentAnimState = "";
         private int lastSentAttackIndex = 0;
         private bool lastSentFacingRight = true;
+        private bool _mirrorInKnockback = false;
         private float lastSentHealth;
         private float lastSentMaxHealth;
         private bool lastSentIsAlive = true;
+        private bool lastSentKnockbackState = false;
 
         #endregion
 
@@ -328,6 +331,37 @@ namespace PetGame.Network
 
             // Animation state sync
             SyncAnimationState();
+
+            // Knockback state sync (Bug4 fix: prevent mirror character jitter during knockback)
+            SyncKnockbackState();
+        }
+
+        /// <summary>
+        /// Sync knockback state to server so mirror characters can simulate knockback locally
+        /// instead of relying on position interpolation (which causes jitter).
+        /// </summary>
+        private void SyncKnockbackState()
+        {
+            if (LocalCharacter == null) return;
+
+            KnockbackController kb = LocalCharacter.GetComponent<KnockbackController>();
+            if (kb == null) return;
+
+            bool isInKnockback = kb.IsInKnockback;
+            if (isInKnockback != lastSentKnockbackState)
+            {
+                lastSentKnockbackState = isInKnockback;
+                if (isInKnockback)
+                {
+                    // Send current position as the knockback start position
+                    // Mirror character will use the synced position to start its own knockback simulation
+                    CmdStartKnockback(LocalCharacter.transform.position);
+                }
+                else
+                {
+                    CmdEndKnockback(LocalCharacter.transform.position);
+                }
+            }
         }
 
         /// <summary>
@@ -482,12 +516,17 @@ namespace PetGame.Network
         {
             if (MirrorCharacter == null) return;
 
-            // Smooth position interpolation
-            MirrorCharacter.transform.position = Vector3.Lerp(
-                MirrorCharacter.transform.position,
-                syncedPosition,
-                Time.deltaTime * interpolationSpeed
-            );
+            // During knockback, skip position interpolation to avoid jitter.
+            // The mirror character's position is driven by RpcStartKnockback/RpcEndKnockback.
+            if (!_mirrorInKnockback)
+            {
+                // Smooth position interpolation
+                MirrorCharacter.transform.position = Vector3.Lerp(
+                    MirrorCharacter.transform.position,
+                    syncedPosition,
+                    Time.deltaTime * interpolationSpeed
+                );
+            }
 
             // Apply facing direction
             SpriteRenderer sr = MirrorCharacter.GetComponent<SpriteRenderer>();
@@ -614,6 +653,158 @@ namespace PetGame.Network
 
         #endregion
 
+        #region Network Skill Effects - Projectile/Summon Sync
+
+        /// <summary>
+        /// Called by local ProjectileSkillEffectData to sync projectile spawn to all clients.
+        /// </summary>
+        public void RequestSpawnProjectile(string prefabName, Vector3 startPos, Vector3 targetPos,
+            float flightDuration, float arcHeight, float damage, CharacterType casterType)
+        {
+            if (!isOwned) return;
+            CmdSpawnProjectile(prefabName, startPos, targetPos, flightDuration, arcHeight, damage, (int)casterType);
+        }
+
+        [Command]
+        private void CmdSpawnProjectile(string prefabName, Vector3 startPos, Vector3 targetPos,
+            float flightDuration, float arcHeight, float damage, int casterType)
+        {
+            // Relay to all clients except the sender
+            RpcSpawnProjectile(prefabName, startPos, targetPos, flightDuration, arcHeight, damage, casterType);
+        }
+
+        [ClientRpc]
+        private void RpcSpawnProjectile(string prefabName, Vector3 startPos, Vector3 targetPos,
+            float flightDuration, float arcHeight, float damage, int casterType)
+        {
+            // Skip on the owner (they already spawned it locally)
+            if (isOwned) return;
+
+            // Load prefab and spawn projectile locally for visual effect
+            GameObject prefab = Resources.Load<GameObject>($"Prefabs/Entity/Characters/{prefabName}");
+            if (prefab == null)
+            {
+                // Try loading from pool registration
+                if (PoolMgr.Instance.HasPrefab(prefabName))
+                {
+                    prefab = PoolMgr.Instance.GetPrefab(prefabName);
+                }
+            }
+            if (prefab == null)
+            {
+                Debug.LogWarning($"[NetworkPlayer] Cannot find projectile prefab: {prefabName}");
+                return;
+            }
+
+            // Ensure prefab is registered with pool
+            PoolMgr.Instance.SetPrefab(prefabName, prefab);
+            GameObject projectileObj = PoolMgr.Instance.GetNode(prefabName);
+            if (projectileObj == null) return;
+
+            projectileObj.transform.position = startPos;
+            projectileObj.transform.rotation = Quaternion.identity;
+            projectileObj.SetActive(true);
+
+            ProjectileController controller = projectileObj.GetComponent<ProjectileController>();
+            if (controller == null)
+            {
+                PoolMgr.Instance.PutNode(projectileObj);
+                return;
+            }
+
+            controller.ResetState();
+
+            // Launch as visual-only (damage = 0 on remote clients, host handles real damage)
+            controller.Launch(
+                startPos,
+                targetPos,
+                flightDuration,
+                arcHeight,
+                0f, // No damage on remote - host handles damage
+                (CharacterType)casterType,
+                () => { PoolMgr.Instance.PutNode(projectileObj); }
+            );
+        }
+
+        /// <summary>
+        /// Called by local SummonSkillEffectData to sync summon spawn to all clients.
+        /// </summary>
+        public void RequestSpawnSummon(string prefabName, Vector3[] positions, string factionTag)
+        {
+            if (!isOwned) return;
+            CmdSpawnSummon(prefabName, positions, factionTag);
+        }
+
+        [Command]
+        private void CmdSpawnSummon(string prefabName, Vector3[] positions, string factionTag)
+        {
+            RpcSpawnSummon(prefabName, positions, factionTag);
+        }
+
+        [ClientRpc]
+        private void RpcSpawnSummon(string prefabName, Vector3[] positions, string factionTag)
+        {
+            // Skip on the owner (they already spawned it locally)
+            if (isOwned) return;
+
+            // Load prefab
+            GameObject prefab = Resources.Load<GameObject>($"Prefabs/Entity/Characters/{prefabName}");
+            if (prefab == null)
+            {
+                Debug.LogWarning($"[NetworkPlayer] Cannot find summon prefab: {prefabName}");
+                return;
+            }
+
+            for (int i = 0; i < positions.Length; i++)
+            {
+                GameObject summonObj = Object.Instantiate(prefab, positions[i], Quaternion.identity);
+                summonObj.tag = factionTag;
+                summonObj.name = $"RemoteSummon_{prefabName}_{i}";
+
+                // Initialize entity
+                CharacterEntity entity = summonObj.GetComponent<CharacterEntity>();
+                if (entity != null && !entity.IsInitialized && entity.characterData != null)
+                {
+                    entity.Initialize(entity.characterData);
+                }
+
+                // Initialize AI
+                PetGame.AI.AIController ai = summonObj.GetComponent<PetGame.AI.AIController>();
+                if (ai != null) ai.InitializeAI();
+
+                // Auto-destroy after a reasonable duration
+                Object.Destroy(summonObj, 15f);
+            }
+        }
+
+        /// <summary>
+        /// Called by PortalManager to request the server to spawn a portal.
+        /// Allows both host and client players to spawn portals.
+        /// </summary>
+        public void RequestSpawnPortal(Vector3 worldPos)
+        {
+            if (!isOwned) return;
+            CmdSpawnPortal(worldPos);
+        }
+
+        [Command]
+        private void CmdSpawnPortal(Vector3 worldPos)
+        {
+            // Server-side: find PortalManager and spawn the portal
+            PortalManager portalManager = Object.FindObjectOfType<PortalManager>();
+            if (portalManager != null)
+            {
+                portalManager.SpawnPortalLocally(worldPos);
+                Debug.Log($"[NetworkPlayer] Server: Portal spawned at {worldPos} by player '{playerName}'.");
+            }
+            else
+            {
+                Debug.LogWarning("[NetworkPlayer] PortalManager not found. Cannot spawn portal.");
+            }
+        }
+
+        #endregion
+
         #region Commands (Client -> Server)
 
         [Command]
@@ -687,6 +878,20 @@ namespace PetGame.Network
             syncedAttackIndex = attackIndex;
         }
 
+        [Command]
+        private void CmdStartKnockback(Vector3 currentPosition)
+        {
+            syncedPosition = currentPosition;
+            RpcStartKnockback(currentPosition);
+        }
+
+        [Command]
+        private void CmdEndKnockback(Vector3 landingPosition)
+        {
+            syncedPosition = landingPosition;
+            RpcEndKnockback(landingPosition);
+        }
+
         #endregion
 
         #region ClientRpc (Server -> All Clients)
@@ -706,6 +911,37 @@ namespace PetGame.Network
             Debug.Log($"[NetworkPlayer] RPC: Switching mirror character to '{newCharacterId}' for remote player '{playerName}'");
             DestroyMirrorCharacter();
             StartCoroutine(CreateMirrorCharacterDelayed(newCharacterId));
+        }
+
+        /// <summary>
+        /// RPC: Start knockback simulation on mirror character.
+        /// Instead of relying on position interpolation (which causes jitter),
+        /// the mirror character simulates knockback locally using the same physics.
+        /// </summary>
+        [ClientRpc]
+        private void RpcStartKnockback(Vector3 currentPosition)
+        {
+            if (isOwned) return;
+            if (MirrorCharacter == null) return;
+
+            // Snap mirror character to the knockback start position
+            MirrorCharacter.transform.position = currentPosition;
+
+            // Enable knockback flag so UpdateMirrorCharacter skips position interpolation
+            _mirrorInKnockback = true;
+        }
+
+        /// <summary>
+        /// RPC: End knockback on mirror character, snap to landing position.
+        /// </summary>
+        [ClientRpc]
+        private void RpcEndKnockback(Vector3 landingPosition)
+        {
+            if (isOwned) return;
+            if (MirrorCharacter == null) return;
+
+            MirrorCharacter.transform.position = landingPosition;
+            _mirrorInKnockback = false;
         }
 
         #endregion

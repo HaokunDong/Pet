@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Mirror;
+using PetGame.Network;
 
 namespace PetGame
 {
@@ -125,6 +127,24 @@ namespace PetGame
                     PoolMgr.Instance.PutNode(projectileObj);
                 }
             );
+
+            // Network sync: notify other clients to spawn the same projectile visually
+            if (NetworkClient.active && MirrorNetworkManager.singleton != null)
+            {
+                PetGame.Network.NetworkPlayer localPlayer = MirrorNetworkManager.singleton.LocalPlayer;
+                if (localPlayer != null)
+                {
+                    localPlayer.RequestSpawnProjectile(
+                        GetPoolKey(),
+                        caster.transform.position,
+                        predictedPos,
+                        projectileFlightDuration,
+                        projectileArcHeight,
+                        dmg,
+                        casterCharType
+                    );
+                }
+            }
 
             // Apply displacement if configured
             ApplyDisplacement(caster);
