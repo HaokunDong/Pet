@@ -18,5 +18,5 @@ MonoBehaviour:
   boldDuration: 0.2
   arrowColor: {r: 0.05271268, g: 1, b: 0, a: 0.9}
   arrowScale: 0.5
-  arrowYOffset: -3.3
+  arrowYOffset: -3.5
   arrowDuration: 0.5
