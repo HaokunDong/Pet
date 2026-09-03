@@ -144,6 +144,8 @@ namespace PetGame
 
         /// <summary>
         /// Executes the boss fight sequence locally (both server and client).
+        /// On clients, the Boss is NOT spawned here — it will be synced from the host
+        /// via NetworkEnemySpawner as a MirrorEnemy. This avoids duplicate Boss spawning.
         /// </summary>
         private void ExecuteBossFightLocally()
         {
@@ -166,8 +168,19 @@ namespace PetGame
                 enemySpawner.ClearAllEnemies();
             }
 
-            // Step 3: Spawn Boss
-            SpawnBoss();
+            // Step 3: Spawn Boss (host/server only)
+            // Clients do NOT spawn the Boss locally — the host's Boss is tagged "Enemy"
+            // and will be automatically detected and synced to clients by NetworkEnemySpawner
+            // as a MirrorEnemy. Spawning here on clients would create a duplicate.
+            bool isClientOnly = !NetworkServer.active && NetworkClient.active;
+            if (!isClientOnly)
+            {
+                SpawnBoss();
+            }
+            else
+            {
+                Debug.Log("[BossFightManager] Client: Skipping local Boss spawn. Boss will be synced from host via NetworkEnemySpawner.");
+            }
 
             // Step 4: Monitor player death for retry logic
             SubscribePlayerDeath();
@@ -215,10 +228,9 @@ namespace PetGame
         // =====================================================================
 
         /// <summary>
-        /// Spawns the Boss at the configured spawn point using the object pool.
-        /// On the server/host, the Boss has full AI and combat capabilities.
-        /// On clients, the Boss is visual-only (AI and CombatSystem disabled) to prevent
-        /// local attacks on MirrorCharacters which would cause jitter/death animations.
+        /// Spawns the Boss at the configured spawn point.
+        /// Only called on the server/host. The Boss has full AI and combat capabilities.
+        /// Clients receive the Boss via NetworkEnemySpawner sync (as a MirrorEnemy).
         /// </summary>
         private void SpawnBoss()
         {
@@ -276,40 +288,19 @@ namespace PetGame
             if (bossCharacterData.animatorController != null)
                 charAnim.SetAnimatorController(bossCharacterData.animatorController);
 
-            // On clients (non-host), disable AI and CombatSystem.
-            // The Boss on clients is visual-only; the host handles all combat logic.
-            // This prevents the client-side Boss from attacking MirrorCharacters,
-            // which would cause jitter, knockback, and false death animations.
-            bool isClientOnly = !NetworkServer.active && NetworkClient.active;
-            if (isClientOnly)
-            {
-                // Disable CombatSystem so Boss doesn't deal damage locally on client
-                CombatSystem combat = bossObj.GetComponent<CombatSystem>();
-                if (combat != null) combat.enabled = false;
+            // Setup AI controller (server/host only)
+            AIController aiController = bossObj.GetComponent<AIController>();
+            if (aiController == null)
+                aiController = bossObj.AddComponent<AIController>();
 
-                // Disable AnimEventReceiver so attack animation events don't trigger damage
-                AnimEventReceiver animEvent = bossObj.GetComponent<AnimEventReceiver>();
-                if (animEvent != null) animEvent.enabled = false;
+            aiController.detectionRange = bossDetectionRange;
+            aiController.patrolRange = bossPatrolRange;
+            aiController.InitializeAI();
 
-                // Don't initialize AI on client - Boss movement will be synced from host
-                Debug.Log("[BossFightManager] Client: Boss spawned as visual-only (AI/Combat disabled).");
-            }
-            else
-            {
-                // Setup AI controller (server/host only)
-                AIController aiController = bossObj.GetComponent<AIController>();
-                if (aiController == null)
-                    aiController = bossObj.AddComponent<AIController>();
+            // Listen for Boss death (server only)
+            currentBossEntity.OnDeath += OnBossDeath;
 
-                aiController.detectionRange = bossDetectionRange;
-                aiController.patrolRange = bossPatrolRange;
-                aiController.InitializeAI();
-
-                // Step 4: Listen for Boss death (server only)
-                currentBossEntity.OnDeath += OnBossDeath;
-
-                Debug.Log($"[BossFightManager] Host: Boss '{bossCharacterData.characterName}' spawned at {spawnPosition} with full AI.");
-            }
+            Debug.Log($"[BossFightManager] Host: Boss '{bossCharacterData.characterName}' spawned at {spawnPosition} with full AI.");
         }
 
         // =====================================================================

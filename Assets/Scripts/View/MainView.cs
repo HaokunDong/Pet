@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
-using System.Linq;
 using PetGame;
 using PetGame.UI;
 using PetGame.Network;
@@ -49,6 +48,8 @@ public class MainView : BaseView
 
         blackHole = transform.Find("BlackHole").gameObject;
         EventTriggerListener.Get(blackHole).onClick = OnButtonClick;
+        EventTriggerListener.Get(blackHole).onEnter = OnBlackHolePointerEnter;
+        EventTriggerListener.Get(blackHole).onExit = OnBlackHolePointerExit;
 
         // Bind RingRadialMenu buttons (replaces legacy Menus/Button1..4):
         //   CharacterButton -> Button1 (toggle card-spline distributor)
@@ -61,23 +62,11 @@ public class MainView : BaseView
         settingButton        = BindRingButton("SettingButton",        OnSettingButtonClick);
         specialLevelListButton = BindRingButton("SpecialLevelListButton", OnSpecialLevelListButtonClick);
 
-        // Load sprite sheets from Resources
-        Sprite[] idleSprites = Resources.LoadAll<Sprite>("UI/MainMenu/idle")
-            .OrderBy(s => {
-                string numStr = s.name.Replace("idle_", "");
-                int.TryParse(numStr, out int n);
-                return n;
-            }).ToArray();
+        // Register existing ButtonSpriteAnimation component (sprites configured in Inspector)
+        InitButtonSpriteAnim(blackHole);
 
-        Sprite[] onClickSprites = Resources.LoadAll<Sprite>("UI/MainMenu/onclicked")
-            .OrderBy(s => {
-                string numStr = s.name.Replace("onclicked_", "");
-                int.TryParse(numStr, out int n);
-                return n;
-            }).ToArray();
-
-        // Initialize sprite animation for each button
-        InitButtonSpriteAnim(blackHole, idleSprites, onClickSprites);
+        // Initialize circular click area on BlackHole (add CircleClickArea if not already present)
+        InitCircleClickArea(blackHole);
 
         ringRadialMenu.SetActive(false);
     }
@@ -85,28 +74,92 @@ public class MainView : BaseView
     /// <summary>
     /// Initialize ButtonSpriteAnimation component on a button GameObject.
     /// </summary>
-    private void InitButtonSpriteAnim(GameObject btn, Sprite[] idleSprites, Sprite[] onClickSprites)
+    private void InitButtonSpriteAnim(GameObject btn)
     {
         ButtonSpriteAnimation anim = btn.GetComponent<ButtonSpriteAnimation>();
         if (anim == null)
         {
-            anim = btn.AddComponent<ButtonSpriteAnimation>();
+            Debug.LogWarning($"[MainView] No ButtonSpriteAnimation found on {btn.name}. Skipping.");
+            return;
         }
-        anim.idleSprites = idleSprites;
-        anim.onClickSprites = onClickSprites;
-        anim.autoPlayIdle = true;
         _btnAnimMap[btn] = anim;
+    }
+
+    /// <summary>
+    /// Ensure the given button has a CircleClickArea component for circular hit-testing.
+    /// If the GameObject already has a plain Image, it will be replaced by CircleClickArea.
+    /// </summary>
+    private void InitCircleClickArea(GameObject btn)
+    {
+        var circleArea = btn.GetComponent<PetGame.UI.CircleClickArea>();
+        if (circleArea == null)
+        {
+            // If there is an existing Image component, copy its sprite/color before replacing
+            var existingImage = btn.GetComponent<Image>();
+            Sprite existingSprite = null;
+            Color existingColor = Color.white;
+            if (existingImage != null && !(existingImage is PetGame.UI.CircleClickArea))
+            {
+                existingSprite = existingImage.sprite;
+                existingColor = existingImage.color;
+                DestroyImmediate(existingImage);
+            }
+
+            circleArea = btn.AddComponent<PetGame.UI.CircleClickArea>();
+            if (existingSprite != null)
+            {
+                circleArea.sprite = existingSprite;
+                circleArea.color = existingColor;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Called when the mouse pointer enters the BlackHole area.
+    /// Plays the suspend (hover) loop animation.
+    /// Does not interrupt OnClick animation.
+    /// </summary>
+    private void OnBlackHolePointerEnter(GameObject go)
+    {
+        if (_btnAnimMap.ContainsKey(go))
+        {
+            var anim = _btnAnimMap[go];
+            if (anim.CurrentState == ButtonSpriteAnimation.AnimState.OnClick) return;
+            anim.PlaySuspend();
+        }
+    }
+
+    /// <summary>
+    /// Called when the mouse pointer exits the BlackHole area.
+    /// Reverts to the idle loop animation.
+    /// Does not interrupt OnClick animation.
+    /// </summary>
+    private void OnBlackHolePointerExit(GameObject go)
+    {
+        if (_btnAnimMap.ContainsKey(go))
+        {
+            var anim = _btnAnimMap[go];
+            if (anim.CurrentState == ButtonSpriteAnimation.AnimState.OnClick) return;
+            anim.PlayIdle();
+        }
     }
 
     void OnButtonClick(GameObject go)
     {
-        // Trigger OnClick sprite animation if available
-
         if (go == blackHole)
         {
+            // Toggle animation between Idle and OnClick on each click
             if (_btnAnimMap.ContainsKey(go))
             {
-                _btnAnimMap[go].PlayOnClick();
+                var anim = _btnAnimMap[go];
+                if (anim.CurrentState == ButtonSpriteAnimation.AnimState.OnClick)
+                {
+                    anim.PlayIdle();
+                }
+                else
+                {
+                    anim.PlayOnClick();
+                }
             }
             ringRadialMenu.SetActive(!ringRadialMenu.activeSelf);
         }

@@ -77,6 +77,23 @@ namespace PetGame.Network
             base.Awake();
         }
 
+        public override void Start()
+        {
+            base.Start();
+
+            // Auto-start as Host in single player mode so that all NetworkBehaviour
+            // objects (e.g. BossFightManager) are activated by Mirror.
+            // Only start if not already in a lobby (multiplayer handles its own startup).
+            var lobbyMgr = SteamLobbyManager.Instance;
+            bool inLobby = lobbyMgr != null && lobbyMgr.InLobby;
+
+            if (!inLobby && !IsNetworkActive)
+            {
+                Debug.Log("[MirrorNetworkManager] Single player mode detected. Auto-starting Host...");
+                StartHost();
+            }
+        }
+
         public override void OnDestroy()
         {
             if (singleton == this)

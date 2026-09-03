@@ -13,7 +13,8 @@ public class ButtonSpriteAnimation : MonoBehaviour
     public enum AnimState
     {
         Idle,
-        OnClick
+        OnClick,
+        Suspend
     }
 
     [Header("Idle Animation")]
@@ -29,6 +30,13 @@ public class ButtonSpriteAnimation : MonoBehaviour
 
     [Tooltip("OnClick animation frame rate (frames per second)")]
     public float onClickFPS = 24f;
+
+    [Header("Suspend Animation")]
+    [Tooltip("Sprite frames for suspend/hover loop animation")]
+    public Sprite[] suspendSprites;
+
+    [Tooltip("Suspend animation frame rate (frames per second)")]
+    public float suspendFPS = 24f;
 
     [Header("Settings")]
     [Tooltip("Automatically start playing Idle animation on enable")]
@@ -102,9 +110,8 @@ public class ButtonSpriteAnimation : MonoBehaviour
     }
 
     /// <summary>
-    /// Start playing the OnClick animation once.
+    /// Start playing the OnClick animation in a loop.
     /// Interrupts any currently running animation (including a previous OnClick).
-    /// After playback completes, automatically returns to Idle animation.
     /// </summary>
     public void PlayOnClick()
     {
@@ -113,7 +120,21 @@ public class ButtonSpriteAnimation : MonoBehaviour
 
         StopCurrentAnimation();
         _currentState = AnimState.OnClick;
-        _currentAnim = StartCoroutine(PlayAnimation(onClickSprites, onClickFPS, false));
+        _currentAnim = StartCoroutine(PlayAnimation(onClickSprites, onClickFPS, true));
+    }
+
+    /// <summary>
+    /// Start playing the Suspend (hover) animation in a loop.
+    /// Stops any currently running animation first.
+    /// </summary>
+    public void PlaySuspend()
+    {
+        if (_image == null) return;
+        if (suspendSprites == null || suspendSprites.Length == 0) return;
+
+        StopCurrentAnimation();
+        _currentState = AnimState.Suspend;
+        _currentAnim = StartCoroutine(PlayAnimation(suspendSprites, suspendFPS, true));
     }
 
     /// <summary>
