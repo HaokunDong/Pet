@@ -24,16 +24,6 @@ public class MainView : BaseView
     // SpecialLevelListButton on the RingRadialMenu opens the multiplayer level request list.
     private RingRadialMenuButton specialLevelListButton;
 
-    [Header("Lobby")]
-    [Tooltip("Path to LobbyPanel prefab in Resources folder")]
-    private const string LOBBY_PANEL_PREFAB_PATH = "Prefabs/UI/LobbyPanel";
-
-    // Cached LobbyPanel instance (dynamically loaded)
-    private LobbyPanel lobbyPanelInstance;
-
-    // Cached SpecialLevelListView instance
-    private SpecialLevelListView specialLevelListView;
-
     // Map buttons to their sprite animation components
     private Dictionary<GameObject, ButtonSpriteAnimation> _btnAnimMap = new Dictionary<GameObject, ButtonSpriteAnimation>();
 
@@ -226,70 +216,11 @@ public class MainView : BaseView
 
     /// <summary>
     /// Click handler for the RingRadialMenu's FriendsButton.
-    /// Dynamically instantiates LobbyPanel prefab under GamePanel, or toggles visibility.
+    /// Toggles the panel referenced by the Sector's LinkedPanel field.
     /// </summary>
     private void OnFriendsButtonClick()
     {
-        if (lobbyPanelInstance != null)
-        {
-            // Toggle: if already active, hide; otherwise show
-            if (lobbyPanelInstance.gameObject.activeSelf)
-                lobbyPanelInstance.Hide();
-            else
-                lobbyPanelInstance.Show();
-        }
-        else
-        {
-            // Dynamically load and instantiate LobbyPanel prefab
-            GameObject prefab = Resources.Load<GameObject>(LOBBY_PANEL_PREFAB_PATH);
-            if (prefab == null)
-            {
-                Debug.LogError($"[MainView] LobbyPanel prefab not found at: Resources/{LOBBY_PANEL_PREFAB_PATH}");
-                return;
-            }
-
-            // Find GamePanel as parent (Canvas > GamePanel)
-            Transform gamePanel = FindGamePanel();
-            if (gamePanel == null)
-            {
-                Debug.LogError("[MainView] GamePanel not found. Using MainView as parent.");
-                gamePanel = transform;
-            }
-
-            GameObject instance = Instantiate(prefab, gamePanel);
-            lobbyPanelInstance = instance.GetComponent<LobbyPanel>();
-
-            if (lobbyPanelInstance != null)
-            {
-                lobbyPanelInstance.Show();
-            }
-            else
-            {
-                Debug.LogError("[MainView] LobbyPanel component not found on instantiated prefab!");
-                Destroy(instance);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Find the GamePanel transform in the scene hierarchy.
-    /// Searches for a child named "GamePanel" under the Canvas.
-    /// </summary>
-    private Transform FindGamePanel()
-    {
-        // Try to find GamePanel as sibling or parent
-        Canvas canvas = GetComponentInParent<Canvas>();
-        if (canvas != null)
-        {
-            Transform gp = canvas.transform.Find("GamePanel");
-            if (gp != null) return gp;
-        }
-
-        // Fallback: search in scene
-        GameObject gpObj = GameObject.Find("GamePanel");
-        if (gpObj != null) return gpObj.transform;
-
-        return null;
+        ToggleLinkedPanel(friendsButton, "FriendsButton");
     }
 
     /// <summary>
@@ -303,7 +234,7 @@ public class MainView : BaseView
 
     /// <summary>
     /// Click handler for the RingRadialMenu's SpecialLevelListButton.
-    /// Only responds when in a multiplayer lobby. Toggles the SpecialLevelListForMultiplayer panel.
+    /// Only responds when in a multiplayer lobby. Toggles the panel referenced by the Sector's LinkedPanel field.
     /// </summary>
     private void OnSpecialLevelListButtonClick()
     {
@@ -315,20 +246,31 @@ public class MainView : BaseView
             return;
         }
 
-        // Find or cache the SpecialLevelListView
-        if (specialLevelListView == null)
+        // Toggle the SpecialLevelListForMultiplayer panel directly.
+        // The LinkedPanel already references the root SpecialLevelListForMultiplayer object.
+        ToggleLinkedPanel(specialLevelListButton, "SpecialLevelListButton");
+    }
+
+    /// <summary>
+    /// Generic helper: toggles the LinkedPanel assigned on a button's Sector.
+    /// If the Sector or LinkedPanel is not assigned, logs a warning.
+    /// </summary>
+    private void ToggleLinkedPanel(RingRadialMenuButton button, string buttonName)
+    {
+        if (button == null || button.SectorGraphic == null)
         {
-            specialLevelListView = FindObjectOfType<SpecialLevelListView>(true);
+            Debug.LogWarning($"[MainView] {buttonName} or its SectorGraphic is null.");
+            return;
         }
 
-        if (specialLevelListView != null)
+        GameObject panel = button.SectorGraphic.LinkedPanel;
+        if (panel == null)
         {
-            specialLevelListView.ToggleVisibility();
+            Debug.LogWarning($"[MainView] {buttonName}'s Sector has no LinkedPanel assigned.");
+            return;
         }
-        else
-        {
-            Debug.LogWarning("[MainView] SpecialLevelListView not found in scene.");
-        }
+
+        panel.SetActive(!panel.activeSelf);
     }
 
     // protected override void AddEvent() {

@@ -68,6 +68,14 @@ namespace PetGame
         public event Action<int> OnButtonClicked;
 
         /// <summary>
+        /// Fired when any button's state changes (Idle / Suspended / Selected).
+        /// Arguments: (buttonIndex, oldState, newState).
+        /// Subscribe to this to drive visual feedback (sprite swaps, color tints, etc.)
+        /// from outside the menu component.
+        /// </summary>
+        public event Action<int, RingRadialMenuButton.ButtonState, RingRadialMenuButton.ButtonState> OnButtonStateChanged;
+
+        /// <summary>
         /// Fired after a scroll-driven rotation is applied. Argument is the
         /// total accumulated rotation (in degrees) since the menu was initialized.
         /// Positive value means the wheel has been rotated counter-clockwise overall
@@ -398,6 +406,12 @@ namespace PetGame
                 // Wire dispatcher and index, so the button can fan out to OnButtonClicked.
                 btn.Initialize(i, DispatchClickFromButton);
 
+                // Subscribe to per-button state changes so we can relay them through
+                // the menu-level OnButtonStateChanged event.
+                // Unsubscribe first to avoid duplicate registrations on repeated RebuildLayout calls.
+                btn.OnStateChanged -= RelayButtonStateChanged;
+                btn.OnStateChanged += RelayButtonStateChanged;
+
                 // Configure the sector graphic for hit-testing.
                 var sector = btn.SectorGraphic;
                 if (sector != null)
@@ -409,8 +423,83 @@ namespace PetGame
                         sectorCenterDeg: angleDeg,
                         sectorSizeDeg: effectiveSectorSize,
                         useAngle: useAngleCheck);
+
+                    // Apply custom sector size if specified (> 0); otherwise keep
+                    // the existing RectTransform layout (e.g. stretch-to-fill).
+                    ApplySectorSize(sector.rectTransform);
+
+                    // Rotate the sector so its local orientation always faces the ring center.
+                    // angleDeg is the math-convention angle (0 = +X, 90 = +Y).
+                    // Subtracting 90 makes the sector's local "up" (+Y) point toward the center.
+                    sector.rectTransform.localEulerAngles = new Vector3(0f, 0f, angleDeg - 90f);
                 }
+
+                // Ensure the icon never intercepts pointer events (enter/exit/click).
+                // This guarantees the sector's hover state is not interrupted when the
+                // mouse moves over the icon area.
+                EnsureIconNonInteractive(btn);
             }
+        }
+
+        /// <summary>
+        /// Applies the custom sector width/height from <see cref="settings"/> to a sector's
+        /// RectTransform. When a dimension is 0, the sector keeps its current layout (e.g.
+        /// stretch-to-fill the parent button cell). When > 0, the sector is switched to a
+        /// center-anchored fixed-size layout on that axis.
+        /// </summary>
+        private void ApplySectorSize(RectTransform sectorRT)
+        {
+            if (sectorRT == null || settings == null) return;
+
+            float w = settings.sectorWidth;
+            float h = settings.sectorHeight;
+
+            // Nothing to do if both are zero (keep existing layout).
+            if (w <= 0f && h <= 0f) return;
+
+            // Switch to center-anchored layout so sizeDelta controls the actual size.
+            sectorRT.anchorMin = new Vector2(0.5f, 0.5f);
+            sectorRT.anchorMax = new Vector2(0.5f, 0.5f);
+            sectorRT.pivot = new Vector2(0.5f, 0.5f);
+            sectorRT.anchoredPosition = Vector2.zero;
+
+            // If only one dimension is specified, use the button cell's size for the other.
+            // We read the current sizeDelta as a fallback (it was set by the prefab or user).
+            Vector2 size = sectorRT.sizeDelta;
+            if (w > 0f) size.x = w;
+            if (h > 0f) size.y = h;
+            sectorRT.sizeDelta = size;
+        }
+
+        /// <summary>
+        /// Ensures the icon image on a button does not intercept any pointer events.
+        /// Sets <c>raycastTarget = false</c> on the icon <see cref="Image"/> and adds a
+        /// <see cref="CanvasGroup"/> with <c>blocksRaycasts = false</c> and
+        /// <c>interactable = false</c> to the icon GameObject. This guarantees that
+        /// pointer-enter / pointer-exit events are never stolen from the underlying
+        /// <see cref="RingSectorGraphic"/>, keeping the sector's hover state continuous
+        /// even when the mouse passes over the icon area.
+        /// </summary>
+        private static void EnsureIconNonInteractive(RingRadialMenuButton btn)
+        {
+            if (btn == null) return;
+            Image icon = btn.IconImage;
+            if (icon == null) return;
+
+            // Force raycastTarget off so the icon never participates in UGUI raycasts.
+            icon.raycastTarget = false;
+
+            // Add a CanvasGroup to block all pointer interactions on the icon subtree.
+            // This is a belt-and-suspenders measure: even if someone accidentally sets
+            // raycastTarget = true on the icon, the CanvasGroup will still prevent it
+            // from receiving any pointer events.
+            CanvasGroup cg = icon.GetComponent<CanvasGroup>();
+            if (cg == null)
+            {
+                cg = icon.gameObject.AddComponent<CanvasGroup>();
+            }
+            cg.blocksRaycasts = false;
+            cg.interactable = false;
         }
 
         // -----------------------------------------------------------------
@@ -655,6 +744,57 @@ namespace PetGame
             {
                 Debug.LogException(e, this);
             }
+        }
+
+        /// <summary>
+        /// Relays per-button <see cref="RingRadialMenuButton.OnStateChanged"/> events
+        /// through the menu-level <see cref="OnButtonStateChanged"/> event.
+        /// </summary>
+        private void RelayButtonStateChanged(int index, RingRadialMenuButton.ButtonState oldState, RingRadialMenuButton.ButtonState newState)
+        {
+            try
+            {
+                OnButtonStateChanged?.Invoke(index, oldState, newState);
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e, this);
+            }
+        }
+
+        /// <summary>
+        /// Deselects (sets to Idle) the button at the given index.
+        /// Call this when the panel/page associated with a button is closed externally,
+        /// so the button reverts from Selected back to Idle.
+        /// </summary>
+        public void DeselectButton(int index)
+        {
+            if (!IsIndexValid(index)) return;
+            buttons[index].Deselect();
+        }
+
+        /// <summary>
+        /// Deselects all buttons that are currently in the Selected state.
+        /// </summary>
+        public void DeselectAllButtons()
+        {
+            if (buttons == null) return;
+            for (int i = 0; i < buttons.Count; ++i)
+            {
+                if (buttons[i] != null)
+                {
+                    buttons[i].Deselect();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Returns true if the button at the given index is currently Selected.
+        /// </summary>
+        public bool IsButtonSelected(int index)
+        {
+            if (!IsIndexValid(index)) return false;
+            return buttons[index].IsSelected;
         }
 
         // -----------------------------------------------------------------

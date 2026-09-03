@@ -43,8 +43,14 @@ namespace PetGame.UI
             // Auto-discover option slots from direct children
             AutoDiscoverSlots();
 
-            // Start hidden
-            gameObject.SetActive(false);
+            // Start hidden – hide the entire SpecialLevelListForMultiplayer root object.
+            // This script lives on BackGroundPanel (a child), so we go up to the root
+            // to ensure toggling the root later will make all children visible.
+            Transform root = transform.parent;
+            if (root != null)
+                root.gameObject.SetActive(false);
+            else
+                gameObject.SetActive(false);
         }
 
         /// <summary>
@@ -124,11 +130,15 @@ namespace PetGame.UI
         #region Public Methods
 
         /// <summary>
-        /// Toggle the visibility of this panel.
+        /// Toggle the visibility of the entire SpecialLevelListForMultiplayer panel.
         /// </summary>
         public void ToggleVisibility()
         {
-            gameObject.SetActive(!gameObject.activeSelf);
+            Transform root = transform.parent;
+            if (root != null)
+                root.gameObject.SetActive(!root.gameObject.activeSelf);
+            else
+                gameObject.SetActive(!gameObject.activeSelf);
         }
 
         #endregion

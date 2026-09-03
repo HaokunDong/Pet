@@ -28,6 +28,15 @@ namespace PetGame
         [Tooltip("If true, buttons are placed clockwise; otherwise counter-clockwise.")]
         public bool clockwise = true;
 
+        [Header("Sector Size")]
+        [Tooltip("Width of each sector's RectTransform (in canvas units). 0 means stretch to fill the button cell.")]
+        [Min(0f)]
+        public float sectorWidth = 0f;
+
+        [Tooltip("Height of each sector's RectTransform (in canvas units). 0 means stretch to fill the button cell.")]
+        [Min(0f)]
+        public float sectorHeight = 0f;
+
         [Header("Scroll Rotation")]
         [Tooltip("If true, scrolling the mouse wheel while the cursor is inside the outer circle rotates the wheel.")]
         public bool enableScrollRotate = true;
@@ -78,6 +87,20 @@ namespace PetGame
             {
                 Debug.LogWarning($"[RingRadialMenuSettings] scrollRotateStepDegrees ({scrollRotateStepDegrees}) cannot be negative. Clamped to 0.");
                 scrollRotateStepDegrees = 0f;
+                ok = false;
+            }
+
+            if (sectorWidth < 0f)
+            {
+                Debug.LogWarning($"[RingRadialMenuSettings] sectorWidth ({sectorWidth}) cannot be negative. Clamped to 0.");
+                sectorWidth = 0f;
+                ok = false;
+            }
+
+            if (sectorHeight < 0f)
+            {
+                Debug.LogWarning($"[RingRadialMenuSettings] sectorHeight ({sectorHeight}) cannot be negative. Clamped to 0.");
+                sectorHeight = 0f;
                 ok = false;
             }
 

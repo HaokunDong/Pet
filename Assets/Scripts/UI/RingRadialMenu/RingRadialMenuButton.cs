@@ -1,6 +1,6 @@
+using System;
 using UnityEngine;
 using UnityEngine.Events;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace PetGame
@@ -9,13 +9,53 @@ namespace PetGame
     /// A single button cell on a <see cref="RingRadialMenu"/>.
     /// Wraps a <see cref="RingSectorGraphic"/> background (the clickable hit area)
     /// and an optional icon <see cref="Image"/>.
-    /// Click events are dispatched both via a per-button <see cref="UnityAction"/> callback
-    /// and via the parent menu's <c>OnButtonClicked(int)</c> event.
+    /// Click events are dispatched by the child <see cref="RingSectorGraphic"/> directly;
+    /// this component acts as a logical container and provides convenience API for
+    /// setting icons and callbacks.
+    ///
+    /// <para>
+    /// Supports three visual states: <see cref="ButtonState.Idle"/>,
+    /// <see cref="ButtonState.Suspended"/> (hover), and <see cref="ButtonState.Selected"/>.
+    /// Clicking the sector toggles between Idle/Suspended and Selected.
+    /// Multiple buttons on the same menu can be Selected simultaneously.
+    /// </para>
     /// </summary>
     [AddComponentMenu("UI/Ring Radial Menu/Ring Radial Menu Button")]
     [RequireComponent(typeof(RectTransform))]
-    public class RingRadialMenuButton : MonoBehaviour, IPointerClickHandler
+    public class RingRadialMenuButton : MonoBehaviour
     {
+        // -----------------------------------------------------------------
+        // Button state
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// Visual/logical states for a ring radial menu button.
+        /// </summary>
+        public enum ButtonState
+        {
+            /// <summary>Default resting state.</summary>
+            Idle,
+            /// <summary>Mouse is hovering over the sector (pointer enter).</summary>
+            Suspended,
+            /// <summary>Button has been clicked and is "active" / toggled on.</summary>
+            Selected
+        }
+
+        /// <summary>
+        /// Current state of this button.
+        /// </summary>
+        public ButtonState State { get; private set; } = ButtonState.Idle;
+
+        /// <summary>
+        /// Fired whenever the button state changes.
+        /// Arguments: (buttonIndex, oldState, newState).
+        /// </summary>
+        public event Action<int, ButtonState, ButtonState> OnStateChanged;
+
+        // -----------------------------------------------------------------
+        // Inspector fields
+        // -----------------------------------------------------------------
+
         [Tooltip("The sector-shaped raycast graphic that defines this button's hit area.")]
         [SerializeField] private RingSectorGraphic sectorGraphic;
 
@@ -27,17 +67,6 @@ namespace PetGame
         /// Assigned at layout-time by the parent menu.
         /// </summary>
         public int Index { get; private set; }
-
-        /// <summary>
-        /// Per-button click callback, registered via <see cref="SetCallback"/>.
-        /// </summary>
-        private UnityAction onClickCallback;
-
-        /// <summary>
-        /// Optional parent-level callback that also receives the button index.
-        /// Set by <see cref="RingRadialMenu"/> when it builds buttons.
-        /// </summary>
-        private System.Action<int> onClickWithIndex;
 
         /// <summary>
         /// Cached reference to this button's RectTransform.
@@ -71,11 +100,91 @@ namespace PetGame
 
         /// <summary>
         /// Initializes index and parent dispatcher. Called by RingRadialMenu.
+        /// Delegates click handling to the child <see cref="RingSectorGraphic"/>.
         /// </summary>
         public void Initialize(int index, System.Action<int> dispatcher)
         {
             Index = index;
-            onClickWithIndex = dispatcher;
+            // Delegate click events to the sector graphic.
+            if (SectorGraphic != null)
+            {
+                SectorGraphic.InitializeClick(index, dispatcher);
+                SectorGraphic.OwnerButton = this;
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // State management
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// Transitions the button to the given state, updates the sector sprite,
+        /// and fires <see cref="OnStateChanged"/>.
+        /// If the new state equals the current state, no event is fired.
+        /// </summary>
+        public void SetState(ButtonState newState)
+        {
+            if (State == newState) return;
+            ButtonState old = State;
+            State = newState;
+            if (SectorGraphic != null) SectorGraphic.ApplyStateSprite(newState);
+            try { OnStateChanged?.Invoke(Index, old, newState); }
+            catch (Exception e) { Debug.LogException(e, this); }
+        }
+
+        /// <summary>
+        /// Toggles between Selected and the appropriate non-selected state.
+        /// If currently Selected, transitions to Idle (or Suspended if the pointer
+        /// is still hovering — the caller can pass <paramref name="isHovering"/> to hint).
+        /// If currently Idle or Suspended, transitions to Selected.
+        /// </summary>
+        /// <param name="isHovering">True if the pointer is currently over this button's sector.</param>
+        public void ToggleSelected(bool isHovering = false)
+        {
+            if (State == ButtonState.Selected)
+            {
+                SetState(isHovering ? ButtonState.Suspended : ButtonState.Idle);
+            }
+            else
+            {
+                SetState(ButtonState.Selected);
+            }
+        }
+
+        /// <summary>
+        /// Forces the button back to Idle state. Convenience method for external callers
+        /// (e.g. when the associated panel/page is closed).
+        /// </summary>
+        public void Deselect()
+        {
+            if (State == ButtonState.Selected)
+            {
+                SetState(ButtonState.Idle);
+            }
+        }
+
+        /// <summary>
+        /// Called by <see cref="RingSectorGraphic"/> when the pointer enters the sector.
+        /// Transitions to Suspended unless the button is already Selected.
+        /// </summary>
+        internal void NotifyPointerEnter()
+        {
+            if (State == ButtonState.Idle)
+            {
+                SetState(ButtonState.Suspended);
+            }
+        }
+
+        /// <summary>
+        /// Called by <see cref="RingSectorGraphic"/> when the pointer exits the sector.
+        /// Transitions to Idle unless the button is Selected.
+        /// </summary>
+        internal void NotifyPointerExit()
+        {
+            if (State == ButtonState.Suspended)
+            {
+                SetState(ButtonState.Idle);
+            }
         }
 
         /// <summary>
@@ -93,48 +202,31 @@ namespace PetGame
 
         /// <summary>
         /// Registers (or replaces) the per-button click callback.
+        /// Delegates to the child <see cref="RingSectorGraphic"/>.
         /// </summary>
         public void SetCallback(UnityAction callback)
         {
-            onClickCallback = callback;
+            if (SectorGraphic != null)
+            {
+                SectorGraphic.SetCallback(callback);
+            }
         }
 
         /// <summary>
         /// Removes the per-button click callback.
+        /// Delegates to the child <see cref="RingSectorGraphic"/>.
         /// </summary>
         public void ClearCallback()
         {
-            onClickCallback = null;
+            if (SectorGraphic != null)
+            {
+                SectorGraphic.ClearCallback();
+            }
         }
 
         /// <summary>
-        /// IPointerClickHandler entry. Triggered only when <see cref="RingSectorGraphic.IsRaycastLocationValid"/>
-        /// has already validated the hit, so any click here is guaranteed to be inside the sector.
+        /// Whether this button is currently in the Selected state.
         /// </summary>
-        public void OnPointerClick(PointerEventData eventData)
-        {
-            if (eventData != null && eventData.button != PointerEventData.InputButton.Left)
-            {
-                return;
-            }
-
-            try
-            {
-                onClickCallback?.Invoke();
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogException(e, this);
-            }
-
-            try
-            {
-                onClickWithIndex?.Invoke(Index);
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogException(e, this);
-            }
-        }
+        public bool IsSelected => State == ButtonState.Selected;
     }
 }
