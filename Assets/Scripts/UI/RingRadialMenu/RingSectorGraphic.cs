@@ -72,6 +72,28 @@ namespace PetGame
         [SerializeField] private Sprite selectedSprite;
 
         // -----------------------------------------------------------------
+        // Public read-only accessors (used by the custom Editor for Scene gizmos)
+        // -----------------------------------------------------------------
+
+        /// <summary>Inner radius of the ring sector.</summary>
+        public float InnerRadius => innerRadius;
+
+        /// <summary>Outer radius of the ring sector.</summary>
+        public float OuterRadius => outerRadius;
+
+        /// <summary>Center angle of this sector in degrees.</summary>
+        public float SectorCenterDegrees => sectorCenterDegrees;
+
+        /// <summary>Angular size of this sector in degrees.</summary>
+        public float SectorAngleSize => sectorAngleSize;
+
+        /// <summary>Whether the angular check is enabled.</summary>
+        public bool UseSectorAngleCheck => useSectorAngleCheck;
+
+        /// <summary>The RectTransform that defines the ring center.</summary>
+        public RectTransform RingCenter => ringCenter;
+
+        // -----------------------------------------------------------------
         // Click event delegation
         // -----------------------------------------------------------------
 

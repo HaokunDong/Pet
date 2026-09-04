@@ -117,16 +117,16 @@ namespace PetGame
             RingSectorGraphic sector = target as RingSectorGraphic;
             if (sector == null) return;
 
-            serializedObject.Update();
-
-            float inner = innerRadius.floatValue;
-            float outer = outerRadius.floatValue;
-            float centerDeg = sectorCenterDegrees.floatValue;
-            float sizeDeg = sectorAngleSize.floatValue;
-            bool useAngle = useSectorAngleCheck.boolValue;
+            // Read values directly from the target component instead of serializedObject,
+            // because serializedObject must not be used inside OnSceneGUI.
+            float inner = sector.InnerRadius;
+            float outer = sector.OuterRadius;
+            float centerDeg = sector.SectorCenterDegrees;
+            float sizeDeg = sector.SectorAngleSize;
+            bool useAngle = sector.UseSectorAngleCheck;
 
             // Determine the ring center RectTransform.
-            RectTransform centerRT = ringCenter.objectReferenceValue as RectTransform;
+            RectTransform centerRT = sector.RingCenter;
             if (centerRT == null) centerRT = sector.rectTransform;
 
             // We draw in the local space of the ring center RectTransform.
