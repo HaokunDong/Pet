@@ -51,31 +51,20 @@ namespace PetGame.UI
             if (leaveLobbyButton != null)
                 leaveLobbyButton.onClick.AddListener(OnLeaveLobbyClicked);
 
+            // Subscribe to network events here (before SetActive(false)) so that
+            // events are never lost when the panel is hidden via OnDisable.
+            SubscribeToEvents();
+
             // Start hidden
             gameObject.SetActive(false);
         }
 
         private void OnEnable()
         {
-            // Subscribe to SteamLobbyManager events
+            // Only restore UI state when the panel becomes visible.
+            // Event subscriptions are handled in Awake/OnDestroy to avoid
+            // losing events when the panel is hidden.
             var lobbyMgr = SteamLobbyManager.Instance;
-            if (lobbyMgr != null)
-            {
-                lobbyMgr.OnLobbyCreated += HandleLobbyCreated;
-                lobbyMgr.OnLobbyEntered += HandleLobbyEntered;
-                lobbyMgr.OnLobbyJoinFailed += HandleLobbyJoinFailed;
-                lobbyMgr.OnPlayerCountChanged += HandlePlayerCountChanged;
-                lobbyMgr.OnHostDisconnected += HandleHostDisconnected;
-                lobbyMgr.OnError += HandleError;
-            }
-
-            // Subscribe to MirrorNetworkManager events
-            if (MirrorNetworkManager.singleton != null)
-            {
-                MirrorNetworkManager.singleton.OnDisconnectedFromServer += HandleDisconnectedFromServer;
-            }
-
-            // If already in a lobby, restore lobby state; otherwise show initial state
             if (lobbyMgr != null && lobbyMgr.InLobby)
             {
                 ShowLobbyState(lobbyMgr.CurrentLobbyCode, lobbyMgr.IsHost);
@@ -87,9 +76,39 @@ namespace PetGame.UI
             }
         }
 
-        private void OnDisable()
+        private void OnDestroy()
         {
-            // Unsubscribe from SteamLobbyManager events
+            UnsubscribeFromEvents();
+        }
+
+        /// <summary>
+        /// Subscribe to all network events. Called once in Awake so that
+        /// subscriptions persist regardless of the panel's active state.
+        /// </summary>
+        private void SubscribeToEvents()
+        {
+            var lobbyMgr = SteamLobbyManager.Instance;
+            if (lobbyMgr != null)
+            {
+                lobbyMgr.OnLobbyCreated += HandleLobbyCreated;
+                lobbyMgr.OnLobbyEntered += HandleLobbyEntered;
+                lobbyMgr.OnLobbyJoinFailed += HandleLobbyJoinFailed;
+                lobbyMgr.OnPlayerCountChanged += HandlePlayerCountChanged;
+                lobbyMgr.OnHostDisconnected += HandleHostDisconnected;
+                lobbyMgr.OnError += HandleError;
+            }
+
+            if (MirrorNetworkManager.singleton != null)
+            {
+                MirrorNetworkManager.singleton.OnDisconnectedFromServer += HandleDisconnectedFromServer;
+            }
+        }
+
+        /// <summary>
+        /// Unsubscribe from all network events. Called in OnDestroy.
+        /// </summary>
+        private void UnsubscribeFromEvents()
+        {
             var lobbyMgr = SteamLobbyManager.Instance;
             if (lobbyMgr != null)
             {
@@ -101,7 +120,6 @@ namespace PetGame.UI
                 lobbyMgr.OnError -= HandleError;
             }
 
-            // Unsubscribe from MirrorNetworkManager events
             if (MirrorNetworkManager.singleton != null)
             {
                 MirrorNetworkManager.singleton.OnDisconnectedFromServer -= HandleDisconnectedFromServer;

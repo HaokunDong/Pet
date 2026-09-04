@@ -154,8 +154,9 @@ namespace PetGame
         /// Spawn a portal locally on this client's Canvas.
         /// In multiplayer mode, the portalId is assigned by the server for network identification.
         /// In single player mode, portalId is 0 (not used).
+        /// levelDataIndex is the index into SpecialLevelListManager.registeredLevelData.
         /// </summary>
-        public void SpawnPortalLocally(Vector3 worldPos, uint portalId = 0)
+        public void SpawnPortalLocally(Vector3 worldPos, uint portalId = 0, int levelDataIndex = -1)
         {
             PortalSettings settings = PortalSettings.Instance;
             if (settings.portalPrefab == null) return;
@@ -169,6 +170,28 @@ namespace PetGame
             if (controller != null)
             {
                 controller.portalId = portalId;
+
+                // Assign SpecialLevelData from the registry if a valid index was provided
+                if (levelDataIndex >= 0)
+                {
+                    var levelListMgr = SpecialLevelListManager.Instance;
+                    if (levelListMgr != null)
+                    {
+                        SpecialLevelData levelData = levelListMgr.GetLevelData(levelDataIndex);
+                        if (levelData != null)
+                        {
+                            controller.specialLevelData = levelData;
+                        }
+                        else
+                        {
+                            Debug.LogWarning($"[PortalManager] Invalid levelDataIndex={levelDataIndex}. SpecialLevelData not assigned.");
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogWarning("[PortalManager] SpecialLevelListManager not found. SpecialLevelData not assigned.");
+                    }
+                }
             }
 
             // Convert world position to Canvas local position

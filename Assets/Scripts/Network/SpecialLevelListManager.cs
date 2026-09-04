@@ -150,6 +150,21 @@ namespace PetGame.Network
         }
 
         /// <summary>
+        /// Number of registered SpecialLevelData assets.
+        /// </summary>
+        public int LevelDataCount => registeredLevelData != null ? registeredLevelData.Length : 0;
+
+        /// <summary>
+        /// Get a random valid index into the registeredLevelData array.
+        /// Returns -1 if no data is registered.
+        /// </summary>
+        public int GetRandomLevelDataIndex()
+        {
+            if (registeredLevelData == null || registeredLevelData.Length == 0) return -1;
+            return UnityEngine.Random.Range(0, registeredLevelData.Length);
+        }
+
+        /// <summary>
         /// Get the registry index for a given SpecialLevelData asset.
         /// Returns -1 if not found.
         /// </summary>

@@ -844,9 +844,17 @@ namespace PetGame.Network
             // Generate a unique portal ID on the server
             uint portalId = nextPortalId++;
 
+            // Server picks a random level data index so all portals have valid data
+            int levelDataIndex = -1;
+            var levelListMgr = SpecialLevelListManager.Instance;
+            if (levelListMgr != null)
+            {
+                levelDataIndex = levelListMgr.GetRandomLevelDataIndex();
+            }
+
             // Spawn portal only on the requesting player's client (not on all clients).
             // Portal is a personal UI element that only appears on the spawner's own desktop.
-            TargetRpcSpawnPortal(connectionToClient, worldPos, portalId);
+            TargetRpcSpawnPortal(connectionToClient, worldPos, portalId, levelDataIndex);
         }
 
         /// <summary>
@@ -854,13 +862,13 @@ namespace PetGame.Network
         /// Portal is a personal UI element that only appears on the player's own Canvas/desktop.
         /// </summary>
         [TargetRpc]
-        private void TargetRpcSpawnPortal(NetworkConnection target, Vector3 worldPos, uint portalId)
+        private void TargetRpcSpawnPortal(NetworkConnection target, Vector3 worldPos, uint portalId, int levelDataIndex)
         {
             PortalManager portalManager = Object.FindObjectOfType<PortalManager>();
             if (portalManager != null)
             {
-                portalManager.SpawnPortalLocally(worldPos, portalId);
-                Debug.Log($"[NetworkPlayer] Portal spawned locally at {worldPos}, portalId={portalId}.");
+                portalManager.SpawnPortalLocally(worldPos, portalId, levelDataIndex);
+                Debug.Log($"[NetworkPlayer] Portal spawned locally at {worldPos}, portalId={portalId}, levelDataIndex={levelDataIndex}.");
             }
         }
 

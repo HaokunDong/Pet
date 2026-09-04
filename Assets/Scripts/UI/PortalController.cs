@@ -3,6 +3,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using Mirror;
 using PetGame.Network;
+using System;
 
 namespace PetGame
 {
@@ -27,6 +28,12 @@ namespace PetGame
     [RequireComponent(typeof(RectTransform))]
     public class PortalController : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
     {
+        /// <summary>
+        /// Fired when a portal request produces user-facing feedback (success or failure).
+        /// Parameter: message string to display to the user.
+        /// </summary>
+        public static event Action<string> OnPortalRequestFeedback;
+
         /// <summary>
         /// Unique portal ID assigned by the server. Used for network identification
         /// instead of NetworkIdentity.netId since Portal is a local UI element.
@@ -65,6 +72,15 @@ namespace PetGame
                 _canvasCamera = _parentCanvas.renderMode == RenderMode.ScreenSpaceOverlay
                     ? null
                     : _parentCanvas.worldCamera;
+            }
+
+            // Subscribe to server rejection events for user feedback
+            var levelListMgr = SpecialLevelListManager.Instance;
+            if (levelListMgr == null)
+                levelListMgr = FindObjectOfType<SpecialLevelListManager>();
+            if (levelListMgr != null)
+            {
+                levelListMgr.OnRequestRejected += HandleRequestRejected;
             }
         }
 
@@ -141,28 +157,36 @@ namespace PetGame
 
             if (manager == null)
             {
-                Debug.LogWarning("[PortalController] SpecialLevelListManager not found. Cannot submit request.");
+                string msg = "Network system not ready. Please try again.";
+                Debug.LogWarning($"[PortalController] SpecialLevelListManager not found. Cannot submit request.");
+                OnPortalRequestFeedback?.Invoke(msg);
                 return;
             }
 
             // Get the level data index for this portal
             if (specialLevelData == null)
             {
-                Debug.LogWarning("[PortalController] No SpecialLevelData assigned to this portal.");
+                string msg = "Portal data not configured. Cannot submit request.";
+                Debug.LogWarning($"[PortalController] No SpecialLevelData assigned to this portal (portalId={portalId}).");
+                OnPortalRequestFeedback?.Invoke(msg);
                 return;
             }
 
             int levelDataIndex = manager.GetLevelDataIndex(specialLevelData);
             if (levelDataIndex < 0)
             {
+                string msg = "Portal level data not registered. Cannot submit request.";
                 Debug.LogWarning("[PortalController] SpecialLevelData not registered in SpecialLevelListManager.");
+                OnPortalRequestFeedback?.Invoke(msg);
                 return;
             }
 
             // Validate portal has a valid ID
             if (portalId == 0)
             {
+                string msg = "Portal not properly initialized. Cannot submit request.";
                 Debug.LogWarning("[PortalController] Portal has no valid portalId. Cannot submit request.");
+                OnPortalRequestFeedback?.Invoke(msg);
                 return;
             }
 
@@ -170,12 +194,23 @@ namespace PetGame
             var localPlayer = MirrorNetworkManager.singleton?.LocalPlayer;
             if (localPlayer == null)
             {
+                string msg = "Player not connected. Please wait and try again.";
                 Debug.LogWarning("[PortalController] Local NetworkPlayer not found. Cannot submit request.");
+                OnPortalRequestFeedback?.Invoke(msg);
                 return;
             }
 
             // Submit the request via Command
             manager.CmdRequestAddOption(portalId, localPlayer.netId, levelDataIndex);
+            OnPortalRequestFeedback?.Invoke("Challenge request submitted!");
+        }
+
+        /// <summary>
+        /// Called when the server rejects a portal request.
+        /// </summary>
+        private void HandleRequestRejected(string reason)
+        {
+            OnPortalRequestFeedback?.Invoke($"Request rejected: {reason}");
         }
 
         // =====================================================================
@@ -276,10 +311,20 @@ namespace PetGame
         /// <summary>
         /// When this portal is destroyed, notify SpecialLevelListManager to remove
         /// any associated option from the list (server-side only).
+        /// Also unsubscribes from rejection events.
         /// </summary>
         private void OnDestroy()
         {
-            // Only run on server
+            // Unsubscribe from rejection events
+            var levelListMgr = SpecialLevelListManager.Instance;
+            if (levelListMgr == null)
+                levelListMgr = FindObjectOfType<SpecialLevelListManager>();
+            if (levelListMgr != null)
+            {
+                levelListMgr.OnRequestRejected -= HandleRequestRejected;
+            }
+
+            // Only run server-side cleanup
             if (!NetworkServer.active) return;
 
             if (portalId == 0) return;

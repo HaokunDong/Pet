@@ -1,0 +1,44 @@
+# 实施计划
+
+- [ ] 1. 修复 LobbyPanel 房间人数显示不更新
+  - [ ] 1.1 将事件订阅从 `OnEnable/OnDisable` 迁移到 `Awake/OnDestroy`
+    - 修改 `LobbyPanel.cs`，将 `SteamLobbyManager` 事件（`OnPlayerCountChanged`、`OnLobbyCreated`、`OnLobbyEntered`、`OnLobbyJoinFailed`、`OnHostDisconnected`、`OnError`）和 `MirrorNetworkManager` 事件（`OnDisconnectedFromServer`）的订阅从 `OnEnable()` 移到 `Awake()` 中（在 `gameObject.SetActive(false)` 之前执行）
+    - 将对应的取消订阅从 `OnDisable()` 移到 `OnDestroy()` 中
+    - 注意：`SteamLobbyManager.Instance` 在 `Awake()` 时可能尚未初始化，需要处理延迟订阅（如在 `Start()` 中订阅，或使用 null 检查 + 延迟重试）
+    - _需求：1.3、1.4_
+  - [ ] 1.2 保留 `OnEnable` 中的 UI 状态恢复逻辑
+    - `OnEnable()` 中保留 lobby 状态恢复逻辑（`ShowLobbyState` / `ShowInitialState` / `HandlePlayerCountChanged`），确保面板从隐藏变为显示时立即刷新当前最新人数
+    - _需求：1.1、1.2_
+
+- [ ] 2. 修复客户端 Portal 点击未发送挑战申请
+  - [ ] 2.1 在 `PortalManager.SpawnPortalLocally()` 中为 Portal 实例赋值 `specialLevelData`
+    - 修改 `PortalManager.cs` 的 `SpawnPortalLocally()` 方法，在设置 `portalId` 之后，从 `SpecialLevelListManager.Instance.registeredLevelData` 中随机选取（或按规则选取）一个 `SpecialLevelData` 赋值给 `controller.specialLevelData`
+    - 或者修改网络流程：在 `CmdSpawnPortal` 中由服务器决定 `specialLevelDataIndex`，通过 `TargetRpcSpawnPortal` 传递给客户端，客户端在 `SpawnPortalLocally` 中根据 index 赋值
+    - _需求：2.1、2.6_
+  - [ ] 2.2 确保客户端能找到 `SpecialLevelListManager` 实例
+    - 确认 `SpecialLevelListManager` 所在的 GameObject 在场景中存在且带有 `NetworkIdentity`，并在 Host 启动时被正确初始化
+    - 确认客户端连接后 `SpecialLevelListManager.Instance` 单例已通过 `Awake()` 正确设置
+    - 如果 `Instance` 为 null，`HandleMultiplayerPortalClick()` 中已有 `FindObjectOfType` 备用逻辑，确认该逻辑在客户端能正常工作
+    - _需求：2.2、2.4_
+  - [ ] 2.3 为 `HandleMultiplayerPortalClick` 添加用户反馈提示
+    - 当挑战申请因各种原因失败时（manager 为 null、specialLevelData 为 null、portalId 为 0、LocalPlayer 为 null），除了 `Debug.LogWarning` 外，增加面向用户的 UI 提示（如 Toast 或状态文本）
+    - 订阅 `SpecialLevelListManager.OnRequestRejected` 事件，在客户端显示服务器拒绝原因
+    - _需求：2.4、2.5、2.6_
+
+- [ ] 3. 修复敌人 AI 不攻击其他玩家（MirrorCharacter）
+  - [ ] 3.1 移除 `BTFindNearestEnemy.FindNearest()` 中跳过 `MirrorCharacterTag` 的过滤逻辑
+    - 修改 `BTFindNearestEnemy.cs` 的 `FindNearest()` 方法，删除 `if (go.GetComponent<MirrorCharacterTag>() != null) continue;` 这行代码及其注释
+    - 这样敌人 AI 在 Host 端搜索目标时，会将所有带 "Player" 标签的活跃角色（包括 MirrorCharacter）都纳入候选列表
+    - _需求：3.1、3.5_
+  - [ ] 3.2 确认 `CombatSystem.ApplyNormalAttackDamage()` 的伤害路由兼容性
+    - 验证 `CombatSystem.ApplyNormalAttackDamage()` 中调用的 `NetworkDamageHelper.ApplyDamage()` 已能正确处理 `MirrorCharacterTag` 目标（代码已有此逻辑：检测 `MirrorCharacterTag` 后调用 `RouteDamageToMirrorCharacterOwner`）
+    - 验证 `MeleeSkillEffectData.Execute()` 和 `ProjectileDamageArea.DealDamage()` 中的伤害也通过 `NetworkDamageHelper.ApplyDamage()` 路由，确保技能伤害同样能命中 MirrorCharacter
+    - _需求：3.2、3.3、3.7_
+  - [ ] 3.3 处理 MirrorCharacter 被销毁时的边界情况
+    - 在 `BTFindNearestEnemy.FindNearest()` 中，确认已有的 `!go.activeInHierarchy` 检查和 `entity.RuntimeStats.IsAlive` 检查能正确过滤掉已断线/被销毁的 MirrorCharacter
+    - 在 `BTFindNearestEnemy.Execute()` 中，确认当 `CurrentTarget` 的 GameObject 被销毁（变为 null）时，`dead` 判断逻辑能正确触发重新扫描
+    - _需求：3.4_
+  - [ ] 3.4 确认 `NetworkDamageHelper.RouteDamageToMirrorCharacterOwner()` 的健壮性
+    - 验证当多个敌人同时攻击同一个 MirrorCharacter 时，`RouteDamageToMirrorCharacterOwner()` 不会产生竞态条件（当前实现是同步遍历 `ConnectedPlayers` 列表并调用 `TargetRpc`，Mirror 的 TargetRpc 是线程安全的）
+    - 验证当目标玩家断线后，`RouteDamageToMirrorCharacterOwner()` 中找不到对应 `NetworkPlayer` 时只输出警告日志而不崩溃（当前已有此逻辑）
+    - _需求：3.3、3.6_
