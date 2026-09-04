@@ -164,6 +164,31 @@ namespace PetGame.Network
             }
         }
 
+        /// <summary>
+        /// Called by MirrorNetworkManager.OnClientSceneChanged() after a networked scene change.
+        /// Re-registers the local character and recreates mirror characters in the new scene.
+        /// </summary>
+        public void OnSceneChanged()
+        {
+            Debug.Log($"[NetworkPlayer] OnSceneChanged called. isOwned={isOwned}, hasCharacter={hasCharacter}");
+
+            if (isOwned)
+            {
+                // Re-register local character in the new scene
+                LocalCharacter = null;
+                StartCoroutine(RegisterLocalCharacterDelayed());
+            }
+            else
+            {
+                // Destroy old mirror character and recreate if the remote player has a character
+                DestroyMirrorCharacter();
+                if (hasCharacter && !string.IsNullOrEmpty(selectedCharacterId))
+                {
+                    StartCoroutine(CreateMirrorCharacterDelayed(selectedCharacterId));
+                }
+            }
+        }
+
         #endregion
 
         #region Local Player - Character Registration

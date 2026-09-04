@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using Mirror;
 using Mirror.FizzySteam;
 using Steamworks;
@@ -33,6 +34,10 @@ namespace PetGame.Network
         /// <summary>Fired when this client disconnects from a server.</summary>
         public event Action OnDisconnectedFromServer;
 
+        /// <summary>Fired on all clients (and host) after a networked scene change completes.
+        /// Parameter: the new scene name.</summary>
+        public event Action<string> OnNetworkSceneChanged;
+
         #endregion
 
         #region Properties
@@ -51,6 +56,12 @@ namespace PetGame.Network
 
         /// <summary>The local player's NetworkPlayer instance.</summary>
         public NetworkPlayer LocalPlayer { get; set; }
+
+        /// <summary>The current game scene name tracked by the server.</summary>
+        public string CurrentGameScene { get; private set; } = "Game";
+
+        /// <summary>Whether a networked scene change is currently in progress.</summary>
+        public bool IsChangingScene { get; private set; }
 
         #endregion
 
@@ -73,6 +84,10 @@ namespace PetGame.Network
 
             // Ensure we have a player prefab
             EnsurePlayerPrefab();
+
+            // Ensure maxConnections supports 4 players at runtime
+            maxConnections = SteamLobbyManager.MAX_PLAYERS;
+            Debug.Log($"[MirrorNetworkManager] maxConnections set to {maxConnections}.");
 
             base.Awake();
         }
@@ -165,16 +180,31 @@ namespace PetGame.Network
                 return;
             }
 
+            // Always ensure maxConnections is correct for multiplayer
+            maxConnections = SteamLobbyManager.MAX_PLAYERS;
+
             if (IsNetworkActive)
             {
                 // Single-player Host was auto-started in Start().
-                // It already uses FizzySteamworks transport, so remote clients
-                // can connect to it. No need to restart.
-                Debug.Log("[MirrorNetworkManager] Host already active (single-player auto-start). Reusing existing host for multiplayer.");
+                // Verify the transport layer is correctly configured for remote connections.
+                var fizzy = GetComponent<Mirror.FizzySteam.FizzySteamworks>();
+                if (fizzy == null || Transport.active != fizzy)
+                {
+                    // Transport is misconfigured — restart the host with correct transport
+                    Debug.LogWarning("[MirrorNetworkManager] Transport misconfigured on existing host. Restarting...");
+                    StopHost();
+                    EnsureTransport();
+                    StartHost();
+                }
+                else
+                {
+                    Debug.Log($"[MirrorNetworkManager] Host already active (single-player auto-start). " +
+                        $"Reusing for multiplayer. maxConnections={maxConnections}, transport={Transport.active?.GetType().Name}");
+                }
                 return;
             }
 
-            Debug.Log("[MirrorNetworkManager] Starting host with Steam...");
+            Debug.Log($"[MirrorNetworkManager] Starting host with Steam... maxConnections={maxConnections}");
             StartHost();
         }
 
@@ -208,6 +238,34 @@ namespace PetGame.Network
         }
 
         /// <summary>
+        /// Change the scene for all connected clients (server-side only).
+        /// Uses Mirror's built-in ServerChangeScene which handles:
+        /// - Notifying all clients to load the new scene
+        /// - Pausing message processing during scene load
+        /// - Re-spawning player objects in the new scene
+        /// </summary>
+        /// <param name="sceneName">The scene to load (must be in Build Settings).</param>
+        public void ChangeSceneForAll(string sceneName)
+        {
+            if (!NetworkServer.active)
+            {
+                Debug.LogWarning("[MirrorNetworkManager] ChangeSceneForAll can only be called on the server/host.");
+                return;
+            }
+
+            if (IsChangingScene)
+            {
+                Debug.LogWarning($"[MirrorNetworkManager] Scene change already in progress. Ignoring request for '{sceneName}'.");
+                return;
+            }
+
+            Debug.Log($"[MirrorNetworkManager] Changing scene for all clients to: {sceneName}");
+            IsChangingScene = true;
+            CurrentGameScene = sceneName;
+            ServerChangeScene(sceneName);
+        }
+
+        /// <summary>
         /// Stop all network activity and clean up.
         /// </summary>
         public void StopNetwork()
@@ -226,6 +284,32 @@ namespace PetGame.Network
             }
 
             Debug.Log("[MirrorNetworkManager] Network stopped.");
+        }
+
+        /// <summary>
+        /// Clean up all client-side network state: mirror characters, mirror enemies, etc.
+        /// Called when disconnecting from the server or stopping the client.
+        /// </summary>
+        private void CleanupClientState()
+        {
+            // Destroy all MirrorCharacters (remote player representations)
+            MirrorCharacterTag[] mirrorChars = FindObjectsOfType<MirrorCharacterTag>();
+            foreach (var mc in mirrorChars)
+            {
+                if (mc != null && mc.gameObject != null)
+                {
+                    Destroy(mc.gameObject);
+                }
+            }
+
+            // Clean up mirror enemies via NetworkEnemySpawner
+            NetworkEnemySpawner enemySpawner = FindObjectOfType<NetworkEnemySpawner>();
+            if (enemySpawner != null)
+            {
+                enemySpawner.CleanupMirrorEnemies();
+            }
+
+            Debug.Log("[MirrorNetworkManager] Client state cleaned up (mirror characters, mirror enemies).");
         }
 
         #endregion
@@ -257,14 +341,24 @@ namespace PetGame.Network
             if (netPlayer != null)
             {
                 ConnectedPlayers.Add(netPlayer);
-                Debug.Log($"[MirrorNetworkManager] NetworkPlayer spawned for connection: {conn.connectionId}");
+                Debug.Log($"[MirrorNetworkManager] NetworkPlayer spawned for connection: {conn.connectionId}. " +
+                    $"Total players: {ConnectedPlayers.Count}/{maxConnections}");
             }
 
-            // Sync existing enemies to the new client (late joiner support)
+            // === Late Joiner Support ===
+
+            // 1. Sync existing enemies to the new client
             NetworkEnemySpawner enemySpawner = FindObjectOfType<NetworkEnemySpawner>();
             if (enemySpawner != null)
             {
                 enemySpawner.SyncAllEnemiesToNewClient(conn);
+            }
+
+            // 2. Sync Boss fight state if a fight is in progress
+            BossFightManager bossMgr = FindObjectOfType<BossFightManager>();
+            if (bossMgr != null && bossMgr.IsBossFightActive)
+            {
+                bossMgr.SyncBossFightToNewClient(conn);
             }
         }
 
@@ -306,6 +400,10 @@ namespace PetGame.Network
         public override void OnClientDisconnect()
         {
             Debug.Log("[MirrorNetworkManager] Disconnected from server.");
+
+            // Clean up all mirror characters and mirror enemies on this client
+            CleanupClientState();
+
             OnDisconnectedFromServer?.Invoke();
             base.OnClientDisconnect();
         }
@@ -339,6 +437,10 @@ namespace PetGame.Network
         {
             base.OnStopClient();
             UnregisterCustomClientHandlers();
+
+            // Clean up client-side network state
+            CleanupClientState();
+
             LocalPlayer = null;
             Debug.Log("[MirrorNetworkManager] Client stopped.");
         }
@@ -347,7 +449,61 @@ namespace PetGame.Network
         {
             base.OnStopServer();
             ConnectedPlayers.Clear();
-            Debug.Log("[MirrorNetworkManager] Server stopped. Player list cleared.");
+
+            // Reset NetworkEnemySpawner state
+            NetworkEnemySpawner enemySpawner = FindObjectOfType<NetworkEnemySpawner>();
+            if (enemySpawner != null)
+            {
+                enemySpawner.OnSceneChanged();
+            }
+
+            IsChangingScene = false;
+            Debug.Log("[MirrorNetworkManager] Server stopped. Player list and state cleared.");
+        }
+
+        /// <summary>
+        /// Called on the server after a scene change completes.
+        /// Re-initializes network objects in the new scene.
+        /// </summary>
+        public override void OnServerSceneChanged(string sceneName)
+        {
+            base.OnServerSceneChanged(sceneName);
+            IsChangingScene = false;
+            CurrentGameScene = sceneName;
+            Debug.Log($"[MirrorNetworkManager] Server scene changed to: {sceneName}");
+
+            // Re-scan and sync enemies in the new scene for all clients
+            NetworkEnemySpawner enemySpawner = FindObjectOfType<NetworkEnemySpawner>();
+            if (enemySpawner != null)
+            {
+                enemySpawner.OnSceneChanged();
+            }
+
+            OnNetworkSceneChanged?.Invoke(sceneName);
+        }
+
+        /// <summary>
+        /// Called on clients (including host-client) after a scene change completes.
+        /// Re-registers local character and restores state.
+        /// </summary>
+        public override void OnClientSceneChanged()
+        {
+            base.OnClientSceneChanged();
+            IsChangingScene = false;
+
+            string sceneName = SceneManager.GetActiveScene().name;
+            Debug.Log($"[MirrorNetworkManager] Client scene changed to: {sceneName}");
+
+            // Re-register local character and recreate mirror characters after scene change.
+            // Find all NetworkPlayer instances in the scene (they survive scene changes
+            // because they are spawned by Mirror and marked DontDestroyOnLoad).
+            NetworkPlayer[] allPlayers = FindObjectsOfType<NetworkPlayer>();
+            foreach (var player in allPlayers)
+            {
+                player.OnSceneChanged();
+            }
+
+            OnNetworkSceneChanged?.Invoke(sceneName);
         }
 
         #endregion

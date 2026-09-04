@@ -53,6 +53,11 @@ namespace PetGame
         public bool IsBossFightActive { get; private set; }
 
         /// <summary>
+        /// The portalId that triggered the current Boss fight.
+        /// </summary>
+        public uint CurrentPortalId => currentPortalId;
+
+        /// <summary>
         /// Reference to the currently active Boss entity (null if no fight is active).
         /// </summary>
         private CharacterEntity currentBossEntity;
@@ -448,6 +453,56 @@ namespace PetGame
         private void RpcDestroyPortalOnClients(uint portalId)
         {
             DestroyLocalPortalById(portalId);
+        }
+
+        /// <summary>
+        /// Sync the current Boss fight state to a newly connected client (late joiner).
+        /// Called from MirrorNetworkManager.OnServerAddPlayer().
+        /// </summary>
+        public void SyncBossFightToNewClient(NetworkConnectionToClient conn)
+        {
+            if (!IsBossFightActive) return;
+            if (!NetworkServer.active) return;
+
+            Debug.Log($"[BossFightManager] Syncing Boss fight state to new client: {conn.connectionId}");
+            TargetRpcStartBossFightForLateJoiner(conn, currentPortalId);
+        }
+
+        /// <summary>
+        /// TargetRpc: Start the Boss fight on a specific late-joining client.
+        /// The Boss entity itself will be synced via NetworkEnemySpawner.
+        /// </summary>
+        [TargetRpc]
+        private void TargetRpcStartBossFightForLateJoiner(NetworkConnectionToClient target, uint portalId)
+        {
+            Debug.Log("[BossFightManager] Late joiner: Received Boss fight state sync.");
+            IsBossFightActive = true;
+            currentPortalId = portalId;
+
+            // Destroy the local portal if it exists
+            if (portalId != 0)
+            {
+                DestroyLocalPortalById(portalId);
+            }
+
+            // Pause enemy spawner and clear local enemies (Boss fight mode)
+            if (enemySpawner != null)
+            {
+                enemySpawner.PauseSpawning();
+                enemySpawner.ClearAllEnemies();
+            }
+            else
+            {
+                enemySpawner = FindObjectOfType<EnemySpawner>();
+                if (enemySpawner != null)
+                {
+                    enemySpawner.PauseSpawning();
+                    enemySpawner.ClearAllEnemies();
+                }
+            }
+
+            // Subscribe to player death for retry logic
+            SubscribePlayerDeath();
         }
 
         /// <summary>

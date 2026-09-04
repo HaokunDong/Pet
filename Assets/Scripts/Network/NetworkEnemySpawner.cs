@@ -645,6 +645,36 @@ namespace PetGame.Network
             Debug.Log($"[NetworkEnemySpawner] Synced {serverEnemies.Count} enemies to new client: {conn.connectionId}");
         }
 
+        /// <summary>
+        /// Called by MirrorNetworkManager.OnServerSceneChanged() after a networked scene change.
+        /// Clears old tracking data and re-scans the new scene for enemies.
+        /// </summary>
+        public void OnSceneChanged()
+        {
+            Debug.Log("[NetworkEnemySpawner] Scene changed. Clearing old data and re-scanning...");
+
+            // Clear server-side tracking (old enemies from previous scene are gone)
+            serverEnemies.Clear();
+
+            // Clear client-side mirror enemies
+            CleanupMirrorEnemies();
+
+            // Re-acquire local spawner reference (may be a new instance in the new scene)
+            localSpawner = GetComponent<EnemySpawner>();
+            if (localSpawner == null)
+                localSpawner = FindObjectOfType<EnemySpawner>();
+
+            // If we are a client, disable the local spawner
+            if (MirrorNetworkManager.singleton != null && MirrorNetworkManager.singleton.IsClientOnly)
+            {
+                if (localSpawner != null)
+                {
+                    localSpawner.enabled = false;
+                    Debug.Log("[NetworkEnemySpawner] Client mode: local EnemySpawner disabled after scene change.");
+                }
+            }
+        }
+
         #endregion
     }
 }
