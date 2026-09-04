@@ -153,6 +153,9 @@ namespace PetGame.Network
 
         /// <summary>
         /// Start as Host (server + client). Called after lobby creation succeeds.
+        /// If a single-player Host is already running (auto-started in Start()),
+        /// we keep it alive — it already uses FizzySteamworks transport and can
+        /// accept incoming Steam connections.
         /// </summary>
         public void StartHostWithSteam()
         {
@@ -164,7 +167,10 @@ namespace PetGame.Network
 
             if (IsNetworkActive)
             {
-                Debug.LogWarning("[MirrorNetworkManager] Network already active. Stop first.");
+                // Single-player Host was auto-started in Start().
+                // It already uses FizzySteamworks transport, so remote clients
+                // can connect to it. No need to restart.
+                Debug.Log("[MirrorNetworkManager] Host already active (single-player auto-start). Reusing existing host for multiplayer.");
                 return;
             }
 
@@ -174,6 +180,8 @@ namespace PetGame.Network
 
         /// <summary>
         /// Start as Client and connect to the specified host Steam ID.
+        /// If a single-player Host is already running (auto-started in Start()),
+        /// it is stopped first so we can reconnect as a client to the remote host.
         /// </summary>
         public void StartClientWithSteam(CSteamID hostSteamId)
         {
@@ -183,10 +191,13 @@ namespace PetGame.Network
                 return;
             }
 
+            // If a single-player Host was auto-started, stop it first.
+            // We need to switch from Host mode to Client-only mode to connect
+            // to the remote host.
             if (IsNetworkActive)
             {
-                Debug.LogWarning("[MirrorNetworkManager] Network already active. Stop first.");
-                return;
+                Debug.Log("[MirrorNetworkManager] Stopping existing network (single-player host) before connecting as client...");
+                StopHost();
             }
 
             // Set the network address to the host's Steam ID

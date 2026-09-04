@@ -476,7 +476,12 @@ namespace PetGame.Network
                 MirrorCharacterTag mirrorTag = MirrorCharacter.GetComponent<MirrorCharacterTag>();
                 if (mirrorTag == null)
                     mirrorTag = MirrorCharacter.gameObject.AddComponent<MirrorCharacterTag>();
-                mirrorTag.ownerConnectionId = (int)connectionToClient.connectionId;
+                // connectionToClient is only valid on the server side.
+                // On clients, use netId as a fallback identifier.
+                if (connectionToClient != null)
+                    mirrorTag.ownerConnectionId = (int)connectionToClient.connectionId;
+                else
+                    mirrorTag.ownerConnectionId = (int)netId;
 
                 // Set the remote player's Steam name on the mirror character name tag
                 MirrorCharacter.SetPlayerName(playerName);
