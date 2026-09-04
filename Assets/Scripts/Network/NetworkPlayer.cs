@@ -471,6 +471,13 @@ namespace PetGame.Network
                 MirrorCharacter.gameObject.name = $"MirrorPlayer_{charData.characterName}_{playerName}";
                 mirrorCharacterCreated = true;
 
+                // Tag this as a mirror character so combat systems can skip or
+                // route damage through the network instead of applying it directly.
+                MirrorCharacterTag mirrorTag = MirrorCharacter.GetComponent<MirrorCharacterTag>();
+                if (mirrorTag == null)
+                    mirrorTag = MirrorCharacter.gameObject.AddComponent<MirrorCharacterTag>();
+                mirrorTag.ownerConnectionId = (int)connectionToClient.connectionId;
+
                 // Set the remote player's Steam name on the mirror character name tag
                 MirrorCharacter.SetPlayerName(playerName);
 
@@ -527,6 +534,19 @@ namespace PetGame.Network
             // Disable AnimEventReceiver so attack animation events don't trigger damage
             var animEvent = MirrorCharacter.GetComponent<AnimEventReceiver>();
             if (animEvent != null) animEvent.enabled = false;
+
+            // Set Rigidbody2D to Kinematic so MirrorCharacter doesn't participate in
+            // physics simulation. Its position is driven entirely by network sync
+            // (Vector3.Lerp in UpdateMirrorCharacter), not by the physics engine.
+            // This prevents MirrorEnemy/Boss collisions from rotating or pushing the sprite.
+            var rb = MirrorCharacter.GetComponent<Rigidbody2D>();
+            if (rb != null)
+            {
+                rb.bodyType = RigidbodyType2D.Kinematic;
+                rb.velocity = Vector2.zero;
+                rb.angularVelocity = 0f;
+                MirrorCharacter.transform.rotation = Quaternion.identity;
+            }
         }
 
         private void UpdateMirrorCharacter()
@@ -837,6 +857,29 @@ namespace PetGame.Network
                 portalManager.SpawnPortalLocally(worldPos, portalId);
                 Debug.Log($"[NetworkPlayer] Portal spawned locally at {worldPos}, portalId={portalId}.");
             }
+        }
+
+        /// <summary>
+        /// TargetRpc: Called by the host to apply Boss damage to a specific client's LocalCharacter.
+        /// The host detects that Boss hit a MirrorCharacter and routes the damage here
+        /// so the owning client applies it to their real LocalCharacter.
+        /// After taking damage, the client syncs updated HP back to the server via CmdUpdateHealth.
+        /// </summary>
+        [TargetRpc]
+        public void TargetTakeDamageFromBoss(float damage)
+        {
+            if (LocalCharacter == null || LocalCharacter.RuntimeStats == null) return;
+
+            // Apply damage locally on the owning client
+            LocalCharacter.TakeDamage(damage, null);
+
+            // Sync updated HP back to the server so all clients see the change
+            float currentHealth = LocalCharacter.RuntimeStats.currentHealth;
+            float maxHealth = LocalCharacter.RuntimeStats.maxHealth;
+            bool isAlive = LocalCharacter.RuntimeStats.IsAlive;
+            CmdUpdateHealth(currentHealth, maxHealth, isAlive);
+
+            Debug.Log($"[NetworkPlayer] Received Boss damage={damage} on client. HP={currentHealth}/{maxHealth}");
         }
 
         #endregion

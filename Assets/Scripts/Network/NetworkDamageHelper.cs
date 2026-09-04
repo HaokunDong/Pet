@@ -21,18 +21,48 @@ namespace PetGame.Network
             MirrorEnemyTag mirrorTag = target.GetComponent<MirrorEnemyTag>();
             if (mirrorTag != null && mirrorTag.enemyNetId != 0)
             {
-                // Route damage through network
+                // Route damage through network to the host
                 if (MirrorNetworkManager.singleton != null &&
                     MirrorNetworkManager.singleton.LocalPlayer != null)
                 {
                     MirrorNetworkManager.singleton.LocalPlayer.RequestDamageEnemy(mirrorTag.enemyNetId, damage);
                 }
             }
+            // Check if this is a mirror character (remote player proxy) on the host.
+            // Damage must be routed to the owning client instead of applied directly.
+            else if (target.GetComponent<MirrorCharacterTag>() != null)
+            {
+                MirrorCharacterTag mirrorCharTag = target.GetComponent<MirrorCharacterTag>();
+                RouteDamageToMirrorCharacterOwner(mirrorCharTag.ownerConnectionId, damage);
+            }
             else
             {
                 // Direct damage (host or offline mode)
                 target.TakeDamage(damage, attacker);
             }
+        }
+
+        /// <summary>
+        /// Route damage from the host to a remote client's LocalCharacter via TargetRpc.
+        /// Called when Boss attacks a MirrorCharacter on the host — the damage must be
+        /// applied on the owning client's LocalCharacter, not on the proxy.
+        /// </summary>
+        private static void RouteDamageToMirrorCharacterOwner(int ownerConnectionId, float damage)
+        {
+            if (MirrorNetworkManager.singleton == null) return;
+
+            foreach (NetworkPlayer np in MirrorNetworkManager.singleton.ConnectedPlayers)
+            {
+                if (np != null &&
+                    np.connectionToClient != null &&
+                    (int)np.connectionToClient.connectionId == ownerConnectionId)
+                {
+                    np.TargetTakeDamageFromBoss(damage);
+                    return;
+                }
+            }
+
+            Debug.LogWarning($"[NetworkDamageHelper] Could not find NetworkPlayer for connectionId={ownerConnectionId}");
         }
     }
 }

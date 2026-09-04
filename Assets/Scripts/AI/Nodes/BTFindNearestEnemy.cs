@@ -1,4 +1,5 @@
 using UnityEngine;
+using PetGame.Network;
 
 namespace PetGame.AI
 {
@@ -105,6 +106,10 @@ namespace PetGame.AI
                 // Skip deactivated/recycled objects (e.g. a previously controlled
                 // character that was returned to the pool during a character switch).
                 if (!go.activeInHierarchy) continue;
+
+                // Skip MirrorCharacters — they are visual proxies for remote players
+                // on the host. Boss AI should only target real LocalCharacters.
+                if (go.GetComponent<MirrorCharacterTag>() != null) continue;
 
                 CharacterEntity entity = go.GetComponent<CharacterEntity>();
                 if (entity == null || !entity.RuntimeStats.IsAlive) continue;

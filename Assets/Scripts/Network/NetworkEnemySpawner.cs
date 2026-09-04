@@ -510,6 +510,16 @@ namespace PetGame.Network
                 col.isTrigger = false;
             }
 
+            // Set Rigidbody2D to Kinematic on mirror enemies to prevent physics
+            // simulation (gravity, collisions) from interfering with network-synced position.
+            // MirrorEnemy position is driven entirely by EnemyPositionMessage.
+            Rigidbody2D rb = enemyObj.GetComponent<Rigidbody2D>();
+            if (rb != null)
+            {
+                rb.bodyType = RigidbodyType2D.Kinematic;
+                rb.simulated = true; // Keep simulated so OverlapCircle queries still detect it
+            }
+
             // Disable AI on mirror enemies - they are driven by network sync
             AIController ai = enemyObj.GetComponent<AIController>();
             if (ai != null) ai.enabled = false;
@@ -556,9 +566,10 @@ namespace PetGame.Network
         }
 
         /// <summary>
-        /// Clean up all mirror enemies.
+        /// Clean up all mirror enemies and clear the tracking dictionary.
+        /// Called externally by EnemySpawner.ClearAllEnemies() to keep dictionary in sync.
         /// </summary>
-        private void CleanupMirrorEnemies()
+        public void CleanupMirrorEnemies()
         {
             foreach (var kvp in clientMirrorEnemies)
             {

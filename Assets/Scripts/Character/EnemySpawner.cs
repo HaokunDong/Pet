@@ -290,6 +290,15 @@ namespace PetGame
             }
 
             currentEnemyCount = 0;
+
+            // Also clean up NetworkEnemySpawner's mirror enemy dictionary on clients,
+            // so subsequent enemy sync messages (e.g. Boss spawn) are handled correctly.
+            PetGame.Network.NetworkEnemySpawner netSpawner = Object.FindObjectOfType<PetGame.Network.NetworkEnemySpawner>();
+            if (netSpawner != null)
+            {
+                netSpawner.CleanupMirrorEnemies();
+            }
+
             Logger.Log($"[EnemySpawner] Destroyed {enemies.Length} enemies from scene.");
         }
     }

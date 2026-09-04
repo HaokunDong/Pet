@@ -174,6 +174,18 @@ namespace PetGame
             lastFramePosition = transform.position;
             Velocity = Vector2.zero;
 
+            // Ensure Rigidbody2D has FreezeRotation constraint to prevent physics
+            // collisions from rotating the character sprite (critical for multiplayer
+            // where MirrorEnemy/MirrorCharacter collisions could cause rotation).
+            // Also reset physics state in case the object was recycled from pool.
+            Rigidbody2D rb = GetComponent<Rigidbody2D>();
+            if (rb != null)
+            {
+                rb.constraints |= RigidbodyConstraints2D.FreezeRotation;
+                rb.angularVelocity = 0f;
+                transform.rotation = Quaternion.identity;
+            }
+
             IsInitialized = true;
         }
 
