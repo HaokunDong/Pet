@@ -57,6 +57,11 @@ namespace PetGame.Network
         public CharacterEntity LocalCharacter { get; private set; }
         public CharacterEntity MirrorCharacter { get; private set; }
 
+        // Read-only replicated state for the diagnostics UI.
+        public Vector3 SyncedPosition => syncedPosition;
+        public float SyncedHealth => syncedHealth;
+        public float SyncedMaxHealth => syncedMaxHealth;
+
         #endregion
 
         #region Settings
