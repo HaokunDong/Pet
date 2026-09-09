@@ -1057,6 +1057,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: RingRadialMenu
       objectReference: {fileID: 0}
+    - target: {fileID: 272947613080736299, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: m_Name
+      value: Button3
+      objectReference: {fileID: 0}
     - target: {fileID: 614741173776362267, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
       propertyPath: m_Sprite
       value: 
@@ -1269,6 +1273,10 @@ PrefabInstance:
       propertyPath: m_LocalRotation.z
       value: -0.38268346
       objectReference: {fileID: 0}
+    - target: {fileID: 4324221671358172028, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: m_Name
+      value: EmojiButton
+      objectReference: {fileID: 0}
     - target: {fileID: 4660075083353546497, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
       propertyPath: m_LocalRotation.w
       value: 0.38268346
@@ -1316,6 +1324,10 @@ PrefabInstance:
     - target: {fileID: 6301132515623719308, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: 27.649994
+      objectReference: {fileID: 0}
+    - target: {fileID: 6457447970430402013, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: m_Enabled
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 6539457883091161679, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
       propertyPath: m_AnchoredPosition.x
