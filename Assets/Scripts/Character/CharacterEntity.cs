@@ -321,6 +321,7 @@ namespace PetGame
         {
             // Replica health and death are exclusively applied by network state.
             if (GetComponent<PetGame.Network.MirrorEnemyTag>() != null) return;
+            if (GetComponent<PetGame.Network.NetworkSummonReplica>() != null) return;
             if (!RuntimeStats.IsAlive) return;
 
             float actualDamage = Mathf.Max(1f, attackPower - RuntimeStats.defense);

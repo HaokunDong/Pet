@@ -17,6 +17,15 @@ namespace PetGame.Network
         {
             if (target == null) return;
 
+            var summon = target.GetComponent<NetworkSummonReplica>();
+            if (summon != null)
+            {
+                var player = MirrorNetworkManager.singleton != null ? MirrorNetworkManager.singleton.LocalPlayer : null;
+                if (player != null && summon.Owner != null)
+                    player.RequestDamageSummon(summon.Owner.netId, summon.SummonId, damage);
+                return;
+            }
+
             // Check if this is a mirror enemy on a client
             MirrorEnemyTag mirrorTag = target.GetComponent<MirrorEnemyTag>();
             if (mirrorTag != null && mirrorTag.enemyNetId != 0)

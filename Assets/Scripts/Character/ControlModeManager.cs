@@ -56,7 +56,7 @@ namespace PetGame
         {
             if (ManualSkillBarUI.Instance == null) return;
             if (dead != entity) return;
-            ManualSkillBarUI.Instance.Unbind();
+            ManualSkillBarUI.Instance.UnbindCharacter(entity);
         }
 
         private void Start()
@@ -134,7 +134,7 @@ namespace PetGame
         private void HideManualSkillBarIfBoundToMe()
         {
             if (ManualSkillBarUI.Instance == null) return;
-            ManualSkillBarUI.Instance.Unbind();
+            ManualSkillBarUI.Instance.UnbindCharacter(entity);
         }
 
         /// <summary>
@@ -169,6 +169,11 @@ namespace PetGame
 
             GameObject go = Instantiate(prefab, sceneCanvas.transform);
             return go.GetComponent<ManualSkillBarUI>();
+        }
+
+        private void OnDisable()
+        {
+            HideManualSkillBarIfBoundToMe();
         }
 
         private void OnDestroy()

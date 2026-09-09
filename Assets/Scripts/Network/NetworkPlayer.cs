@@ -11,7 +11,7 @@ namespace PetGame.Network
     /// Syncs character info, position, animation state, and routes combat damage.
     /// Remote players create a local "mirror character" based on synced data.
     /// </summary>
-    public class NetworkPlayer : NetworkBehaviour
+    public partial class NetworkPlayer : NetworkBehaviour
     {
         #region SyncVars
 
@@ -165,6 +165,8 @@ namespace PetGame.Network
 
         public override void OnStopClient()
         {
+            CleanupSummonReplicas();
+            localSummons.Clear();
             base.OnStopClient();
             DestroyMirrorCharacter();
 
@@ -179,6 +181,7 @@ namespace PetGame.Network
 
         private void Update()
         {
+            UpdateSummonSync();
             if (Time.unscaledTime >= nameRefreshTime)
             {
                 nameRefreshTime = Time.unscaledTime + 1f;
@@ -208,6 +211,7 @@ namespace PetGame.Network
         /// </summary>
         public void OnSceneChanged()
         {
+            CleanupSummonReplicas();
             Debug.Log($"[NetworkPlayer] OnSceneChanged called. isOwned={isOwned}, hasCharacter={hasCharacter}");
 
             if (isOwned)
@@ -854,60 +858,6 @@ namespace PetGame.Network
                 (CharacterType)casterType,
                 () => { PoolMgr.Instance.PutNode(projectileObj); }
             );
-        }
-
-        /// <summary>
-        /// Called by local SummonSkillEffectData to sync summon spawn to all clients.
-        /// </summary>
-        public void RequestSpawnSummon(string prefabName, Vector3[] positions, string factionTag)
-        {
-            if (!isOwned) return;
-            CmdSpawnSummon(prefabName, positions, factionTag);
-        }
-
-        [Command]
-        private void CmdSpawnSummon(string prefabName, Vector3[] positions, string factionTag)
-        {
-            RpcSpawnSummon(prefabName, positions, factionTag);
-        }
-
-        [ClientRpc]
-        private void RpcSpawnSummon(string prefabName, Vector3[] positions, string factionTag)
-        {
-            // Enemy summons are already included in the host's world snapshot.
-            // Spawning them here would create a second enemy with independent AI.
-            if (factionTag == "Enemy") return;
-            // Skip on the owner (they already spawned it locally)
-            if (isOwned) return;
-
-            // Load prefab
-            GameObject prefab = Resources.Load<GameObject>($"Prefabs/Entity/Characters/{prefabName}");
-            if (prefab == null)
-            {
-                Debug.LogWarning($"[NetworkPlayer] Cannot find summon prefab: {prefabName}");
-                return;
-            }
-
-            for (int i = 0; i < positions.Length; i++)
-            {
-                GameObject summonObj = Object.Instantiate(prefab, positions[i], Quaternion.identity);
-                summonObj.tag = factionTag;
-                summonObj.name = $"RemoteSummon_{prefabName}_{i}";
-
-                // Initialize entity
-                CharacterEntity entity = summonObj.GetComponent<CharacterEntity>();
-                if (entity != null && !entity.IsInitialized && entity.characterData != null)
-                {
-                    entity.Initialize(entity.characterData);
-                }
-
-                // Initialize AI
-                PetGame.AI.AIController ai = summonObj.GetComponent<PetGame.AI.AIController>();
-                if (ai != null) ai.InitializeAI();
-
-                // Auto-destroy after a reasonable duration
-                Object.Destroy(summonObj, 15f);
-            }
         }
 
         /// <summary>

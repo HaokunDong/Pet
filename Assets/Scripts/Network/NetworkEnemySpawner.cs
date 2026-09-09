@@ -449,7 +449,7 @@ namespace PetGame.Network
             if (boss != null) boss.ApplyNetworkFightState(msg.bossFightActive, msg.bossPortalId);
         }
 
-        private static EnemyAnimatorParameter[] CaptureAnimationParameters(Animator animator)
+        internal static EnemyAnimatorParameter[] CaptureAnimationParameters(Animator animator)
         {
             var result = new List<EnemyAnimatorParameter>();
             if (animator == null || animator.runtimeAnimatorController == null) return result.ToArray();
@@ -468,7 +468,7 @@ namespace PetGame.Network
             return result.ToArray();
         }
 
-        private static void ApplyAnimationParameters(Animator animator, EnemyAnimatorParameter[] parameters)
+        internal static void ApplyAnimationParameters(Animator animator, EnemyAnimatorParameter[] parameters)
         {
             if (parameters == null) return;
             foreach (var parameter in parameters)

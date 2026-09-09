@@ -67,15 +67,12 @@ namespace PetGame
             {
                 GameObject summonObj = Instantiate(summonPrefab, spawnPositions[i], Quaternion.identity);
                 InitializeSummonedEntity(summonObj, casterEntity, summonTag);
-            }
-
-            // Network sync: notify other clients to spawn the same summons visually
-            if (NetworkClient.active && MirrorNetworkManager.singleton != null)
-            {
-                PetGame.Network.NetworkPlayer localPlayer = MirrorNetworkManager.singleton.LocalPlayer;
-                if (localPlayer != null)
+                // Enemy summons already belong to the host's world snapshot.
+                if (summonTag != "Enemy" && NetworkClient.active && MirrorNetworkManager.singleton != null)
                 {
-                    localPlayer.RequestSpawnSummon(summonPrefab.name, spawnPositions, summonTag);
+                    var localPlayer = MirrorNetworkManager.singleton.LocalPlayer;
+                    if (localPlayer != null)
+                        localPlayer.RegisterLocalSummon(summonObj, summonPrefab.name, summonTag);
                 }
             }
         }

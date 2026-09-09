@@ -96,6 +96,11 @@ namespace PetGame
             Hide();
         }
 
+        public void UnbindCharacter(CharacterEntity character)
+        {
+            if (boundCharacter == character) Unbind();
+        }
+
         private void Hide()
         {
             // Reset visuals before hiding so next bind starts clean.
