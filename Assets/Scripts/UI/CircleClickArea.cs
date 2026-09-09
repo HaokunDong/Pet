@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -10,6 +11,8 @@ namespace PetGame.UI
     [RequireComponent(typeof(RectTransform))]
     public class CircleClickArea : Image
     {
+        private static readonly List<CircleClickArea> ActiveAreas = new List<CircleClickArea>();
+
         [Header("Circle Click Settings")]
         [Tooltip("Pixel radius of the clickable circle area. 0 = auto (use half of the smallest dimension of the RectTransform).")]
         [SerializeField]
@@ -24,6 +27,21 @@ namespace PetGame.UI
         {
             get => clickRadius;
             set => clickRadius = Mathf.Max(0f, value);
+        }
+
+        protected override void OnEnable()
+        {
+            base.OnEnable();
+            if (!ActiveAreas.Contains(this))
+            {
+                ActiveAreas.Add(this);
+            }
+        }
+
+        protected override void OnDisable()
+        {
+            ActiveAreas.Remove(this);
+            base.OnDisable();
         }
 
         /// <summary>
@@ -43,6 +61,14 @@ namespace PetGame.UI
         /// </summary>
         public override bool IsRaycastLocationValid(Vector2 screenPoint, Camera eventCamera)
         {
+            return ContainsScreenPoint(screenPoint, eventCamera);
+        }
+
+        /// <summary>
+        /// Determines whether a screen point falls inside this circular area.
+        /// </summary>
+        public bool ContainsScreenPoint(Vector2 screenPoint, Camera eventCamera)
+        {
             Vector2 localPoint;
             if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
                     rectTransform, screenPoint, eventCamera, out localPoint))
@@ -54,6 +80,43 @@ namespace PetGame.UI
             float effectiveRadius = GetEffectiveRadius();
             float distance = localPoint.magnitude;
             return distance <= effectiveRadius;
+        }
+
+        /// <summary>
+        /// Returns true when the screen point is inside any active CircleClickArea.
+        /// Used by the desktop click-through system so circular UI can block
+        /// transparent-window pass-through even when the rendered pixel is transparent.
+        /// </summary>
+        public static bool ContainsAnyActiveArea(Vector2 screenPoint)
+        {
+            for (int i = ActiveAreas.Count - 1; i >= 0; --i)
+            {
+                CircleClickArea area = ActiveAreas[i];
+                if (area == null)
+                {
+                    ActiveAreas.RemoveAt(i);
+                    continue;
+                }
+
+                if (!area.isActiveAndEnabled || !area.raycastTarget)
+                {
+                    continue;
+                }
+
+                Canvas canvas = area.canvas;
+                Camera eventCamera = null;
+                if (canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+                {
+                    eventCamera = canvas.worldCamera;
+                }
+
+                if (area.ContainsScreenPoint(screenPoint, eventCamera))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
 #if UNITY_EDITOR

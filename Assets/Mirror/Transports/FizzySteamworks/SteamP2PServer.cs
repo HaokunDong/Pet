@@ -77,7 +77,7 @@ namespace Mirror.FizzySteam
             while (pendingConnections.Count > 0)
             {
                 int connId = pendingConnections.Dequeue();
-                pendingConnectionSet.Remove(connId);
+                if (!pendingConnectionSet.Remove(connId)) continue;
 
                 // Only notify if the client is still connected (hasn't timed out)
                 if (connectedClients.ContainsKey(connId))
@@ -150,11 +150,12 @@ namespace Mirror.FizzySteam
                 return;
             }
 
-            // If this client is still pending connection notification, skip data delivery.
-            // Mirror hasn't been notified yet, so it can't process data for this connection.
-            if (pendingConnectionSet.Contains(connId))
+            // A fast client may send its Ready/AddPlayer batch in this same receive loop.
+            // Notify Mirror before delivery instead of discarding a reliable packet.
+            if (pendingConnectionSet.Remove(connId))
             {
-                return;
+                transport.OnServerConnectedInternal(connId);
+                if (!Active || !connectedClients.ContainsKey(connId)) return;
             }
 
             // Known client - deliver data to Mirror

@@ -7,6 +7,40 @@ namespace PetGame.Network
 {
     #region Network Messages
 
+    public struct EnemyAnimatorParameter
+    {
+        public int hash;
+        public int type;
+        public float floatValue;
+        public int intValue;
+        public bool boolValue;
+    }
+
+    public struct EnemySnapshot
+    {
+        public uint id;
+        public string characterId;
+        public Vector3 position;
+        public Quaternion rotation;
+        public Vector3 scale;
+        public bool facingRight;
+        public string statsJson;
+        public int[] cooldownKeys;
+        public float[] cooldownValues;
+        public int animationHash;
+        public float animationTime;
+        public float animationSpeed;
+        public EnemyAnimatorParameter[] animationParameters;
+    }
+
+    public struct WorldSnapshotMessage : NetworkMessage
+    {
+        public string scene;
+        public EnemySnapshot[] enemies;
+        public bool bossFightActive;
+        public uint bossPortalId;
+    }
+
     /// <summary>Message sent from server to clients to spawn a mirror enemy.</summary>
     public struct EnemySpawnMessage : NetworkMessage
     {
@@ -74,6 +108,10 @@ namespace PetGame.Network
         private Dictionary<uint, GameObject> clientMirrorEnemies = new Dictionary<uint, GameObject>();
 
         private bool isRegistered = false;
+        private bool clientScenePrepared;
+        private readonly Dictionary<uint, Vector3> clientTargetPositions = new Dictionary<uint, Vector3>();
+        private struct AnimationProgress { public int hash; public float time; }
+        private readonly Dictionary<uint, AnimationProgress> clientAnimationProgress = new Dictionary<uint, AnimationProgress>();
 
         /// <summary>Data structure to track enemy state on the server.</summary>
         private class EnemyNetData
@@ -90,6 +128,8 @@ namespace PetGame.Network
         {
             if (localSpawner == null)
                 localSpawner = GetComponent<EnemySpawner>();
+            if (localSpawner == null)
+                localSpawner = FindObjectOfType<EnemySpawner>();
         }
 
         private void OnEnable()
@@ -153,14 +193,23 @@ namespace PetGame.Network
 
         private void Update()
         {
-            if (!NetworkServer.active) return;
+            if (!NetworkServer.active)
+            {
+                float blend = 1f - Mathf.Exp(-20f * Time.deltaTime);
+                foreach (var pair in clientTargetPositions)
+                    if (clientMirrorEnemies.TryGetValue(pair.Key, out GameObject obj) && obj != null)
+                        obj.transform.position = Vector3.Lerp(obj.transform.position, pair.Value, blend);
+                return;
+            }
 
             // Server: Periodically scan for new enemies and sync their state
             syncTimer += Time.deltaTime;
-            if (syncTimer >= 1f / syncRate)
+            if (syncTimer >= 1f / Mathf.Max(1f, syncRate))
             {
                 syncTimer = 0f;
                 ScanAndSyncEnemies();
+                if (NetworkServer.connections.Count > 1)
+                    SendToRemoteClients(CreateWorldSnapshot());
             }
         }
 
@@ -172,7 +221,6 @@ namespace PetGame.Network
             if (!NetworkServer.active) return;
 
             // Don't scan/send if there are no remote clients connected
-            if (NetworkServer.connections.Count <= 1) return; // Only host's local connection
 
             // Find all active enemies in the scene
             GameObject[] enemyObjects = GameObject.FindGameObjectsWithTag("Enemy");
@@ -186,6 +234,8 @@ namespace PetGame.Network
 
                 CharacterEntity entity = enemyObj.GetComponent<CharacterEntity>();
                 if (entity == null) continue;
+                if (entity.RuntimeStats == null || !entity.RuntimeStats.IsAlive) continue;
+                if (enemyObj.GetComponent<MirrorEnemyTag>() != null) continue;
 
                 // Check if this enemy is already tracked
                 uint existingId = FindEnemyId(enemyObj);
@@ -199,31 +249,6 @@ namespace PetGame.Network
                 if (existingId != 0)
                 {
                     aliveEnemyIds.Add(existingId);
-
-                    // Sync position updates
-                    EnemyNetData data = serverEnemies[existingId];
-                    Vector3 currentPos = enemyObj.transform.position;
-                    SpriteRenderer sr = enemyObj.GetComponent<SpriteRenderer>();
-                    bool facingRight = sr != null ? !sr.flipX : true;
-
-                    if (Vector3.Distance(currentPos, data.lastSyncedPosition) > 0.05f || facingRight != data.lastFacingRight)
-                    {
-                        data.lastSyncedPosition = currentPos;
-                        data.lastFacingRight = facingRight;
-
-                        // Include real-time health in position sync so clients always have up-to-date HP
-                        float health = entity.RuntimeStats != null ? entity.RuntimeStats.currentHealth : 100f;
-                        float maxHealth = entity.RuntimeStats != null ? entity.RuntimeStats.maxHealth : 100f;
-
-                        SendToRemoteClients(new EnemyPositionMessage
-                        {
-                            enemyNetId = existingId,
-                            position = currentPos,
-                            facingRight = facingRight,
-                            health = health,
-                            maxHealth = maxHealth
-                        });
-                    }
 
                     // Check if enemy died
                     if (entity.RuntimeStats != null && !entity.RuntimeStats.IsAlive)
@@ -310,7 +335,7 @@ namespace PetGame.Network
             {
                 NetworkConnectionToClient conn = kvp.Value;
                 // Skip the host's local connection (connectionId 0)
-                if (conn != null && conn.connectionId != 0)
+                if (conn != null && conn.connectionId != 0 && conn.isReady)
                 {
                     conn.Send(msg);
                 }
@@ -318,6 +343,144 @@ namespace PetGame.Network
         }
 
         #region Public Message Handlers (called by MirrorNetworkManager)
+
+        private WorldSnapshotMessage CreateWorldSnapshot()
+        {
+            var enemies = new List<EnemySnapshot>();
+            foreach (EnemyNetData data in serverEnemies.Values)
+            {
+                if (data.entity == null || !data.gameObject.activeInHierarchy || !data.entity.RuntimeStats.IsAlive)
+                    continue;
+                var animator = data.gameObject.GetComponent<Animator>();
+                bool hasAnimator = animator != null && animator.runtimeAnimatorController != null;
+                AnimatorStateInfo state = hasAnimator
+                    ? (animator.IsInTransition(0) ? animator.GetNextAnimatorStateInfo(0) : animator.GetCurrentAnimatorStateInfo(0)) : default;
+                var stats = data.entity.RuntimeStats;
+                var sprite = data.gameObject.GetComponent<SpriteRenderer>();
+                enemies.Add(new EnemySnapshot
+                {
+                    id = data.netId,
+                    characterId = data.entity.characterData.characterId,
+                    position = data.gameObject.transform.position,
+                    rotation = data.gameObject.transform.rotation,
+                    scale = data.gameObject.transform.localScale,
+                    facingRight = sprite == null || !sprite.flipX,
+                    statsJson = JsonUtility.ToJson(stats),
+                    cooldownKeys = stats.skillCooldowns == null ? new int[0] : new List<int>(stats.skillCooldowns.Keys).ToArray(),
+                    cooldownValues = stats.skillCooldowns == null ? new float[0] : new List<float>(stats.skillCooldowns.Values).ToArray(),
+                    animationHash = state.fullPathHash,
+                    animationTime = state.normalizedTime,
+                    animationSpeed = hasAnimator ? animator.speed : 1f,
+                    animationParameters = CaptureAnimationParameters(animator)
+                });
+            }
+            BossFightManager boss = FindObjectOfType<BossFightManager>();
+            return new WorldSnapshotMessage
+            {
+                scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().path,
+                enemies = enemies.ToArray(),
+                bossFightActive = boss != null && boss.IsBossFightActive,
+                bossPortalId = boss != null ? boss.CurrentPortalId : 0
+            };
+        }
+
+        public void HandleWorldSnapshot(WorldSnapshotMessage msg)
+        {
+            if (NetworkServer.active || msg.scene != UnityEngine.SceneManagement.SceneManager.GetActiveScene().path)
+                return;
+
+            // Clearing local simulation never destroys a server replica.
+            if (!clientScenePrepared && localSpawner != null)
+            {
+                localSpawner.PauseSpawning();
+                localSpawner.ClearAllEnemies();
+                clientScenePrepared = true;
+            }
+            var alive = new HashSet<uint>();
+            foreach (EnemySnapshot enemy in msg.enemies)
+            {
+                alive.Add(enemy.id);
+                if (clientMirrorEnemies.TryGetValue(enemy.id, out GameObject existing) &&
+                    (existing == null || existing.GetComponent<CharacterEntity>().characterData.characterId != enemy.characterId))
+                {
+                    if (existing != null) Destroy(existing);
+                    clientMirrorEnemies.Remove(enemy.id);
+                }
+                CreateMirrorEnemy(enemy.id, enemy.characterId, enemy.position, 1f, 1f);
+                if (!clientMirrorEnemies.TryGetValue(enemy.id, out GameObject obj) || obj == null) continue;
+                var entity = obj.GetComponent<CharacterEntity>();
+                JsonUtility.FromJsonOverwrite(enemy.statsJson, entity.RuntimeStats);
+                entity.RuntimeStats.skillCooldowns.Clear();
+                for (int i = 0; i < enemy.cooldownKeys.Length; i++)
+                    entity.RuntimeStats.skillCooldowns[enemy.cooldownKeys[i]] = enemy.cooldownValues[i];
+                clientTargetPositions[enemy.id] = enemy.position;
+                if (Vector3.Distance(obj.transform.position, enemy.position) > 3f)
+                    obj.transform.position = enemy.position;
+                obj.transform.rotation = enemy.rotation;
+                obj.transform.localScale = enemy.scale;
+                obj.GetComponent<SpriteRenderer>().flipX = !enemy.facingRight;
+                var bar = obj.GetComponentInChildren<HealthBar>(true);
+                if (bar != null) bar.UpdateHealth(entity.RuntimeStats.currentHealth, entity.RuntimeStats.maxHealth);
+                var animator = obj.GetComponent<Animator>();
+                if (animator != null && animator.runtimeAnimatorController != null && enemy.animationHash != 0)
+                {
+                    ApplyAnimationParameters(animator, enemy.animationParameters);
+                    animator.speed = enemy.animationSpeed;
+                    AnimatorStateInfo current = animator.GetCurrentAnimatorStateInfo(0);
+                    // Let the clip run between snapshots. Replaying every 100ms rewinds
+                    // playback and fights transitions, especially during attack/hit clips.
+                    bool restarted = clientAnimationProgress.TryGetValue(enemy.id, out AnimationProgress previous) &&
+                        previous.hash == enemy.animationHash && enemy.animationTime + 0.05f < previous.time;
+                    if (current.fullPathHash != enemy.animationHash || restarted ||
+                        Mathf.Abs(current.normalizedTime - enemy.animationTime) * current.length > 0.2f)
+                        animator.Play(enemy.animationHash, 0, enemy.animationTime);
+                    clientAnimationProgress[enemy.id] = new AnimationProgress { hash = enemy.animationHash, time = enemy.animationTime };
+                }
+            }
+            foreach (uint id in new List<uint>(clientMirrorEnemies.Keys))
+            {
+                if (alive.Contains(id)) continue;
+                Destroy(clientMirrorEnemies[id]);
+                clientMirrorEnemies.Remove(id);
+                clientTargetPositions.Remove(id);
+                clientAnimationProgress.Remove(id);
+            }
+            var boss = FindObjectOfType<BossFightManager>();
+            if (boss != null) boss.ApplyNetworkFightState(msg.bossFightActive, msg.bossPortalId);
+        }
+
+        private static EnemyAnimatorParameter[] CaptureAnimationParameters(Animator animator)
+        {
+            var result = new List<EnemyAnimatorParameter>();
+            if (animator == null || animator.runtimeAnimatorController == null) return result.ToArray();
+            foreach (var parameter in animator.parameters)
+            {
+                var value = new EnemyAnimatorParameter { hash = parameter.nameHash, type = (int)parameter.type };
+                switch (parameter.type)
+                {
+                    case AnimatorControllerParameterType.Bool: value.boolValue = animator.GetBool(parameter.nameHash); break;
+                    case AnimatorControllerParameterType.Int: value.intValue = animator.GetInteger(parameter.nameHash); break;
+                    case AnimatorControllerParameterType.Float: value.floatValue = animator.GetFloat(parameter.nameHash); break;
+                    default: continue;
+                }
+                result.Add(value);
+            }
+            return result.ToArray();
+        }
+
+        private static void ApplyAnimationParameters(Animator animator, EnemyAnimatorParameter[] parameters)
+        {
+            if (parameters == null) return;
+            foreach (var parameter in parameters)
+            {
+                switch ((AnimatorControllerParameterType)parameter.type)
+                {
+                    case AnimatorControllerParameterType.Bool: animator.SetBool(parameter.hash, parameter.boolValue); break;
+                    case AnimatorControllerParameterType.Int: animator.SetInteger(parameter.hash, parameter.intValue); break;
+                    case AnimatorControllerParameterType.Float: animator.SetFloat(parameter.hash, parameter.floatValue); break;
+                }
+            }
+        }
 
         /// <summary>Handle EnemySpawnMessage forwarded from MirrorNetworkManager.</summary>
         public void HandleEnemySpawnMessage(EnemySpawnMessage msg)
@@ -361,8 +524,7 @@ namespace PetGame.Network
 
             if (clientMirrorEnemies.TryGetValue(msg.enemyNetId, out GameObject mirrorObj) && mirrorObj != null)
             {
-                // Smooth interpolation
-                mirrorObj.transform.position = Vector3.Lerp(mirrorObj.transform.position, msg.position, 0.5f);
+                clientTargetPositions[msg.enemyNetId] = msg.position;
 
                 SpriteRenderer sr = mirrorObj.GetComponent<SpriteRenderer>();
                 if (sr != null)
@@ -401,6 +563,8 @@ namespace PetGame.Network
                 // Destroy after a short delay for death animation
                 Destroy(mirrorObj, 1f);
                 clientMirrorEnemies.Remove(msg.enemyNetId);
+                clientTargetPositions.Remove(msg.enemyNetId);
+                clientAnimationProgress.Remove(msg.enemyNetId);
                 Debug.Log($"[NetworkEnemySpawner] Mirror enemy #{msg.enemyNetId} died.");
             }
         }
@@ -411,12 +575,8 @@ namespace PetGame.Network
 
             if (clientMirrorEnemies.TryGetValue(msg.enemyNetId, out GameObject mirrorObj) && mirrorObj != null)
             {
-                // Play hit animation
-                CharacterAnimator charAnim = mirrorObj.GetComponent<CharacterAnimator>();
-                if (charAnim != null)
-                {
-                    charAnim.PlayHit();
-                }
+                // Animation state comes exclusively from world snapshots. This message
+                // only updates damage feedback; do not start a competing local state.
 
                 // Update health
                 CharacterEntity entity = mirrorObj.GetComponent<CharacterEntity>();
@@ -520,6 +680,22 @@ namespace PetGame.Network
                 rb.simulated = true; // Keep simulated so OverlapCircle queries still detect it
             }
 
+            // Kinematic bodies still push dynamic bodies through solid contacts.
+            // Replicas are queryable hit targets only; the host owns collision response.
+            int enemyLayer = LayerMask.NameToLayer("Enemy");
+            foreach (Collider2D collider in enemyObj.GetComponentsInChildren<Collider2D>(true))
+            {
+                collider.isTrigger = true;
+                if (enemyLayer >= 0) collider.gameObject.layer = enemyLayer;
+            }
+            foreach (Rigidbody2D body in enemyObj.GetComponentsInChildren<Rigidbody2D>(true))
+            {
+                body.bodyType = RigidbodyType2D.Kinematic;
+                body.velocity = Vector2.zero;
+                body.angularVelocity = 0f;
+                body.useFullKinematicContacts = false;
+            }
+
             // Disable AI on mirror enemies - they are driven by network sync
             AIController ai = enemyObj.GetComponent<AIController>();
             if (ai != null) ai.enabled = false;
@@ -527,6 +703,15 @@ namespace PetGame.Network
             // Disable CombatSystem on mirror enemies - host handles combat
             CombatSystem combat = enemyObj.GetComponent<CombatSystem>();
             if (combat != null) combat.enabled = false;
+            var events = enemyObj.GetComponent<AnimEventReceiver>();
+            if (events != null) events.enabled = false;
+            var knockback = enemyObj.GetComponent<KnockbackController>();
+            if (knockback != null) knockback.enabled = false;
+            // Animator playback is driven by the host, not the local state machine.
+            if (charAnim != null) charAnim.enabled = false;
+            var visualAnimator = enemyObj.GetComponent<Animator>();
+            if (visualAnimator != null) visualAnimator.fireEvents = false;
+            entity.enabled = false;
 
             // Store the network ID on the enemy for damage routing
             MirrorEnemyTag tag = enemyObj.GetComponent<MirrorEnemyTag>();
@@ -571,6 +756,9 @@ namespace PetGame.Network
         /// </summary>
         public void CleanupMirrorEnemies()
         {
+            clientScenePrepared = false;
+            clientTargetPositions.Clear();
+            clientAnimationProgress.Clear();
             foreach (var kvp in clientMirrorEnemies)
             {
                 if (kvp.Value != null)
@@ -621,6 +809,9 @@ namespace PetGame.Network
         public void SyncAllEnemiesToNewClient(NetworkConnectionToClient conn)
         {
             if (!NetworkServer.active) return;
+            if (conn == null || conn.connectionId == 0 || !conn.isReady) return;
+            ScanAndSyncEnemies();
+            conn.Send(CreateWorldSnapshot());
 
             foreach (var kvp in serverEnemies)
             {

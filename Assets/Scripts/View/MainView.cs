@@ -102,6 +102,8 @@ public class MainView : BaseView
                 circleArea.color = existingColor;
             }
         }
+
+        circleArea.raycastTarget = true;
     }
 
     /// <summary>

@@ -49,6 +49,13 @@ namespace PetGame
 
         private void Awake()
         {
+            // Every gameplay scene needs a snapshot publisher/receiver, even if the
+            // component was omitted when the scene prefab was assembled.
+            if (FindObjectOfType<NetworkEnemySpawner>() == null)
+            {
+                GameObject syncOwner = enemySpawner != null ? enemySpawner.gameObject : gameObject;
+                syncOwner.AddComponent<NetworkEnemySpawner>();
+            }
             // Disable collision between Character layer and Enemy layer
             int characterLayer = LayerMask.NameToLayer(CHARACTER_LAYER_NAME);
             int enemyLayer = LayerMask.NameToLayer(ENEMY_LAYER_NAME);
@@ -191,13 +198,21 @@ namespace PetGame
             else
             {
                 // Try to find by tag as fallback
-                GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
-                if (playerObj != null)
-                    currentEntity = playerObj.GetComponent<CharacterEntity>();
+                foreach (GameObject playerObj in GameObject.FindGameObjectsWithTag("Player"))
+                {
+                    if (playerObj.GetComponent<MirrorCharacterTag>() != null) continue;
+                    CharacterEntity candidate = playerObj.GetComponent<CharacterEntity>();
+                    if (candidate != null && candidate.RuntimeStats != null && candidate.RuntimeStats.IsAlive)
+                    {
+                        currentEntity = candidate;
+                        break;
+                    }
+                }
             }
 
             // Check if the new data is the same as the current character (avoid redundant switch)
-            if (currentEntity != null && currentEntity.characterData == newData)
+            if (currentEntity != null && currentEntity.characterData == newData &&
+                currentEntity.RuntimeStats != null && currentEntity.RuntimeStats.IsAlive)
             {
                 return false;
             }
@@ -426,6 +441,7 @@ namespace PetGame
         private void OnPlayerCharacterDeath(CharacterEntity deadEntity)
         {
             if (deadEntity == null) return;
+            if (deadEntity.GetComponent<MirrorCharacterTag>() != null) return;
 
             // Notify CharacterDeathManager to handle cooldown
             if (CharacterDeathManager.Instance != null)

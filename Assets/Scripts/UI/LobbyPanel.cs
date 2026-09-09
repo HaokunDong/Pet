@@ -34,9 +34,15 @@ namespace PetGame.UI
         [SerializeField] private float errorDisplayDuration = 3f;
 
         private float errorTimer;
+        private float nextLobbyRefresh;
 
         private void Awake()
         {
+            if (joinCodeInput != null)
+            {
+                joinCodeInput.contentType = TMP_InputField.ContentType.Alphanumeric;
+                joinCodeInput.characterLimit = SteamLobbyManager.LOBBY_CODE_LENGTH;
+            }
             // Bind button events
             if (createLobbyButton != null)
                 createLobbyButton.onClick.AddListener(OnCreateLobbyClicked);
@@ -128,6 +134,14 @@ namespace PetGame.UI
 
         private void Update()
         {
+            // Read Steam's local member cache as a fallback when reopening or missing a callback.
+            if (Time.unscaledTime >= nextLobbyRefresh)
+            {
+                nextLobbyRefresh = Time.unscaledTime + 0.5f;
+                var lobbyMgr = SteamLobbyManager.Instance;
+                if (lobbyMgr != null && lobbyMgr.InLobby)
+                    HandlePlayerCountChanged(lobbyMgr.PlayerCount);
+            }
             // Close panel on Escape key
             if (Input.GetKeyDown(KeyCode.Escape))
             {
@@ -184,6 +198,8 @@ namespace PetGame.UI
 
         private void ShowLobbyState(string lobbyCode, bool isHost)
         {
+            var lobbyMgr = SteamLobbyManager.Instance;
+            if (lobbyMgr != null) HandlePlayerCountChanged(lobbyMgr.PlayerCount);
             if (initialPanel != null) initialPanel.SetActive(false);
             if (lobbyPanel != null) lobbyPanel.SetActive(true);
 
@@ -296,22 +312,11 @@ namespace PetGame.UI
 
         private void OnLeaveLobbyClicked()
         {
-            // Stop Mirror network
             if (MirrorNetworkManager.singleton != null)
-            {
-                MirrorNetworkManager.singleton.StopNetwork();
-            }
-
-            // Leave Steam lobby
-            var lobbyMgr = SteamLobbyManager.Instance;
-            if (lobbyMgr != null)
-            {
-                lobbyMgr.LeaveLobby();
-            }
-
+                MirrorNetworkManager.singleton.LeaveRoomAndResumeSinglePlayer();
+            else SteamLobbyManager.Instance.LeaveLobby();
             ShowInitialState();
         }
-
         private void ResetStatusText()
         {
             if (statusText == null) return;
@@ -373,17 +378,9 @@ namespace PetGame.UI
 
         private void HandleHostDisconnected()
         {
-            ShowError("Host disconnected. Returning to lobby.");
-
-            // Stop Mirror network
-            if (MirrorNetworkManager.singleton != null)
-            {
-                MirrorNetworkManager.singleton.StopNetwork();
-            }
-
             ShowInitialState();
+            ShowError("Host left. Room closed; returning to single player.");
         }
-
         private void HandleError(string error)
         {
             ShowError(error);
@@ -392,16 +389,9 @@ namespace PetGame.UI
 
         private void HandleDisconnectedFromServer()
         {
-            // If we were a client and got disconnected, return to initial state
-            var lobbyMgr = SteamLobbyManager.Instance;
-            if (lobbyMgr != null && !lobbyMgr.IsHost)
-            {
-                lobbyMgr.LeaveLobby();
-                ShowError("Disconnected from host.");
-                ShowInitialState();
-            }
+            ShowInitialState();
+            ShowError("Disconnected from host. Returning to single player.");
         }
-
         #endregion
     }
 }

@@ -54,6 +54,11 @@ namespace PetGame
         [Tooltip("Buttons to be laid out on the ring. If empty, child RingRadialMenuButton components are auto-collected on Awake/OnValidate.")]
         [SerializeField] private List<RingRadialMenuButton> buttons = new List<RingRadialMenuButton>();
 
+        [Header("Icons")]
+        [Tooltip("Distance from the RingRadialMenu center to every child Icon object. -1 uses the button center radius.")]
+        [Min(-1f)]
+        [SerializeField] private float iconRadius = -1f;
+
         [Header("Debug")]
         [Tooltip("If true, draws gizmos for the inner/outer ring in the Scene view.")]
         [SerializeField] private bool drawGizmos = true;
@@ -377,6 +382,7 @@ namespace PetGame
             }
 
             float midRadius = (settings.innerRadius + settings.outerRadius) * 0.5f;
+            float effectiveIconRadius = iconRadius >= 0f ? iconRadius : midRadius;
             float sectorSize = 360f / Mathf.Max(1, actual);
             float dir = settings.clockwise ? -1f : 1f;
             bool useAngleCheck = actual > 1; // single button covers the full ring
@@ -402,6 +408,7 @@ namespace PetGame
                     Mathf.Cos(angleRad) * midRadius,
                     Mathf.Sin(angleRad) * midRadius);
                 btn.RectTransform.anchoredPosition = pos;
+                ApplyIconRadius(btn, pos.normalized, pos, effectiveIconRadius);
 
                 // Wire dispatcher and index, so the button can fan out to OnButtonClicked.
                 btn.Initialize(i, DispatchClickFromButton);
@@ -438,6 +445,34 @@ namespace PetGame
                 // This guarantees the sector's hover state is not interrupted when the
                 // mouse moves over the icon area.
                 EnsureIconNonInteractive(btn);
+            }
+        }
+
+        /// <summary>
+        /// Positions every child object named "Icon" so its distance from the menu center
+        /// matches <see cref="iconRadius"/>. The button itself can stay on the sector center.
+        /// </summary>
+        private static void ApplyIconRadius(RingRadialMenuButton btn, Vector2 direction, Vector2 buttonCenter, float targetRadius)
+        {
+            if (btn == null) return;
+
+            Vector2 targetMenuSpace = direction * targetRadius;
+            Vector2 iconLocalPosition = targetMenuSpace - buttonCenter;
+
+            RectTransform[] rects = btn.GetComponentsInChildren<RectTransform>(true);
+            for (int i = 0; i < rects.Length; ++i)
+            {
+                RectTransform iconRT = rects[i];
+                if (iconRT == null || iconRT == btn.RectTransform) continue;
+
+                bool isBoundIcon = btn.IconImage != null && iconRT == btn.IconImage.rectTransform;
+                bool isNamedIcon = iconRT.gameObject.name.IndexOf("Icon", StringComparison.OrdinalIgnoreCase) >= 0;
+                if (!isBoundIcon && !isNamedIcon) continue;
+
+                iconRT.anchorMin = new Vector2(0.5f, 0.5f);
+                iconRT.anchorMax = new Vector2(0.5f, 0.5f);
+                iconRT.pivot = new Vector2(0.5f, 0.5f);
+                iconRT.anchoredPosition = iconLocalPosition;
             }
         }
 

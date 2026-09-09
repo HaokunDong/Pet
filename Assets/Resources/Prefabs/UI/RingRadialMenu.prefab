@@ -93,6 +93,7 @@ MonoBehaviour:
   - {fileID: 9211222754137145069}
   - {fileID: 7232869837450574532}
   - {fileID: 8636001931003696154}
+  iconRadius: -1
   drawGizmos: 1
 --- !u!1 &232872128219244936
 GameObject:

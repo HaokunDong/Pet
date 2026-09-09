@@ -15,6 +15,13 @@ namespace PetGame.Network
 
         /// <summary>Maximum players allowed in a lobby.</summary>
         public const int MAX_PLAYERS = 4;
+        public const int LOBBY_CODE_LENGTH = 6;
+        private const string LOBBY_KEY_CODE = "RoomCode";
+        private CallResult<LobbyMatchList_t> lobbySearchResult;
+        private bool searching;
+        private const string LOBBY_KEY_CLOSED = "Closed";
+        private CSteamID originalHostId = CSteamID.Nil;
+        private float nextMembershipCheck;
 
         /// <summary>Lobby data key for storing the host's Steam ID.</summary>
         private const string LOBBY_KEY_HOST_ID = "HostSteamId";
@@ -57,7 +64,7 @@ namespace PetGame.Network
         /// <summary>Whether we are the host of the current lobby.</summary>
         public bool IsHost { get; private set; }
 
-        /// <summary>Current lobby code (string representation of lobby ID).</summary>
+        /// <summary>Six-character shareable room code.</summary>
         public string CurrentLobbyCode { get; private set; } = "";
 
         /// <summary>Number of players currently in the lobby.</summary>
@@ -94,6 +101,20 @@ namespace PetGame.Network
         protected override void OnStart()
         {
             // Nothing needed here
+        }
+
+        protected override void OnUpdate()
+        {
+            if (!InLobby || !IsSteamReady || Time.unscaledTime < nextMembershipCheck) return;
+            nextMembershipCheck = Time.unscaledTime + 0.5f;
+            if (!IsHost && (SteamMatchmaking.GetLobbyData(CurrentLobbyId, LOBBY_KEY_CLOSED) == "1" ||
+                SteamMatchmaking.GetLobbyOwner(CurrentLobbyId) != originalHostId || !IsLobbyOwnerValid()))
+            {
+                HandleRoomClosed();
+                return;
+            }
+            OnPlayerCountChanged?.Invoke(PlayerCount);
+            if (IsHost) MirrorNetworkManager.singleton?.RemoveDepartedLobbyConnections(this);
         }
 
         protected override void BeforeOnDestroy()
@@ -133,7 +154,7 @@ namespace PetGame.Network
         }
 
         /// <summary>
-        /// Join a lobby by lobby code (string representation of CSteamID).
+        /// Find and join a lobby by its six-character room code.
         /// </summary>
         public void JoinLobby(string lobbyCode)
         {
@@ -155,15 +176,55 @@ namespace PetGame.Network
                 return;
             }
 
-            if (!ulong.TryParse(lobbyCode.Trim(), out ulong lobbyId))
+            string code = lobbyCode.Trim().ToUpperInvariant();
+            if (!System.Text.RegularExpressions.Regex.IsMatch(code, @"^(?=.*[A-Z])(?=.*[0-9])[A-Z0-9]{6}$"))
             {
-                OnLobbyJoinFailed?.Invoke("Invalid lobby code format.");
+                OnLobbyJoinFailed?.Invoke("Enter a 6-character code containing letters and numbers.");
                 return;
             }
 
-            CSteamID steamLobbyId = new CSteamID(lobbyId);
-            Debug.Log($"[SteamLobbyManager] Joining lobby: {lobbyCode}");
-            SteamMatchmaking.JoinLobby(steamLobbyId);
+            if (searching) return;
+            searching = true;
+            lobbySearchResult = lobbySearchResult ?? CallResult<LobbyMatchList_t>.Create(OnLobbySearchCompleted);
+            SteamMatchmaking.AddRequestLobbyListStringFilter(LOBBY_KEY_GAME_ID, "1", ELobbyComparison.k_ELobbyComparisonEqual);
+            SteamMatchmaking.AddRequestLobbyListStringFilter(LOBBY_KEY_CODE, code, ELobbyComparison.k_ELobbyComparisonEqual);
+            SteamMatchmaking.AddRequestLobbyListDistanceFilter(ELobbyDistanceFilter.k_ELobbyDistanceFilterWorldwide);
+            SteamMatchmaking.AddRequestLobbyListResultCountFilter(2);
+            lobbySearchResult.Set(SteamMatchmaking.RequestLobbyList());
+        }
+
+        private void OnLobbySearchCompleted(LobbyMatchList_t result, bool ioFailure)
+        {
+            searching = false;
+            if (InLobby) return;
+            if (ioFailure || result.m_nLobbiesMatching != 1)
+            {
+                OnLobbyJoinFailed?.Invoke(ioFailure ? "Room search failed. Please try again." :
+                    result.m_nLobbiesMatching == 0 ? "Room not found or full. Check the code and try again." :
+                    "Duplicate room code. Ask the host to recreate the room or send a Steam invite.");
+                return;
+            }
+            SteamMatchmaking.JoinLobby(SteamMatchmaking.GetLobbyByIndex(0));
+        }
+
+        private static string GenerateLobbyCode()
+        {
+            const string letters = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+            const string digits = "23456789";
+            const string alphabet = letters + digits;
+            var random = new System.Random(Guid.NewGuid().GetHashCode());
+            var code = new char[LOBBY_CODE_LENGTH];
+            code[0] = letters[random.Next(letters.Length)];
+            code[1] = digits[random.Next(digits.Length)];
+            for (int i = 2; i < code.Length; i++) code[i] = alphabet[random.Next(alphabet.Length)];
+            for (int i = code.Length - 1; i > 0; i--)
+            {
+                int j = random.Next(i + 1);
+                char temporary = code[i];
+                code[i] = code[j];
+                code[j] = temporary;
+            }
+            return new string(code);
         }
 
         /// <summary>
@@ -189,11 +250,20 @@ namespace PetGame.Network
             if (!InLobby) return;
 
             Debug.Log($"[SteamLobbyManager] Leaving lobby: {CurrentLobbyId}");
+            // Steam automatically migrates ownership. Mark closed before leaving so
+            // clients leave instead of turning the room into an unhosted lobby.
+            if (IsHost && IsSteamReady)
+            {
+                SteamMatchmaking.SetLobbyJoinable(CurrentLobbyId, false);
+                SteamMatchmaking.SetLobbyData(CurrentLobbyId, LOBBY_KEY_CLOSED, "1");
+            }
             SteamMatchmaking.LeaveLobby(CurrentLobbyId);
 
             CurrentLobbyId = CSteamID.Nil;
             CurrentLobbyCode = "";
             IsHost = false;
+            originalHostId = CSteamID.Nil;
+            OnPlayerCountChanged?.Invoke(0);
         }
 
         /// <summary>
@@ -217,7 +287,7 @@ namespace PetGame.Network
         public CSteamID GetHostSteamId()
         {
             if (!InLobby) return CSteamID.Nil;
-            return SteamMatchmaking.GetLobbyOwner(CurrentLobbyId);
+            return originalHostId;
         }
 
         #endregion
@@ -237,6 +307,7 @@ namespace PetGame.Network
 
         private void UnregisterCallbacks()
         {
+            lobbySearchResult?.Dispose();
             lobbyCreatedCallback?.Dispose();
             lobbyEnteredCallback?.Dispose();
             lobbyJoinRequestedCallback?.Dispose();
@@ -268,11 +339,14 @@ namespace PetGame.Network
             }
 
             CurrentLobbyId = new CSteamID(result.m_ulSteamIDLobby);
-            CurrentLobbyCode = result.m_ulSteamIDLobby.ToString();
+            CurrentLobbyCode = GenerateLobbyCode();
             IsHost = true;
+            originalHostId = SteamUser.GetSteamID();
 
             // Set lobby metadata
             SteamMatchmaking.SetLobbyData(CurrentLobbyId, LOBBY_KEY_GAME_ID, "1");
+            SteamMatchmaking.SetLobbyData(CurrentLobbyId, LOBBY_KEY_CLOSED, "0");
+            SteamMatchmaking.SetLobbyData(CurrentLobbyId, LOBBY_KEY_CODE, CurrentLobbyCode);
             SteamMatchmaking.SetLobbyData(CurrentLobbyId, LOBBY_KEY_HOST_ID,
                 SteamUser.GetSteamID().m_SteamID.ToString());
 
@@ -315,11 +389,18 @@ namespace PetGame.Network
             }
 
             CurrentLobbyId = new CSteamID(result.m_ulSteamIDLobby);
-            CurrentLobbyCode = result.m_ulSteamIDLobby.ToString();
+            CurrentLobbyCode = SteamMatchmaking.GetLobbyData(CurrentLobbyId, LOBBY_KEY_CODE);
 
             // Determine if we are the host
             CSteamID lobbyOwner = SteamMatchmaking.GetLobbyOwner(CurrentLobbyId);
-            IsHost = lobbyOwner == SteamUser.GetSteamID();
+            string hostId = SteamMatchmaking.GetLobbyData(CurrentLobbyId, LOBBY_KEY_HOST_ID);
+            originalHostId = ulong.TryParse(hostId, out ulong hostValue) ? new CSteamID(hostValue) : lobbyOwner;
+            IsHost = originalHostId == SteamUser.GetSteamID();
+            if (SteamMatchmaking.GetLobbyData(CurrentLobbyId, LOBBY_KEY_CLOSED) == "1" || lobbyOwner != originalHostId)
+            {
+                HandleRoomClosed();
+                return;
+            }
 
             Debug.Log($"[SteamLobbyManager] Entered lobby: {CurrentLobbyCode} (IsHost: {IsHost})");
             OnLobbyEntered?.Invoke();
@@ -366,12 +447,12 @@ namespace PetGame.Network
                 Debug.Log($"[SteamLobbyManager] Player left lobby: {changedUser}");
 
                 // Check if the host left
-                CSteamID currentOwner = SteamMatchmaking.GetLobbyOwner(CurrentLobbyId);
-                if (changedUser == currentOwner || !IsLobbyOwnerValid())
+                if (changedUser == originalHostId || !IsLobbyOwnerValid())
                 {
-                    Debug.LogWarning("[SteamLobbyManager] Host disconnected!");
-                    OnHostDisconnected?.Invoke();
+                    HandleRoomClosed();
+                    return;
                 }
+                if (IsHost) MirrorNetworkManager.singleton?.DisconnectSteamMember(changedUser);
             }
 
             OnPlayerCountChanged?.Invoke(PlayerCount);
@@ -385,16 +466,27 @@ namespace PetGame.Network
             CSteamID lobbyId = new CSteamID(update.m_ulSteamIDLobby);
             if (lobbyId != CurrentLobbyId) return;
 
-            // Check if lobby owner changed (host migration or disconnect)
-            if (!IsHost)
+            if (!IsHost && (SteamMatchmaking.GetLobbyData(CurrentLobbyId, LOBBY_KEY_CLOSED) == "1" ||
+                SteamMatchmaking.GetLobbyOwner(CurrentLobbyId) != originalHostId))
             {
-                CSteamID newOwner = SteamMatchmaking.GetLobbyOwner(CurrentLobbyId);
-                if (newOwner == SteamUser.GetSteamID())
-                {
-                    IsHost = true;
-                    Debug.Log("[SteamLobbyManager] We are now the lobby host (host migration).");
-                }
+                HandleRoomClosed();
             }
+        }
+
+        private void HandleRoomClosed()
+        {
+            if (!InLobby) return;
+            // If Steam migrated ownership to us, prevent anyone joining while all
+            // remaining members process the closure callback.
+            if (SteamMatchmaking.GetLobbyOwner(CurrentLobbyId) == SteamUser.GetSteamID())
+            {
+                SteamMatchmaking.SetLobbyJoinable(CurrentLobbyId, false);
+                SteamMatchmaking.SetLobbyData(CurrentLobbyId, LOBBY_KEY_CLOSED, "1");
+            }
+            if (MirrorNetworkManager.singleton != null)
+                MirrorNetworkManager.singleton.LeaveRoomAndResumeSinglePlayer();
+            else LeaveLobby();
+            OnHostDisconnected?.Invoke();
         }
 
         #endregion
@@ -406,14 +498,17 @@ namespace PetGame.Network
         /// </summary>
         private bool IsLobbyOwnerValid()
         {
-            if (!InLobby) return false;
+            return IsLobbyMember(originalHostId);
+        }
 
-            CSteamID owner = SteamMatchmaking.GetLobbyOwner(CurrentLobbyId);
+        public bool IsLobbyMember(CSteamID member)
+        {
+            if (!InLobby) return false;
             int memberCount = SteamMatchmaking.GetNumLobbyMembers(CurrentLobbyId);
 
             for (int i = 0; i < memberCount; i++)
             {
-                if (SteamMatchmaking.GetLobbyMemberByIndex(CurrentLobbyId, i) == owner)
+                if (SteamMatchmaking.GetLobbyMemberByIndex(CurrentLobbyId, i) == member)
                     return true;
             }
 

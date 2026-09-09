@@ -67,6 +67,7 @@ namespace PetGame
 
         private void Update()
         {
+            if (Mirror.NetworkClient.active && !Mirror.NetworkServer.active) return;
             if (isPaused) return;
 
             spawnTimer += Time.deltaTime;
@@ -83,6 +84,7 @@ namespace PetGame
         /// </summary>
         public void SpawnEnemy()
         {
+            if (Mirror.NetworkClient.active && !Mirror.NetworkServer.active) return;
             if (enemyDataList == null || enemyDataList.Length == 0) return;
             if (currentEnemyCount >= maxEnemies) return;
 
@@ -172,6 +174,7 @@ namespace PetGame
         /// </summary>
         public void SpawnSpecificEnemy(CharacterData data, Vector3 position)
         {
+            if (Mirror.NetworkClient.active && !Mirror.NetworkServer.active) return;
             if (data == null) return;
 
             // Prefer character-specific Variant Prefab (lazy registration)
@@ -280,6 +283,9 @@ namespace PetGame
             GameObject[] enemies = GameObject.FindGameObjectsWithTag("Enemy");
             foreach (GameObject enemyObj in enemies)
             {
+                // Replicas belong to the server snapshot, including during late-join setup.
+                if (!Mirror.NetworkServer.active && enemyObj.GetComponent<MirrorEnemyTag>() != null)
+                    continue;
                 CharacterEntity entity = enemyObj.GetComponent<CharacterEntity>();
                 if (entity != null)
                 {
@@ -294,7 +300,7 @@ namespace PetGame
             // Also clean up NetworkEnemySpawner's mirror enemy dictionary on clients,
             // so subsequent enemy sync messages (e.g. Boss spawn) are handled correctly.
             PetGame.Network.NetworkEnemySpawner netSpawner = Object.FindObjectOfType<PetGame.Network.NetworkEnemySpawner>();
-            if (netSpawner != null)
+            if (netSpawner != null && Mirror.NetworkServer.active)
             {
                 netSpawner.CleanupMirrorEnemies();
             }

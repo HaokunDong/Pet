@@ -11,7 +11,7 @@ namespace PetGame.Network
     /// </summary>
     public struct SpecialLevelOptionData
     {
-        /// <summary>NetworkIdentity netId of the Portal GameObject.</summary>
+        /// <summary>Server-issued ID of the requester's private desktop Portal.</summary>
         public uint portalNetId;
 
         /// <summary>NetworkIdentity netId of the requesting player's NetworkPlayer.</summary>
@@ -243,6 +243,14 @@ namespace PetGame.Network
         [Command(requiresAuthority = false)]
         public void CmdRequestAddOption(uint portalNetId, uint requesterNetId, int levelDataIndex, NetworkConnectionToClient sender = null)
         {
+            NetworkPlayer requester = sender?.identity != null ? sender.identity.GetComponent<NetworkPlayer>() : null;
+            if (requester == null) return;
+            if (requester.netId != requesterNetId ||
+                !requester.TryGetOwnedPortalLevel(portalNetId, out int ownedLevel) || ownedLevel != levelDataIndex)
+            {
+                TargetRejectRequest(sender, "This portal does not belong to your player or is no longer available.");
+                return;
+            }
             // Validation 1: Boss fight in progress
             BossFightManager bossFightManager = FindObjectOfType<BossFightManager>();
             if (bossFightManager != null && bossFightManager.IsBossFightActive)
@@ -317,6 +325,25 @@ namespace PetGame.Network
 
             SpecialLevelOptionData approvedOption = OptionList[optionIndex];
 
+            // Validate before removing the option so a setup error doesn't consume it.
+            if (bossFightManager == null || !bossFightManager.CanStartBossFight)
+            {
+                TargetRejectRequest(sender, "Boss fight is not configured or is already active.");
+                return;
+            }
+            if (!NetworkServer.spawned.TryGetValue(approvedOption.requesterNetId, out NetworkIdentity requesterIdentity))
+            {
+                TargetRejectRequest(sender, "Requesting player is no longer connected.");
+                return;
+            }
+            NetworkPlayer requester = requesterIdentity.GetComponent<NetworkPlayer>();
+            if (requester == null || !requester.TryGetOwnedPortalLevel(approvedOption.portalNetId, out int ownedLevel) ||
+                ownedLevel != approvedOption.specialLevelDataIndex)
+            {
+                TargetRejectRequest(sender, "Portal is no longer available.");
+                return;
+            }
+
             // Remove only the approved option from the list
             OptionList.RemoveAt(optionIndex);
             _playersWithPendingRequest.Remove(approvedOption.requesterNetId);
@@ -338,6 +365,7 @@ namespace PetGame.Network
                 }
 
                 bossFightManager.StartBossFight(localPortalObj, approvedOption.portalNetId);
+                requester.ConsumeOwnedPortal(approvedOption.portalNetId);
                 Debug.Log($"[SpecialLevelListManager] Option approved. Boss fight started for portal (portalId={approvedOption.portalNetId}).");
             }
             else

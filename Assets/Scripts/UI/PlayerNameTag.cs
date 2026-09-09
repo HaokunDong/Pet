@@ -63,6 +63,7 @@ namespace PetGame
         /// <param name="parentSprite">The parent character's SpriteRenderer (reserved for future use).</param>
         public void Initialize(SpriteRenderer parentSprite)
         {
+            if (isInitialized) return;
 
             // Create outline TextMeshes for readability (4 directions)
             outlineMeshes = new TextMesh[OUTLINE_COUNT];
@@ -144,6 +145,8 @@ namespace PetGame
         /// <param name="name">The player's Steam name to display.</param>
         public void SetName(string name)
         {
+            string nextName = string.IsNullOrEmpty(name) ? DEFAULT_NAME : name;
+            if (currentName == nextName && isInitialized) return;
             if (string.IsNullOrEmpty(name))
             {
                 currentName = DEFAULT_NAME;

@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using Mirror;
 using PetGame.Network;
 
+
 namespace PetGame
 {
     /// <summary>
@@ -158,6 +159,8 @@ namespace PetGame
         /// </summary>
         public void SpawnPortalLocally(Vector3 worldPos, uint portalId = 0, int levelDataIndex = -1)
         {
+            if (portalCanvas == null) return;
+            if (_canvasRect == null) _canvasRect = portalCanvas.GetComponent<RectTransform>();
             PortalSettings settings = PortalSettings.Instance;
             if (settings.portalPrefab == null) return;
 

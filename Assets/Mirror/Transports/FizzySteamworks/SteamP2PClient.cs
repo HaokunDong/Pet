@@ -53,7 +53,7 @@ namespace Mirror.FizzySteam
             // while Steam is establishing the P2P NAT traversal.
             waitingForAck = true;
             connectStartTime = Time.realtimeSinceStartup;
-            lastHandshakeSendTime = 0f; // Force immediate first send
+            SendHandshake();
             Debug.Log($"[FizzySteamworks Client] Starting connection to host: {hostSteamId}, will send handshake packets...");
         }
 
@@ -86,19 +86,15 @@ namespace Mirror.FizzySteam
                 if (now - connectStartTime > transport.connectionTimeout)
                 {
                     Debug.LogError("[FizzySteamworks Client] Connection timed out waiting for server acknowledgment.");
-                    waitingForAck = false;
                     transport.OnClientErrorInternal(TransportError.Timeout, "Connection timed out.");
-                    transport.OnClientDisconnectedInternal();
+                    Disconnect();
                     return;
                 }
 
                 // Resend handshake every 0.5 seconds until we get an ack
                 if (now - lastHandshakeSendTime >= 0.5f)
                 {
-                    lastHandshakeSendTime = now;
-                    byte[] handshake = new byte[] { 0xFF };
-                    SteamNetworking.SendP2PPacket(hostSteamId, handshake, 1, EP2PSend.k_EP2PSendReliable, transport.reliableChannel);
-                    Debug.Log($"[FizzySteamworks Client] Handshake sent to host: {hostSteamId}");
+                    SendHandshake();
                 }
             }
 
@@ -159,6 +155,13 @@ namespace Mirror.FizzySteam
                     }
                 }
             }
+        }
+
+        private void SendHandshake()
+        {
+            lastHandshakeSendTime = Time.realtimeSinceStartup;
+            byte[] handshake = { 0xFF };
+            SteamNetworking.SendP2PPacket(hostSteamId, handshake, 1, EP2PSend.k_EP2PSendReliable, transport.reliableChannel);
         }
 
         public void Send(ArraySegment<byte> data, EP2PSend sendType)

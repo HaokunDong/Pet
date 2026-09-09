@@ -62,6 +62,10 @@ namespace PetGame.Network
 
         /// <summary>Whether a networked scene change is currently in progress.</summary>
         public bool IsChangingScene { get; private set; }
+        private bool switchingToSteamClient;
+        private bool leavingRoom;
+        private bool applicationQuitting;
+        private Coroutine singlePlayerRecovery;
 
         #endregion
 
@@ -174,6 +178,11 @@ namespace PetGame.Network
         /// </summary>
         public void StartHostWithSteam()
         {
+            if (singlePlayerRecovery != null)
+            {
+                StopCoroutine(singlePlayerRecovery);
+                singlePlayerRecovery = null;
+            }
             if (!SteamManager.Initialized)
             {
                 Debug.LogError("[MirrorNetworkManager] Cannot start host: Steam not initialized.");
@@ -215,6 +224,11 @@ namespace PetGame.Network
         /// </summary>
         public void StartClientWithSteam(CSteamID hostSteamId)
         {
+            if (singlePlayerRecovery != null)
+            {
+                StopCoroutine(singlePlayerRecovery);
+                singlePlayerRecovery = null;
+            }
             if (!SteamManager.Initialized)
             {
                 Debug.LogError("[MirrorNetworkManager] Cannot start client: Steam not initialized.");
@@ -227,7 +241,15 @@ namespace PetGame.Network
             if (IsNetworkActive)
             {
                 Debug.Log("[MirrorNetworkManager] Stopping existing network (single-player host) before connecting as client...");
-                StopHost();
+                switchingToSteamClient = true;
+                try
+                {
+                    StopNetwork();
+                }
+                finally
+                {
+                    switchingToSteamClient = false;
+                }
             }
 
             // Set the network address to the host's Steam ID
@@ -284,6 +306,72 @@ namespace PetGame.Network
             }
 
             Debug.Log("[MirrorNetworkManager] Network stopped.");
+        }
+
+        public void LeaveRoomAndResumeSinglePlayer()
+        {
+            if (leavingRoom || applicationQuitting) return;
+            leavingRoom = true;
+            try
+            {
+                SteamLobbyManager.Instance.LeaveLobby();
+                StopNetwork();
+                QueueSinglePlayerRecovery();
+            }
+            finally { leavingRoom = false; }
+        }
+
+        private void QueueSinglePlayerRecovery()
+        {
+            if (singlePlayerRecovery == null && !applicationQuitting && !switchingToSteamClient)
+                singlePlayerRecovery = StartCoroutine(RecoverSinglePlayer());
+        }
+
+        private System.Collections.IEnumerator RecoverSinglePlayer()
+        {
+            // Mirror invokes disconnect callbacks before shutting its client down.
+            yield return null;
+            while (IsNetworkActive || loadingSceneAsync != null) yield return null;
+            singlePlayerRecovery = null;
+            if (applicationQuitting || SteamLobbyManager.Instance.InLobby) yield break;
+
+            CleanupClientState();
+            foreach (BossFightManager boss in FindObjectsOfType<BossFightManager>(true))
+                boss.ResetAfterLeavingRoom();
+            foreach (PortalController portal in FindObjectsOfType<PortalController>())
+                Destroy(portal.gameObject);
+            foreach (EnemySpawner spawner in FindObjectsOfType<EnemySpawner>(true))
+            {
+                spawner.ClearAllEnemies();
+                spawner.enabled = true;
+                spawner.ResumeSpawning();
+            }
+            StartHost();
+        }
+
+        public void DisconnectSteamMember(CSteamID steamId)
+        {
+            if (!NetworkServer.active) return;
+            string address = steamId.m_SteamID.ToString();
+            foreach (var conn in new List<NetworkConnectionToClient>(NetworkServer.connections.Values))
+                if (conn != null && conn.connectionId != 0 && conn.address == address)
+                    conn.Disconnect();
+        }
+
+        public void RemoveDepartedLobbyConnections(SteamLobbyManager lobby)
+        {
+            if (!NetworkServer.active || !lobby.InLobby) return;
+            foreach (var conn in new List<NetworkConnectionToClient>(NetworkServer.connections.Values))
+                if (conn != null && conn.connectionId != 0 && ulong.TryParse(conn.address, out ulong id) &&
+                    !lobby.IsLobbyMember(new CSteamID(id)))
+                    conn.Disconnect();
+        }
+
+        public override void OnApplicationQuit()
+        {
+            applicationQuitting = true;
+            SteamLobbyManager.Instance.LeaveLobby();
+            base.OnApplicationQuit();
         }
 
         /// <summary>
@@ -392,7 +480,8 @@ namespace PetGame.Network
             Debug.Log("[MirrorNetworkManager] Connected to server.");
 
             // Request the server to add our player object
-            NetworkClient.AddPlayer();
+            if (!clientLoadedScene && NetworkClient.localPlayer == null)
+                NetworkClient.AddPlayer();
 
             OnConnectedToServer?.Invoke();
         }
@@ -404,7 +493,13 @@ namespace PetGame.Network
             // Clean up all mirror characters and mirror enemies on this client
             CleanupClientState();
 
-            OnDisconnectedFromServer?.Invoke();
+            // Joining a remote host deliberately stops the local single-player host.
+            if (!switchingToSteamClient && !applicationQuitting)
+            {
+                SteamLobbyManager.Instance.LeaveLobby();
+                QueueSinglePlayerRecovery();
+                if (!leavingRoom) OnDisconnectedFromServer?.Invoke();
+            }
             base.OnClientDisconnect();
         }
 
@@ -489,6 +584,8 @@ namespace PetGame.Network
         public override void OnClientSceneChanged()
         {
             base.OnClientSceneChanged();
+            if (NetworkClient.ready && NetworkClient.localPlayer == null)
+                NetworkClient.AddPlayer();
             IsChangingScene = false;
 
             string sceneName = SceneManager.GetActiveScene().name;
@@ -528,6 +625,7 @@ namespace PetGame.Network
             NetworkClient.RegisterHandler<EnemyPositionMessage>(OnEnemyPositionMessageReceived);
             NetworkClient.RegisterHandler<EnemyDeathMessage>(OnEnemyDeathMessageReceived);
             NetworkClient.RegisterHandler<EnemyHitMessage>(OnEnemyHitMessageReceived);
+            NetworkClient.RegisterHandler<WorldSnapshotMessage>(OnWorldSnapshotReceived);
             Debug.Log("[MirrorNetworkManager] Custom client message handlers registered.");
         }
 
@@ -539,10 +637,17 @@ namespace PetGame.Network
                 NetworkClient.UnregisterHandler<EnemyPositionMessage>();
                 NetworkClient.UnregisterHandler<EnemyDeathMessage>();
                 NetworkClient.UnregisterHandler<EnemyHitMessage>();
+                NetworkClient.UnregisterHandler<WorldSnapshotMessage>();
             }
         }
 
         // Forwarding handlers - these get called by Mirror and forward to NetworkEnemySpawner
+        private void OnWorldSnapshotReceived(WorldSnapshotMessage msg)
+        {
+            NetworkEnemySpawner spawner = FindObjectOfType<NetworkEnemySpawner>();
+            if (spawner != null) spawner.HandleWorldSnapshot(msg);
+        }
+
         private void OnEnemySpawnMessageReceived(EnemySpawnMessage msg)
         {
             NetworkEnemySpawner spawner = FindObjectOfType<NetworkEnemySpawner>();

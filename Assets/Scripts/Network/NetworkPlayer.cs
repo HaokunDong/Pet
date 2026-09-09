@@ -87,9 +87,24 @@ namespace PetGame.Network
         private float lastSentMaxHealth;
         private bool lastSentIsAlive = true;
         private bool lastSentKnockbackState = false;
+        private bool creatingMirror;
+        private float nameRefreshTime;
 
         /// <summary>Server-side counter for generating unique portal IDs.</summary>
         private static uint nextPortalId = 1;
+        // Server-side ownership metadata; desktop Portal GameObjects stay on the owner.
+        private readonly Dictionary<uint, int> ownedPortalLevels = new Dictionary<uint, int>();
+
+        public bool TryGetOwnedPortalLevel(uint portalId, out int levelIndex)
+        {
+            return ownedPortalLevels.TryGetValue(portalId, out levelIndex);
+        }
+
+        [Server]
+        public void ConsumeOwnedPortal(uint portalId)
+        {
+            ownedPortalLevels.Remove(portalId);
+        }
 
         #endregion
 
@@ -126,6 +141,8 @@ namespace PetGame.Network
 
         private IEnumerator CreateMirrorCharacterDelayed(string characterId)
         {
+            if (creatingMirror) yield break;
+            creatingMirror = true;
             float timeout = 5f;
             float elapsed = 0f;
             while (Object.FindObjectOfType<GameCharacterManager>() == null && elapsed < timeout)
@@ -137,9 +154,12 @@ namespace PetGame.Network
             yield return null;
             yield return null;
 
-            if (!mirrorCharacterCreated)
+            creatingMirror = false;
+            if (!isOwned && hasCharacter && !string.IsNullOrEmpty(selectedCharacterId) &&
+                (MirrorCharacter == null || !MirrorCharacter.gameObject.activeInHierarchy))
             {
-                CreateMirrorCharacter(characterId);
+                mirrorCharacterCreated = false;
+                CreateMirrorCharacter(selectedCharacterId);
             }
         }
 
@@ -159,6 +179,19 @@ namespace PetGame.Network
 
         private void Update()
         {
+            if (Time.unscaledTime >= nameRefreshTime)
+            {
+                nameRefreshTime = Time.unscaledTime + 1f;
+                if (isOwned && SteamManager.Initialized)
+                {
+                    string currentName = SteamFriends.GetPersonaName();
+                    if (currentName != playerName) CmdSetPlayerName(currentName);
+                    if (LocalCharacter != null && LocalCharacter.gameObject.activeInHierarchy)
+                        LocalCharacter.SetPlayerName(currentName);
+                }
+                else if (MirrorCharacter != null && MirrorCharacter.gameObject.activeInHierarchy)
+                    MirrorCharacter.SetPlayerName(playerName);
+            }
             if (isOwned)
             {
                 UpdateLocalPlayerSync();
@@ -311,6 +344,14 @@ namespace PetGame.Network
             Vector3 pos = LocalCharacter != null ? LocalCharacter.transform.position : Vector3.zero;
 
             CmdSwitchCharacter(newCharacterId, pos, health, maxHealth);
+            lastSentAnimState = "";
+            lastSentPosition = pos;
+            lastSentHealth = health;
+            lastSentMaxHealth = maxHealth;
+            lastSentIsAlive = true;
+            lastSentKnockbackState = false;
+            if (LocalCharacter != null && SteamManager.Initialized)
+                LocalCharacter.SetPlayerName(SteamFriends.GetPersonaName());
         }
 
         #endregion
@@ -320,6 +361,12 @@ namespace PetGame.Network
         private void UpdateLocalPlayerSync()
         {
             if (LocalCharacter == null) return;
+            if (!LocalCharacter.gameObject.activeInHierarchy)
+            {
+                LocalCharacter = null;
+                CmdRegisterNoCharacter();
+                return;
+            }
 
             syncTimer += Time.deltaTime;
             if (syncTimer < 1f / syncRate) return;
@@ -526,17 +573,12 @@ namespace PetGame.Network
 
         private void DestroyMirrorCharacter()
         {
+            mirrorCharacterCreated = false;
+            _mirrorInKnockback = false;
             if (MirrorCharacter != null)
             {
-                PoolMgr poolMgr = PoolMgr.Instance;
-                if (poolMgr != null)
-                {
-                    poolMgr.PutNode(MirrorCharacter.gameObject);
-                }
-                else
-                {
-                    Destroy(MirrorCharacter.gameObject);
-                }
+                // Replicas carry disabled controllers and must never enter the local player pool.
+                Destroy(MirrorCharacter.gameObject);
                 MirrorCharacter = null;
                 mirrorCharacterCreated = false;
                 Debug.Log("[NetworkPlayer] Mirror character destroyed.");
@@ -569,6 +611,8 @@ namespace PetGame.Network
             // Disable AnimEventReceiver so attack animation events don't trigger damage
             var animEvent = MirrorCharacter.GetComponent<AnimEventReceiver>();
             if (animEvent != null) animEvent.enabled = false;
+            var visualAnimator = MirrorCharacter.GetComponent<Animator>();
+            if (visualAnimator != null) visualAnimator.fireEvents = false;
 
             // Set Rigidbody2D to Kinematic so MirrorCharacter doesn't participate in
             // physics simulation. Its position is driven entirely by network sync
@@ -586,7 +630,14 @@ namespace PetGame.Network
 
         private void UpdateMirrorCharacter()
         {
-            if (MirrorCharacter == null) return;
+            if (MirrorCharacter == null || !MirrorCharacter.gameObject.activeInHierarchy)
+            {
+                if (MirrorCharacter != null) DestroyMirrorCharacter();
+                mirrorCharacterCreated = false;
+                if (hasCharacter && syncedIsAlive && !creatingMirror)
+                    StartCoroutine(CreateMirrorCharacterDelayed(selectedCharacterId));
+                return;
+            }
 
             // During knockback, skip position interpolation to avoid jitter.
             // The mirror character's position is driven by RpcStartKnockback/RpcEndKnockback.
@@ -823,6 +874,9 @@ namespace PetGame.Network
         [ClientRpc]
         private void RpcSpawnSummon(string prefabName, Vector3[] positions, string factionTag)
         {
+            // Enemy summons are already included in the host's world snapshot.
+            // Spawning them here would create a second enemy with independent AI.
+            if (factionTag == "Enemy") return;
             // Skip on the owner (they already spawned it locally)
             if (isOwned) return;
 
@@ -882,8 +936,7 @@ namespace PetGame.Network
                 levelDataIndex = levelListMgr.GetRandomLevelDataIndex();
             }
 
-            // Spawn portal only on the requesting player's client (not on all clients).
-            // Portal is a personal UI element that only appears on the spawner's own desktop.
+            ownedPortalLevels[portalId] = levelDataIndex;
             TargetRpcSpawnPortal(connectionToClient, worldPos, portalId, levelDataIndex);
         }
 
@@ -968,6 +1021,8 @@ namespace PetGame.Network
             syncedHealth = health;
             syncedMaxHealth = maxHealth;
             syncedIsAlive = true;
+            syncedAnimState = "Idle";
+            syncedAttackIndex = 0;
 
             Debug.Log($"[NetworkPlayer] Server: Player switched character from '{oldId}' to '{newCharacterId}'");
             RpcSwitchMirrorCharacter(newCharacterId);

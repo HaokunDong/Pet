@@ -46,6 +46,7 @@ namespace PetGame
         /// Reference to the PlayerNameTag component displayed above the health bar.
         /// </summary>
         private PlayerNameTag nameTag;
+        private string networkPlayerName;
 
         /// <summary>
         /// Whether this entity has been initialized.
@@ -274,7 +275,12 @@ namespace PetGame
             }
 
             // Hide by default - only shown when SetPlayerName is called (online mode)
-            nameTag.Hide();
+            if (!string.IsNullOrEmpty(networkPlayerName))
+            {
+                nameTag.SetName(networkPlayerName);
+                nameTag.Show();
+            }
+            else nameTag.Hide();
         }
 
         /// <summary>
@@ -285,6 +291,8 @@ namespace PetGame
         /// <param name="name">The player's Steam display name.</param>
         public void SetPlayerName(string name)
         {
+            networkPlayerName = name;
+            if (nameTag == null) InitializeNameTag();
             if (nameTag != null)
             {
                 nameTag.SetName(name);
@@ -311,6 +319,8 @@ namespace PetGame
         /// </summary>
         public void TakeDamage(float attackPower, CharacterEntity attacker = null)
         {
+            // Replica health and death are exclusively applied by network state.
+            if (GetComponent<PetGame.Network.MirrorEnemyTag>() != null) return;
             if (!RuntimeStats.IsAlive) return;
 
             float actualDamage = Mathf.Max(1f, attackPower - RuntimeStats.defense);
@@ -465,6 +475,7 @@ namespace PetGame
         /// </summary>
         private void CleanUp()
         {
+            networkPlayerName = null;
             OnDeath = null;
             OnDamageTaken = null;
             IsInitialized = false;

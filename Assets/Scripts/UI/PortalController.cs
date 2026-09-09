@@ -112,7 +112,8 @@ namespace PetGame
 
             // Check if we are in multiplayer mode
             var lobbyMgr = SteamLobbyManager.Instance;
-            if (lobbyMgr != null && lobbyMgr.InLobby)
+            if ((lobbyMgr != null && lobbyMgr.InLobby) ||
+                (NetworkClient.active && !NetworkServer.active))
             {
                 // Multiplayer mode: submit a request to the SpecialLevelListManager
                 HandleMultiplayerPortalClick();

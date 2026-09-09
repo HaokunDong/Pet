@@ -1,4 +1,5 @@
 using UnityEngine;
+using PetGame.UI;
 
 namespace PetGame.DesktopWindow
 {
@@ -84,11 +85,16 @@ namespace PetGame.DesktopWindow
             int x = Mathf.Clamp((int)mousePos.x, 0, Screen.width - 1);
             int y = Mathf.Clamp((int)mousePos.y, 0, Screen.height - 1);
 
-            // Check if mouse is over a game area collider first
+            // Check explicit interactive areas before falling back to rendered pixel alpha.
             bool shouldClickThrough;
             if (useGameAreaCollider && IsMouseOverGameArea(mousePos))
             {
                 // Mouse is over game area collider — never click through
+                shouldClickThrough = false;
+            }
+            else if (CircleClickArea.ContainsAnyActiveArea(mousePos))
+            {
+                // Mouse is over circular UI such as MainView/BlackHole — never click through.
                 shouldClickThrough = false;
             }
             else

@@ -93,7 +93,8 @@ namespace PetGame
             GameObject joinCodeInputObj = CreateTMPInputField("JoinCodeInput", initialPanel.transform, "Enter Lobby Code...");
             SetLayoutHeight(joinCodeInputObj, 50f);
             TMP_InputField joinCodeInput = joinCodeInputObj.GetComponent<TMP_InputField>();
-            joinCodeInput.characterLimit = 20; // Steam Lobby ID can be up to 18 digits
+            joinCodeInput.contentType = TMP_InputField.ContentType.Alphanumeric;
+            joinCodeInput.characterLimit = PetGame.Network.SteamLobbyManager.LOBBY_CODE_LENGTH;
 
             // Join Button
             GameObject joinBtnObj = CreateTMPButton("JoinButton", initialPanel.transform, "Join");
@@ -138,7 +139,7 @@ namespace PetGame
             lobbyLayout.childForceExpandHeight = false;
 
             // Player Count Text
-            GameObject playerCountObj = CreateTMPText("PlayerCountText", lobbyPanelObj.transform, "Lobby (1/2)", 18, TextAlignmentOptions.Center, Color.white);
+            GameObject playerCountObj = CreateTMPText("PlayerCountText", lobbyPanelObj.transform, $"Players: 1/{PetGame.Network.SteamLobbyManager.MAX_PLAYERS}", 18, TextAlignmentOptions.Center, Color.white);
             SetLayoutHeight(playerCountObj, 30f);
             TextMeshProUGUI playerCountText = playerCountObj.GetComponent<TextMeshProUGUI>();
 
@@ -154,7 +155,7 @@ namespace PetGame
             SetLayoutHeight(codeRow, 50f);
 
             // Lobby Code Text
-            GameObject lobbyCodeObj = CreateTMPText("LobbyCodeText", codeRow.transform, "ABCDEF", 36, TextAlignmentOptions.Center, new Color(0.3f, 0.9f, 0.4f));
+            GameObject lobbyCodeObj = CreateTMPText("LobbyCodeText", codeRow.transform, "AB3D5F", 36, TextAlignmentOptions.Center, new Color(0.3f, 0.9f, 0.4f));
             RectTransform lobbyCodeRect = lobbyCodeObj.GetComponent<RectTransform>();
             lobbyCodeRect.sizeDelta = new Vector2(250f, 50f);
             LayoutElement lobbyCodeLE = lobbyCodeObj.AddComponent<LayoutElement>();

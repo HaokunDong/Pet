@@ -56,6 +56,7 @@ namespace PetGame
         /// The portalId that triggered the current Boss fight.
         /// </summary>
         public uint CurrentPortalId => currentPortalId;
+        public bool CanStartBossFight => !IsBossFightActive && bossCharacterData != null && bossPrefab != null;
 
         /// <summary>
         /// Reference to the currently active Boss entity (null if no fight is active).
@@ -89,6 +90,7 @@ namespace PetGame
         /// <param name="portalId">The portal ID for network identification. Used to destroy the portal on all clients after Boss defeat.</param>
         public void StartBossFight(GameObject portalObj = null, uint portalId = 0)
         {
+            if (NetworkClient.active && !NetworkServer.active) return;
             if (IsBossFightActive)
             {
                 Debug.LogWarning("[BossFightManager] Boss fight already in progress!");
@@ -196,6 +198,8 @@ namespace PetGame
         /// </summary>
         private void SubscribePlayerDeath()
         {
+            // A client's personal death must not terminate the shared encounter.
+            if (NetworkClient.active && !NetworkServer.active) return;
             GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
             if (playerObj != null)
             {
@@ -239,6 +243,7 @@ namespace PetGame
         /// </summary>
         private void SpawnBoss()
         {
+            if (NetworkClient.active && !NetworkServer.active) return;
             // Determine spawn position
             Vector3 spawnPosition;
             if (bossSpawnPoint != null)
@@ -372,6 +377,7 @@ namespace PetGame
         /// </summary>
         public void OnPlayerDefeated()
         {
+            if (NetworkClient.active && !NetworkServer.active) return;
             if (!IsBossFightActive) return;
 
             Debug.Log("[BossFightManager] Player defeated during Boss fight. Boss fight ended, portal remains for retry.");
@@ -393,6 +399,19 @@ namespace PetGame
             }
 
             // Portal is NOT destroyed — player can click it again to retry
+        }
+
+        public void ResetAfterLeavingRoom()
+        {
+            UnsubscribePlayerDeath();
+            if (currentBossEntity != null)
+            {
+                currentBossEntity.OnDeath -= OnBossDeath;
+                Destroy(currentBossEntity.gameObject);
+                currentBossEntity = null;
+            }
+            IsBossFightActive = false;
+            currentPortalId = 0;
         }
 
         /// <summary>
@@ -443,6 +462,18 @@ namespace PetGame
         // =====================================================================
         // Portal Cleanup (Network)
         // =====================================================================
+
+        public void ApplyNetworkFightState(bool active, uint portalId)
+        {
+            if (NetworkServer.active) return;
+            bool wasActive = IsBossFightActive;
+            IsBossFightActive = active;
+            currentPortalId = portalId;
+            if (enemySpawner == null) enemySpawner = FindObjectOfType<EnemySpawner>();
+            if (enemySpawner != null) enemySpawner.PauseSpawning();
+            if (active && portalId != 0) DestroyLocalPortalById(portalId);
+            if (wasActive && !active) UnsubscribePlayerDeath();
+        }
 
         /// <summary>
         /// RPC: Notify all clients to destroy their local portal by portalId.
