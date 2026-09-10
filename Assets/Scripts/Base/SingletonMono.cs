@@ -5,11 +5,15 @@ public class SingletonMono<T> : MonoBehaviour where T : MonoBehaviour
 {
     #region 单例
     private static T instance;
+    private static bool applicationIsQuitting;
 
     public static T Instance
     {
         get
         {
+            if (applicationIsQuitting)
+                return null;
+
             if (instance == null)
             {
                 GameObject obj = new GameObject(typeof(T).Name);
@@ -23,10 +27,34 @@ public class SingletonMono<T> : MonoBehaviour where T : MonoBehaviour
             return instance;
         }
     }
+
+    public static bool TryGetInstance(out T existingInstance)
+    {
+        existingInstance = instance;
+        return existingInstance != null;
+    }
     #endregion
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStatics()
+    {
+        instance = null;
+        applicationIsQuitting = false;
+    }
 
     void Awake()
     {
+        if (instance == null)
+        {
+            instance = this as T;
+            DontDestroyOnLoad(gameObject);
+        }
+        else if (!ReferenceEquals(instance, this))
+        {
+            Destroy(gameObject);
+            return;
+        }
+
         OnAwake();
     }
 
@@ -43,6 +71,14 @@ public class SingletonMono<T> : MonoBehaviour where T : MonoBehaviour
     void OnDestroy()
     {
         BeforeOnDestroy();
+
+        if (ReferenceEquals(instance, this))
+            instance = null;
+    }
+
+    void OnApplicationQuit()
+    {
+        applicationIsQuitting = true;
     }
 
     protected virtual void OnAwake() { }

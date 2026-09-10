@@ -314,7 +314,8 @@ namespace PetGame.Network
             leavingRoom = true;
             try
             {
-                SteamLobbyManager.Instance.LeaveLobby();
+                if (SteamLobbyManager.TryGetInstance(out var lobbyMgr))
+                    lobbyMgr.LeaveLobby();
                 StopNetwork();
                 QueueSinglePlayerRecovery();
             }
@@ -333,7 +334,9 @@ namespace PetGame.Network
             yield return null;
             while (IsNetworkActive || loadingSceneAsync != null) yield return null;
             singlePlayerRecovery = null;
-            if (applicationQuitting || SteamLobbyManager.Instance.InLobby) yield break;
+            if (applicationQuitting ||
+                (SteamLobbyManager.TryGetInstance(out var lobbyMgr) && lobbyMgr.InLobby))
+                yield break;
 
             CleanupClientState();
             foreach (BossFightManager boss in FindObjectsOfType<BossFightManager>(true))
@@ -370,7 +373,8 @@ namespace PetGame.Network
         public override void OnApplicationQuit()
         {
             applicationQuitting = true;
-            SteamLobbyManager.Instance.LeaveLobby();
+            if (SteamLobbyManager.TryGetInstance(out var lobbyMgr))
+                lobbyMgr.LeaveLobby();
             base.OnApplicationQuit();
         }
 
@@ -496,7 +500,8 @@ namespace PetGame.Network
             // Joining a remote host deliberately stops the local single-player host.
             if (!switchingToSteamClient && !applicationQuitting)
             {
-                SteamLobbyManager.Instance.LeaveLobby();
+                if (SteamLobbyManager.TryGetInstance(out var lobbyMgr))
+                    lobbyMgr.LeaveLobby();
                 QueueSinglePlayerRecovery();
                 if (!leavingRoom) OnDisconnectedFromServer?.Invoke();
             }

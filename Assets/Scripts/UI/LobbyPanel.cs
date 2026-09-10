@@ -115,8 +115,7 @@ namespace PetGame.UI
         /// </summary>
         private void UnsubscribeFromEvents()
         {
-            var lobbyMgr = SteamLobbyManager.Instance;
-            if (lobbyMgr != null)
+            if (SteamLobbyManager.TryGetInstance(out var lobbyMgr))
             {
                 lobbyMgr.OnLobbyCreated -= HandleLobbyCreated;
                 lobbyMgr.OnLobbyEntered -= HandleLobbyEntered;

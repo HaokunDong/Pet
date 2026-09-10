@@ -1285,6 +1285,18 @@ PrefabInstance:
       propertyPath: m_LocalRotation.z
       value: -0.92387956
       objectReference: {fileID: 0}
+    - target: {fileID: 5247076867122414477, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: idleSprite
+      value: 
+      objectReference: {fileID: 21300000, guid: 57c9c9ac9fd8e4b48ab8af608c745d07, type: 3}
+    - target: {fileID: 5247076867122414477, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: selectedSprite
+      value: 
+      objectReference: {fileID: 21300000, guid: 38581d921b3bf684f9b733825014c440, type: 3}
+    - target: {fileID: 5247076867122414477, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: suspendedSprite
+      value: 
+      objectReference: {fileID: 21300000, guid: 7f791bcf5b69d414a9183bac4e824b1a, type: 3}
     - target: {fileID: 5721577233093937500, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
       propertyPath: m_AnchoredPosition.x
       value: 19.551498
@@ -1300,6 +1312,22 @@ PrefabInstance:
     - target: {fileID: 5738327376412707850, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
       propertyPath: m_LocalRotation.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5883603116036271773, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: m_Sprite
+      value: 
+      objectReference: {fileID: 21300000, guid: 098355e1a44a0ac4db940fad8c6b5ee4, type: 3}
+    - target: {fileID: 5883603116036271773, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: m_Color.b
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5883603116036271773, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: m_Color.g
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5883603116036271773, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: m_Color.r
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 6020936818647618701, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
       propertyPath: m_LocalRotation.w
@@ -1324,6 +1352,22 @@ PrefabInstance:
     - target: {fileID: 6301132515623719308, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: 27.649994
+      objectReference: {fileID: 0}
+    - target: {fileID: 6457447970430402013, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: m_Sprite
+      value: 
+      objectReference: {fileID: 21300000, guid: 2b2a48de7a6f7ac4492399bcf4c80566, type: 3}
+    - target: {fileID: 6457447970430402013, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: m_Color.b
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6457447970430402013, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: m_Color.g
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6457447970430402013, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: m_Color.r
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 6457447970430402013, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
       propertyPath: m_Enabled
@@ -1421,6 +1465,18 @@ PrefabInstance:
       propertyPath: linkedPanel
       value: 
       objectReference: {fileID: 2135925739}
+    - target: {fileID: 7763308516042451862, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: idleSprite
+      value: 
+      objectReference: {fileID: 21300000, guid: 2b2a48de7a6f7ac4492399bcf4c80566, type: 3}
+    - target: {fileID: 7763308516042451862, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: selectedSprite
+      value: 
+      objectReference: {fileID: 21300000, guid: b9084cb97ace2904da2f07ef65535a43, type: 3}
+    - target: {fileID: 7763308516042451862, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: suspendedSprite
+      value: 
+      objectReference: {fileID: 21300000, guid: 8515de1b6697f6d4abbb51429839d467, type: 3}
     - target: {fileID: 7796395629034492277, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
       propertyPath: m_Enabled
       value: 0
@@ -1573,8 +1629,21 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 9058465984411097090, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: idleSprite
+      value: 
+      objectReference: {fileID: 21300000, guid: 098355e1a44a0ac4db940fad8c6b5ee4, type: 3}
+    - target: {fileID: 9058465984411097090, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: selectedSprite
+      value: 
+      objectReference: {fileID: 21300000, guid: 87b689d3861f4cc4e8e487a19099308f, type: 3}
+    - target: {fileID: 9058465984411097090, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
+      propertyPath: suspendedSprite
+      value: 
+      objectReference: {fileID: 21300000, guid: a547fa29c64ee014593833bbc76319ef, type: 3}
     m_RemovedComponents: []
-    m_RemovedGameObjects: []
+    m_RemovedGameObjects:
+    - {fileID: 6715565486046860236, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: c3c810bc6a508f94a87d041f210b51a4, type: 3}

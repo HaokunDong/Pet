@@ -23,10 +23,15 @@ using Steamworks;
 public class SteamManager : MonoBehaviour {
 #if !DISABLESTEAMWORKS
 	protected static bool s_EverInitialized = false;
+	protected static bool s_IsShuttingDown = false;
 
 	protected static SteamManager s_instance;
 	protected static SteamManager Instance {
 		get {
+			if (s_IsShuttingDown) {
+				return null;
+			}
+
 			if (s_instance == null) {
 				return new GameObject("SteamManager").AddComponent<SteamManager>();
 			}
@@ -39,13 +44,18 @@ public class SteamManager : MonoBehaviour {
 	protected bool m_bInitialized = false;
 	public static bool Initialized {
 		get {
+			if (s_IsShuttingDown) {
+				return false;
+			}
+
 			if (s_instance == null)
 			{
 				// If already initialized once in this session, don't create a new instance
 				if (s_EverInitialized)
 					return false;
 				// Otherwise, create the instance
-				return Instance.m_bInitialized;
+				SteamManager instance = Instance;
+				return instance != null && instance.m_bInitialized;
 			}
 			return s_instance.m_bInitialized;
 		}
@@ -64,6 +74,7 @@ public class SteamManager : MonoBehaviour {
 	private static void InitOnPlayMode()
 	{
 		s_EverInitialized = false;
+		s_IsShuttingDown = false;
 		s_instance = null;
 	}
 #endif
@@ -164,12 +175,17 @@ public class SteamManager : MonoBehaviour {
 		}
 
 		s_instance = null;
+		s_IsShuttingDown = true;
 
 		if (!m_bInitialized) {
 			return;
 		}
 
 		SteamAPI.Shutdown();
+	}
+
+	protected virtual void OnApplicationQuit() {
+		s_IsShuttingDown = true;
 	}
 
 	protected virtual void Update() {

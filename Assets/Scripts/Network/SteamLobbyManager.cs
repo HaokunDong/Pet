@@ -120,7 +120,7 @@ namespace PetGame.Network
         protected override void BeforeOnDestroy()
         {
             // Only attempt to leave lobby if Steam is still initialized
-            if (SteamManager.Initialized && InLobby)
+            if (IsSteamReady && InLobby)
             {
                 LeaveLobby();
             }
