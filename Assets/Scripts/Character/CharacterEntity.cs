@@ -373,7 +373,7 @@ namespace PetGame
         /// </summary>
         private void Die()
         {
-            // Award experience to the killer if this is an enemy killed by a player
+            // Award player kill experience (shared across the room in multiplayer).
             AwardExperienceToKiller();
 
             // Record kill stats for the killer (player characters only)
@@ -415,11 +415,12 @@ namespace PetGame
         }
 
         /// <summary>
-        /// Award experience points to the killer when this enemy dies.
+        /// Award experience to the killer offline, or equally to the room online.
         /// Only awards exp if this character is an enemy and the killer is a player.
         /// </summary>
         private void AwardExperienceToKiller()
         {
+            if (Mirror.NetworkClient.active && !Mirror.NetworkServer.active) return;
             if (lastAttacker == null) return;
             if (RuntimeStats == null || lastAttacker.RuntimeStats == null) return;
 
@@ -436,6 +437,12 @@ namespace PetGame
             int expReward = (characterData != null) ? characterData.expReward : 10;
             if (expReward <= 0) expReward = 10; // Default fallback
 
+            if (Mirror.NetworkServer.active)
+            {
+                PetGame.Network.NetworkPlayer.AwardSharedExperience(expReward);
+                return;
+            }
+
             CultivationManager.Instance.AddExperience(lastAttacker, expReward);
             Debug.Log($"[CharacterEntity] '{lastAttacker.RuntimeStats.characterId}' gained {expReward} exp from defeating '{RuntimeStats.characterId}'");
         }
@@ -447,6 +454,8 @@ namespace PetGame
         private void RecordKillStats()
         {
             if (lastAttacker == null) return;
+            // Remote player proxies must not write to the host's local progression.
+            if (lastAttacker.GetComponent<PetGame.Network.MirrorCharacterTag>() != null) return;
             if (RuntimeStats == null || lastAttacker.RuntimeStats == null) return;
 
             // Only enemies count as kills

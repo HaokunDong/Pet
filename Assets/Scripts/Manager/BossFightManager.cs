@@ -322,6 +322,8 @@ namespace PetGame
         /// </summary>
         private void OnBossDeath(CharacterEntity bossEntity)
         {
+            if (NetworkClient.active && !NetworkServer.active) return;
+            if (!IsBossFightActive || bossEntity != currentBossEntity) return;
             // Unsubscribe from death event
             bossEntity.OnDeath -= OnBossDeath;
             currentBossEntity = null;
@@ -348,6 +350,26 @@ namespace PetGame
             }
 
             currentPortalId = 0;
+
+            // Every client checks its own deck, independently of the host's ownership.
+            if (NetworkServer.active)
+                RpcCompleteBossFightOnClients();
+            CompleteBossFightLocally();
+        }
+
+        [ClientRpc]
+        private void RpcCompleteBossFightOnClients()
+        {
+            // The host runs the same completion path directly exactly once.
+            if (NetworkServer.active) return;
+            CompleteBossFightLocally();
+        }
+
+        private void CompleteBossFightLocally()
+        {
+            IsBossFightActive = false;
+            currentPortalId = 0;
+            UnsubscribePlayerDeath();
 
             // Check if this is the first time defeating this Boss
             bool isFirstDefeat = !HasBossDataInDeck(bossCharacterData);

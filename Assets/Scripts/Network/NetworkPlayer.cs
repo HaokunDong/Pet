@@ -781,7 +781,43 @@ namespace PetGame.Network
             NetworkEnemySpawner spawner = Object.FindObjectOfType<NetworkEnemySpawner>();
             if (spawner != null)
             {
-                spawner.ApplyDamageToEnemy(enemyNetId, damage, null);
+                spawner.ApplyDamageToEnemy(enemyNetId, damage, LocalCharacter != null ? LocalCharacter : MirrorCharacter);
+            }
+        }
+
+        /// <summary>Split each server-confirmed kill equally between connected players.</summary>
+        public static void AwardSharedExperience(int totalExperience)
+        {
+            if (!NetworkServer.active || totalExperience <= 0) return;
+            var recipients = new List<NetworkPlayer>();
+            foreach (var connection in NetworkServer.connections.Values)
+            {
+                if (connection == null || connection.identity == null) continue;
+                var player = connection.identity.GetComponent<NetworkPlayer>();
+                if (player != null) recipients.Add(player);
+            }
+
+            if (recipients.Count == 0) return;
+            // Experience is integer-based; round up so every player receives the same share.
+            int share = totalExperience / recipients.Count;
+            if (totalExperience % recipients.Count != 0) share++;
+            foreach (var player in recipients)
+                player.TargetReceiveSharedExperience(player.selectedCharacterId, share);
+        }
+
+        [TargetRpc]
+        private void TargetReceiveSharedExperience(string characterId, int amount)
+        {
+            if (amount <= 0 || string.IsNullOrEmpty(characterId)) return;
+            if (LocalCharacter != null && LocalCharacter.RuntimeStats != null &&
+                LocalCharacter.RuntimeStats.characterId == characterId)
+            {
+                CultivationManager.Instance.AddExperience(LocalCharacter, amount);
+            }
+            else
+            {
+                // Keep rewards when the character is being switched or respawned.
+                CultivationManager.Instance.GetCultivationData(characterId)?.AddExp(amount);
             }
         }
 
