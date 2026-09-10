@@ -235,6 +235,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   sectorGraphic: {fileID: 7626577237323452763}
   iconImage: {fileID: 2747269957385798076}
+  idleSprite: {fileID: 0}
+  suspendedSprite: {fileID: 0}
+  selectedSprite: {fileID: 0}
 --- !u!1 &874133051582133544
 GameObject:
   m_ObjectHideFlags: 0
@@ -287,6 +290,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   sectorGraphic: {fileID: 717482546654862724}
   iconImage: {fileID: 8742380624609621218}
+  idleSprite: {fileID: 0}
+  suspendedSprite: {fileID: 0}
+  selectedSprite: {fileID: 0}
 --- !u!1 &1047851535466358643
 GameObject:
   m_ObjectHideFlags: 0
@@ -935,6 +941,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   sectorGraphic: {fileID: 3350153879157400609}
   iconImage: {fileID: 1151336334584476752}
+  idleSprite: {fileID: 0}
+  suspendedSprite: {fileID: 0}
+  selectedSprite: {fileID: 0}
 --- !u!1 &3429797601352206674
 GameObject:
   m_ObjectHideFlags: 0
@@ -987,6 +996,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   sectorGraphic: {fileID: 7755943156216491671}
   iconImage: {fileID: 8155795835973008513}
+  idleSprite: {fileID: 0}
+  suspendedSprite: {fileID: 0}
+  selectedSprite: {fileID: 0}
 --- !u!1 &3951373613034820941
 GameObject:
   m_ObjectHideFlags: 0
@@ -1385,6 +1397,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   sectorGraphic: {fileID: 7854581231219493237}
   iconImage: {fileID: 6457447970430402013}
+  idleSprite: {fileID: 0}
+  suspendedSprite: {fileID: 0}
+  selectedSprite: {fileID: 0}
 --- !u!1 &4447115714839905367
 GameObject:
   m_ObjectHideFlags: 0
@@ -1761,6 +1776,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   sectorGraphic: {fileID: 2832967367407307686}
   iconImage: {fileID: 5883603116036271773}
+  idleSprite: {fileID: 0}
+  suspendedSprite: {fileID: 0}
+  selectedSprite: {fileID: 0}
 --- !u!1 &6715565486046860236
 GameObject:
   m_ObjectHideFlags: 0
@@ -1892,6 +1910,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   sectorGraphic: {fileID: 614741173776362267}
   iconImage: {fileID: 7796395629034492277}
+  idleSprite: {fileID: 0}
+  suspendedSprite: {fileID: 0}
+  selectedSprite: {fileID: 0}
 --- !u!1 &7040821738926218809
 GameObject:
   m_ObjectHideFlags: 0
@@ -2033,6 +2054,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   sectorGraphic: {fileID: 678570125504103923}
   iconImage: {fileID: 3132539874417106022}
+  idleSprite: {fileID: 0}
+  suspendedSprite: {fileID: 0}
+  selectedSprite: {fileID: 0}
 --- !u!1 &8569537390963931842
 GameObject:
   m_ObjectHideFlags: 0

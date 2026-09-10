@@ -62,6 +62,16 @@ namespace PetGame
         [Tooltip("Optional icon image displayed at the center of the button cell.")]
         [SerializeField] private Image iconImage;
 
+        [Header("Icon State Sprites")]
+        [Tooltip("Icon sprite displayed when the button is in Idle state.")]
+        [SerializeField] private Sprite idleSprite;
+
+        [Tooltip("Icon sprite displayed when the pointer hovers over the sector (Suspended state).")]
+        [SerializeField] private Sprite suspendedSprite;
+
+        [Tooltip("Icon sprite displayed when the button is toggled on (Selected state).")]
+        [SerializeField] private Sprite selectedSprite;
+
         /// <summary>
         /// Index of this button within the parent <see cref="RingRadialMenu"/>.
         /// Assigned at layout-time by the parent menu.
@@ -98,6 +108,16 @@ namespace PetGame
         /// </summary>
         public Image IconImage => iconImage;
 
+        private void Awake()
+        {
+            ApplyVisualState(State);
+        }
+
+        private void OnEnable()
+        {
+            ApplyVisualState(State);
+        }
+
         /// <summary>
         /// Initializes index and parent dispatcher. Called by RingRadialMenu.
         /// Delegates click handling to the child <see cref="RingSectorGraphic"/>.
@@ -111,6 +131,8 @@ namespace PetGame
                 SectorGraphic.InitializeClick(index, dispatcher);
                 SectorGraphic.OwnerButton = this;
             }
+
+            ApplyVisualState(State);
         }
 
         // -----------------------------------------------------------------
@@ -127,9 +149,41 @@ namespace PetGame
             if (State == newState) return;
             ButtonState old = State;
             State = newState;
-            if (SectorGraphic != null) SectorGraphic.ApplyStateSprite(newState);
+            ApplyVisualState(newState);
             try { OnStateChanged?.Invoke(Index, old, newState); }
             catch (Exception e) { Debug.LogException(e, this); }
+        }
+
+        private void ApplyVisualState(ButtonState state)
+        {
+            if (SectorGraphic != null) SectorGraphic.ApplyStateSprite(state);
+            ApplyIconStateSprite(state);
+        }
+
+        /// <summary>
+        /// Applies the appropriate icon sprite based on the given button state.
+        /// If the sprite for the given state is null, the current icon sprite is left unchanged.
+        /// </summary>
+        private void ApplyIconStateSprite(ButtonState state)
+        {
+            if (iconImage == null)
+            {
+                return;
+            }
+
+            Sprite target = state switch
+            {
+                ButtonState.Idle      => idleSprite,
+                ButtonState.Suspended => suspendedSprite,
+                ButtonState.Selected  => selectedSprite,
+                _                     => null
+            };
+
+            if (target != null)
+            {
+                iconImage.sprite = target;
+                iconImage.enabled = true;
+            }
         }
 
         /// <summary>
