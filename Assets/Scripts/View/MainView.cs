@@ -59,6 +59,17 @@ public class MainView : BaseView
         InitCircleClickArea(blackHole);
 
         ringRadialMenu.SetActive(false);
+        SyncControlButtonStateWithControlMode();
+    }
+
+    protected override void BeforeOnEnable()
+    {
+        SyncControlButtonStateWithControlMode();
+    }
+
+    protected override void OnUpdate()
+    {
+        SyncControlButtonStateWithControlMode();
     }
 
     /// <summary>
@@ -199,21 +210,52 @@ public class MainView : BaseView
     /// </summary>
     private void OnControlButtonClick()
     {
-        var manager = FindObjectOfType<PetGame.GameCharacterManager>();
-        if (manager == null || manager.PlayerCharacters == null || manager.PlayerCharacters.Count == 0)
+        var controlMode = GetCurrentPlayerControlMode();
+        if (controlMode == null)
         {
             Debug.LogWarning("[MainView] No player character found to toggle control mode.");
+            SyncControlButtonStateWithControlMode();
             return;
         }
 
-        var entity = manager.PlayerCharacters[0];
-        if (entity == null) return;
+        controlMode.ToggleControlMode();
+        SyncControlButtonStateWithControlMode();
+    }
 
-        var controlMode = entity.GetComponent<PetGame.ControlModeManager>();
-        if (controlMode != null)
+    /// <summary>
+    /// Keeps ControlButton's visual state tied to the character's actual control mode.
+    /// AI_Auto uses IdleSprite; Manual uses SelectedSprite.
+    /// </summary>
+    private void SyncControlButtonStateWithControlMode()
+    {
+        if (controlButton == null)
         {
-            controlMode.ToggleControlMode();
+            return;
         }
+
+        var controlMode = GetCurrentPlayerControlMode();
+        if (controlMode == null)
+        {
+            controlButton.SetState(RingRadialMenuButton.ButtonState.Idle);
+            return;
+        }
+
+        controlButton.SetState(
+            controlMode.CurrentMode == PetGame.ControlMode.Manual
+                ? RingRadialMenuButton.ButtonState.Selected
+                : RingRadialMenuButton.ButtonState.Idle);
+    }
+
+    private PetGame.ControlModeManager GetCurrentPlayerControlMode()
+    {
+        var manager = FindObjectOfType<PetGame.GameCharacterManager>();
+        if (manager == null || manager.PlayerCharacters == null || manager.PlayerCharacters.Count == 0)
+        {
+            return null;
+        }
+
+        var entity = manager.PlayerCharacters[0];
+        return entity != null ? entity.GetComponent<PetGame.ControlModeManager>() : null;
     }
 
     /// <summary>

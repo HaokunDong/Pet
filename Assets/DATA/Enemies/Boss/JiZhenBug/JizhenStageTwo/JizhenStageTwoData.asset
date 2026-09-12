@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: JizhenStageTwoData
   m_EditorClassIdentifier: 
   characterId: JiZhen_02
-  characterName: "\u51FB\u9488\u866B"
+  characterName: "\u51FB\u9488\u866B\u6210\u5E74\u4F53"
   attackPower: 50
   maxHealth: 100
   defense: 5

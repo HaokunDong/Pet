@@ -1,7 +1,47 @@
 using UnityEngine;
 using System.Collections;
 
-public class SingletonMono<T> : MonoBehaviour where T : MonoBehaviour
+public abstract class SingletonMonoBase : MonoBehaviour
+{
+    void Awake()
+    {
+        if (!BeforeAwakeMessage())
+            return;
+
+        OnAwake();
+    }
+
+    void Start()
+    {
+        OnStart();
+    }
+
+    void Update()
+    {
+        OnUpdate();
+    }
+
+    void OnDestroy()
+    {
+        BeforeOnDestroy();
+        BeforeDestroyMessage();
+    }
+
+    void OnApplicationQuit()
+    {
+        OnApplicationQuitMessage();
+    }
+
+    protected virtual bool BeforeAwakeMessage() { return true; }
+    protected virtual void BeforeDestroyMessage() { }
+    protected virtual void OnApplicationQuitMessage() { }
+    protected virtual void OnAwake() { }
+    protected virtual void OnStart() { }
+    protected virtual void OnUpdate() { }
+    protected virtual void BeforeOnDestroy() { }
+}
+
+public abstract class SingletonMono<T> : SingletonMonoBase where T : MonoBehaviour
 {
     #region 单例
     private static T instance;
@@ -35,14 +75,7 @@ public class SingletonMono<T> : MonoBehaviour where T : MonoBehaviour
     }
     #endregion
 
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-    private static void ResetStatics()
-    {
-        instance = null;
-        applicationIsQuitting = false;
-    }
-
-    void Awake()
+    protected override bool BeforeAwakeMessage()
     {
         if (instance == null)
         {
@@ -52,39 +85,20 @@ public class SingletonMono<T> : MonoBehaviour where T : MonoBehaviour
         else if (!ReferenceEquals(instance, this))
         {
             Destroy(gameObject);
-            return;
+            return false;
         }
 
-        OnAwake();
+        return true;
     }
 
-    void Start()
+    protected override void BeforeDestroyMessage()
     {
-        OnStart();
-    }
-
-    void Update()
-    {
-        OnUpdate();
-    }
-
-    void OnDestroy()
-    {
-        BeforeOnDestroy();
-
         if (ReferenceEquals(instance, this))
             instance = null;
     }
 
-    void OnApplicationQuit()
+    protected override void OnApplicationQuitMessage()
     {
         applicationIsQuitting = true;
     }
-
-    protected virtual void OnAwake() { }
-    protected virtual void OnStart() { }
-    protected virtual void OnUpdate() { }
-    protected virtual void BeforeOnDestroy() { }
-
-
 }
